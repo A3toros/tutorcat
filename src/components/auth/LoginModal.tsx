@@ -17,20 +17,20 @@ const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
   const { showNotification } = useNotification()
   const { showModal } = useModal()
   const { refreshAuth } = useAuth()
-  const [username, setUsername] = useState('')
+  const [loginIdentifier, setLoginIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
 
   const handleLogin = async () => {
-    if (!username.trim() || !password) {
-      showNotification(t('auth.usernameAndPasswordRequired', 'Username and password are required'), 'error')
+    if (!loginIdentifier.trim() || !password) {
+      showNotification(t('auth.loginIdentifierAndPasswordRequired', 'Username/email and password are required'), 'error')
       return
     }
 
     setLoading(true)
     try {
-      const response = await apiClient.login(username.trim(), password)
+      const response = await apiClient.login(loginIdentifier.trim(), password)
 
       console.log('LoginModal: Full login response', { 
         success: response.success,
@@ -89,9 +89,9 @@ const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
       <div className="space-y-6">
         <Input
           type="text"
-          placeholder={t('auth.username', 'Username')}
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
+          placeholder={t('auth.loginIdentifier', 'Username or Email')}
+          value={loginIdentifier}
+          onChange={(e) => setLoginIdentifier(e.target.value)}
           className="w-full"
           autoFocus
           onKeyDown={(e) => {

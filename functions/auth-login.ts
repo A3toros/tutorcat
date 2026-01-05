@@ -43,15 +43,18 @@ const handler: Handler = async (event, context) => {
     // Parse request body
     const { username, password } = JSON.parse(event.body || '{}');
 
+    // Support both old 'username' field and new 'loginIdentifier' field for backward compatibility
+    const loginIdentifier = username;
+
     // Validate input
-    if (!username || !password) {
+    if (!loginIdentifier || !password) {
       return {
         statusCode: 400,
         headers: {
           ...headers,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ success: false, error: 'Username and password are required' })
+        body: JSON.stringify({ success: false, error: 'Username/email and password are required' })
       };
     }
 
@@ -68,21 +71,34 @@ const handler: Handler = async (event, context) => {
 
     const sql = neon(databaseUrl);
 
+    // Determine if loginIdentifier is email or username
+    const isEmail = loginIdentifier.includes('@');
+
     // Get user from database
     let userResult;
     try {
-      userResult = await sql`
-        SELECT id, email, username, first_name, last_name, level, role, password_hash, eval_test_result
-        FROM users
-        WHERE username = ${username}
-      `;
+      if (isEmail) {
+        // Query by email (case sensitive)
+        userResult = await sql`
+          SELECT id, email, username, first_name, last_name, level, role, password_hash, eval_test_result
+          FROM users
+          WHERE email = ${loginIdentifier}
+        `;
+      } else {
+        // Query by username (convert to lowercase for case-insensitive matching)
+        userResult = await sql`
+          SELECT id, email, username, first_name, last_name, level, role, password_hash, eval_test_result
+          FROM users
+          WHERE LOWER(username) = LOWER(${loginIdentifier})
+        `;
+      }
     } catch (dbError) {
       console.error('[AUTH] Login failed: Database query error:', dbError);
       throw new Error('Database query failed');
     }
 
     if (!userResult || userResult.length === 0) {
-      console.log('[AUTH] Login failed: User not found:', username);
+      console.log('[AUTH] Login failed: User not found:', loginIdentifier);
       return {
         statusCode: 401,
         headers: {

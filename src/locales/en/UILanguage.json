@@ -117,6 +117,8 @@
     "passwordResetError": "Failed to reset password",
     "verify": "Verify",
     "usernameAndPasswordRequired": "Username and password are required",
+    "loginIdentifierAndPasswordRequired": "Username/email and password are required",
+    "loginIdentifier": "Username or Email",
     "loggingIn": "Signing in...",
     "login": "Sign In",
     "noAccount": "Don't have an account?",
