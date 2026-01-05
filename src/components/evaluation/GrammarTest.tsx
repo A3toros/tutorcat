@@ -68,10 +68,10 @@ const GrammarDragFill: React.FC<GrammarDragFillProps> = ({ question, answer, onA
       const touch = e.changedTouches[0];
       const elementAtPoint = document.elementFromPoint(touch.clientX, touch.clientY);
 
-      // Check if the element is the drop zone or its children
+      // Check if the element is the tap zone or its children
       if (elementAtPoint && (
-        elementAtPoint.classList.contains('drop-zone') ||
-        elementAtPoint.closest('.drop-zone')
+        elementAtPoint.classList.contains('tap-zone') ||
+        elementAtPoint.closest('.tap-zone')
       )) {
         onAnswer(draggedWord);
       }
@@ -88,21 +88,21 @@ const GrammarDragFill: React.FC<GrammarDragFillProps> = ({ question, answer, onA
   return (
     <div className="space-y-6">
       <h3 className="text-xl font-semibold text-center mb-6">
-        {t('evaluation.dragWordsToComplete', 'Drag words to complete the sentence')}
+        {t('evaluation.dragWordsToComplete', 'Complete the sentence')}
       </h3>
 
       {/* Sentence with drop zone */}
       <div className="text-center text-lg mb-6 p-4 bg-gray-50 rounded-lg">
         {promptParts[0]}
         <span
-          className={`drop-zone inline-block mx-2 px-4 py-2 min-w-[120px] border-2 border-dashed rounded ${
+          className={`tap-zone inline-block mx-2 px-4 py-2 min-w-[120px] border-2 border-dashed rounded ${
             answer ? 'border-green-400 bg-green-50' : 'border-gray-300'
           }`}
           onDrop={handleDrop}
           onDragOver={handleDragOver}
           onTouchEnd={handleTouchEnd}
         >
-          {answer || t('evaluation.dropHere', 'Drop here')}
+          {answer || t('evaluation.dropHere', 'Tap here')}
         </span>
         {promptParts[1]}
         {answer && (
@@ -120,7 +120,7 @@ const GrammarDragFill: React.FC<GrammarDragFillProps> = ({ question, answer, onA
       {/* Word bank */}
       <div className="text-center">
         <p className="text-sm text-gray-600 mb-3">
-          {t('evaluation.dragWordToBlank', 'Drag a word to the blank space')}
+          {t('evaluation.dragWordToBlank', 'Tap on correct word below, then tap on drop zone')}
         </p>
         <div className="flex flex-wrap justify-center gap-3">
           {shuffledWords.map((word, index) => (
