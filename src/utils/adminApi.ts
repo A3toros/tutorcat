@@ -45,20 +45,22 @@ export async function adminApiRequest(
 
   // Check for 401 (unauthorized) - token expired
   if (response.status === 401) {
-    const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
-    const isOnAdminPage = currentPath.startsWith('/admin');
-    
-    // Only redirect if not already on admin page to prevent loops
-    // If on admin page, just throw error - let the component handle it
-    if (!isOnAdminPage) {
-      console.warn('Admin token expired, redirecting to login');
-      handleTokenExpired();
-    } else {
-      console.warn('Admin API returned 401, but staying on admin page to prevent loop');
-      // Don't clear tokens or redirect - might be a temporary issue
-      // Let the component handle the error
+    // Admin token expired - trigger full logout
+    console.warn('Admin token expired, logging out user');
+
+    if (typeof window !== 'undefined') {
+      // Clear localStorage (preserve cookie consent)
+      const cookieConsentData = localStorage.getItem('cookie_consent_data');
+      localStorage.clear();
+      if (cookieConsentData) {
+        localStorage.setItem('cookie_consent_data', cookieConsentData);
+      }
+
+      // Redirect to home page (AuthContext will detect logout)
+      window.location.href = '/';
     }
-    throw new Error('Session expired. Please log in again.');
+
+    throw new Error('Admin session expired. Logging out...');
   }
 
   return response;

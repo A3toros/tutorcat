@@ -9,7 +9,7 @@ import { useNotification } from '@/contexts/NotificationContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { adminApiRequest } from '@/utils/adminApi'
 
-type ContentType = 'lessons' | 'vocabulary' | 'evaluation' | 'grammar' | 'activities'
+type ContentType = 'lessons' | 'evaluation'
 
 interface Lesson {
   id: string
@@ -20,12 +20,6 @@ interface Lesson {
   created_at: string
 }
 
-interface VocabularyItem {
-  id: string
-  english_word: string
-  thai_translation: string
-  audio_url?: string
-}
 
 interface EvaluationTest {
   id: string
@@ -46,7 +40,6 @@ export default function ContentManagementContent() {
 
   const [activeTab, setActiveTab] = useState<ContentType>('lessons')
   const [lessons, setLessons] = useState<Lesson[]>([])
-  const [vocabulary, setVocabulary] = useState<VocabularyItem[]>([])
   const [evaluationTests, setEvaluationTests] = useState<EvaluationTest[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -77,23 +70,6 @@ export default function ContentManagementContent() {
           setLessons(result.lessons)
         } else {
           throw new Error(result.error || 'Failed to load lessons')
-        }
-      } else if (activeTab === 'vocabulary') {
-        // Admin token is in HTTP cookie, sent automatically with credentials: 'include'
-        const response = await adminApiRequest('/.netlify/functions/admin-vocabulary', {
-          method: 'GET'
-        })
-
-        if (!response.ok) {
-          throw new Error('Failed to load vocabulary')
-        }
-
-        const result = await response.json()
-
-        if (result.success) {
-          setVocabulary(result.vocabulary)
-        } else {
-          throw new Error(result.error || 'Failed to load vocabulary')
         }
       } else if (activeTab === 'evaluation') {
         // For now, we'll load the evaluation test directly from the database
@@ -130,8 +106,6 @@ export default function ContentManagementContent() {
       // Set empty arrays on error
       if (activeTab === 'lessons') {
         setLessons([])
-      } else if (activeTab === 'vocabulary') {
-        setVocabulary([])
       } else if (activeTab === 'evaluation') {
         setEvaluationTests([])
       }
@@ -144,37 +118,54 @@ export default function ContentManagementContent() {
     router.push('/admin/content/lessons/new')
   }
 
-  const handleCreateVocabulary = () => {
-    router.push('/admin/content/vocabulary/new')
-  }
 
   const handleEditLesson = (lessonId: string) => {
     router.push(`/admin/content/lessons/${lessonId}`)
   }
 
-  const handleEditVocabulary = (vocabId: string) => {
-    router.push(`/admin/content/vocabulary/${vocabId}`)
-  }
 
   const handleEditEvaluationTest = (testId: string) => {
     router.push(`/admin/content/evaluation/${testId}`)
   }
 
-  const filteredLessons = lessons.filter(lesson =>
-    (selectedLevel === 'all' || lesson.level === selectedLevel) &&
-    (!showDrafts || lesson.is_draft) &&
-    (lesson.topic.toLowerCase().includes(searchTerm.toLowerCase()) ||
-     lesson.level.toLowerCase().includes(searchTerm.toLowerCase()))
-  )
+  // Normalize selectedLevel for consistent comparison
+  const normalizedSelectedLevel = selectedLevel === 'all' ? 'all' : selectedLevel.toUpperCase();
 
-  // Group lessons by level
+  const filteredLessons = lessons.filter(lesson => {
+    const normalizedLessonLevel = lesson.level?.trim().toUpperCase();
+    return (normalizedSelectedLevel === 'all' || normalizedLessonLevel === normalizedSelectedLevel) &&
+           (!showDrafts || lesson.is_draft) &&
+           (lesson.topic.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            normalizedLessonLevel?.toLowerCase().includes(searchTerm.toLowerCase()))
+  })
+
+  // Group filtered lessons by normalized level (for display)
   const lessonsByLevel = filteredLessons.reduce((acc, lesson) => {
-    if (!acc[lesson.level]) {
-      acc[lesson.level] = []
+    const normalizedLevel = lesson.level?.trim().toUpperCase();
+    if (!normalizedLevel) return acc;
+    if (!acc[normalizedLevel]) {
+      acc[normalizedLevel] = []
     }
-    acc[lesson.level].push(lesson)
+    acc[normalizedLevel].push(lesson)
     return acc
   }, {} as Record<string, Lesson[]>)
+
+  // Group all lessons by normalized level (for accurate counts)
+  const totalLessonsByLevel = lessons.reduce((acc, lesson) => {
+    const level = lesson.level?.trim(); // Trim whitespace
+    if (!level) {
+      console.warn('Lesson without level:', lesson);
+      return acc;
+    }
+    // Normalize level to uppercase
+    const normalizedLevel = level.toUpperCase();
+    if (!acc[normalizedLevel]) {
+      acc[normalizedLevel] = []
+    }
+    acc[normalizedLevel].push(lesson)
+    return acc
+  }, {} as Record<string, Lesson[]>)
+
 
   // Sort lessons within each level by lesson_number
   Object.keys(lessonsByLevel).forEach(level => {
@@ -183,23 +174,22 @@ export default function ContentManagementContent() {
 
   // CEFR level order
   const levelOrder = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']
-  const sortedLevels = Object.keys(lessonsByLevel).sort((a, b) => {
+  const sortedLevels = Object.keys(totalLessonsByLevel).sort((a, b) => {
     const indexA = levelOrder.indexOf(a)
     const indexB = levelOrder.indexOf(b)
     return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB)
   })
 
-  const filteredVocabulary = vocabulary.filter(item =>
-    item.english_word.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.thai_translation.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  // Create a mapping from display level to normalized level for lookup
+  const levelDisplayMap: Record<string, string> = {}
+  Object.keys(totalLessonsByLevel).forEach(normalizedLevel => {
+    levelDisplayMap[normalizedLevel] = normalizedLevel
+  })
+
 
   const tabs = [
     { id: 'lessons', label: 'Lessons', count: lessons.length },
-    { id: 'vocabulary', label: 'Vocabulary', count: vocabulary.length },
-    { id: 'evaluation', label: 'Evaluation', count: evaluationTests.length },
-    { id: 'grammar', label: 'Grammar', count: 0 },
-    { id: 'activities', label: 'Activities', count: 0 }
+    { id: 'evaluation', label: 'Evaluation', count: evaluationTests.length }
   ]
 
   if (isLoading) {
@@ -228,7 +218,7 @@ export default function ContentManagementContent() {
             </Button>
             <div>
               <h1 className="text-xl font-bold text-slate-800">Content Management</h1>
-              <p className="text-purple-600 text-sm">Manage lessons, vocabulary, and activities</p>
+              <p className="text-purple-600 text-sm">Manage lessons and evaluation tests</p>
             </div>
           </div>
         </div>
@@ -248,7 +238,7 @@ export default function ContentManagementContent() {
                     : 'text-slate-600 hover:text-slate-800 hover:bg-white hover:shadow-sm'
                 }`}
               >
-                {tab.label} ({tab.count})
+                {tab.label}{tab.id !== 'evaluation' ? ` (${tab.count})` : ''}
               </button>
             ))}
           </div>
@@ -299,17 +289,12 @@ export default function ContentManagementContent() {
             </Button>
           )}
 
-          {activeTab === 'vocabulary' && (
-            <Button onClick={handleCreateVocabulary} className="bg-purple-600 hover:bg-purple-700">
-              + New Vocabulary
-            </Button>
-          )}
         </div>
 
         {/* Content */}
         {activeTab === 'lessons' && (
           <div className="space-y-8">
-            {sortedLevels.length > 0 ? (
+            {Object.keys(totalLessonsByLevel).length > 0 ? (
               sortedLevels.map(level => (
                 <div key={level}>
                   <div className="flex items-center justify-between mb-4">
@@ -324,11 +309,12 @@ export default function ContentManagementContent() {
                       Level {level}
                     </h2>
                     <span className="text-slate-600 text-sm">
-                      {lessonsByLevel[level].length} lesson{lessonsByLevel[level].length !== 1 ? 's' : ''}
+                      {totalLessonsByLevel[level]?.length || 0} lesson{(totalLessonsByLevel[level]?.length || 0) !== 1 ? 's' : ''}
                     </span>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {lessonsByLevel[level].map(lesson => (
+                  {(lessonsByLevel[level] || []).length > 0 && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {lessonsByLevel[level].map(lesson => (
                       <motion.div
                         key={lesson.id}
                         initial={{ opacity: 0, y: 20 }}
@@ -382,7 +368,8 @@ export default function ContentManagementContent() {
                         </Card>
                       </motion.div>
                     ))}
-                  </div>
+                    </div>
+                  )}
                 </div>
               ))
             ) : (
@@ -404,40 +391,6 @@ export default function ContentManagementContent() {
               </Card>
             )}
           </div>
-        )}
-
-        {activeTab === 'vocabulary' && (
-          <Card className="bg-gradient-to-br from-white to-purple-50 border-purple-200 shadow-lg hover:shadow-xl transition-all duration-300">
-            <Card.Body>
-              <div className="space-y-4">
-                {filteredVocabulary.map(item => (
-                  <div key={item.id} className="flex items-center justify-between p-4 border border-slate-700 rounded-lg">
-                    <div className="flex items-center space-x-4">
-                      <div>
-                        <div className="font-medium text-white">{item.english_word}</div>
-                        <div className="text-purple-600">{item.thai_translation}</div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                      {item.audio_url && (
-                        <Button size="sm" variant="secondary">
-                          🔊
-                        </Button>
-                      )}
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => handleEditVocabulary(item.id)}
-                      >
-                        Edit
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Card.Body>
-          </Card>
         )}
 
         {activeTab === 'evaluation' && (
@@ -521,19 +474,6 @@ export default function ContentManagementContent() {
           </div>
         )}
 
-        {(activeTab === 'grammar' || activeTab === 'activities') && (
-          <Card className="bg-gradient-to-br from-white to-purple-50 border-purple-200 shadow-lg hover:shadow-xl transition-all duration-300">
-            <Card.Body className="text-center py-12">
-              <div className="text-6xl mb-4">🚧</div>
-              <h3 className="text-xl font-semibold text-white mb-2">
-                Coming Soon
-              </h3>
-              <p className="text-purple-600">
-                {activeTab === 'grammar' ? 'Grammar' : 'Activity'} management features are under development.
-              </p>
-            </Card.Body>
-          </Card>
-        )}
       </div>
     </div>
   )

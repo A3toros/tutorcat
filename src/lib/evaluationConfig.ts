@@ -216,17 +216,19 @@ const CEFR_VALUES_TO_LEVEL: Record<number, string> = {
   6: 'C2'
 };
 
-// Function to find middle ground between two CEFR levels
-export function findMiddleGroundLevel(level1: string, level2: string): string {
-  const value1 = CEFR_LEVEL_VALUES[level1] ?? 1; // Default to A1 if invalid
-  const value2 = CEFR_LEVEL_VALUES[level2] ?? 1; // Default to A1 if invalid
-  
-  // Calculate average and round to nearest integer
-  const averageValue = Math.round((value1 + value2) / 2);
-  
+// Function to find constrained level based on AI speaking assessment
+// The final level cannot be higher than the AI speaking assessment (level2)
+export function findMiddleGroundLevel(calculatedLevel: string, aiSpeakingLevel: string): string {
+  const calculatedValue = CEFR_LEVEL_VALUES[calculatedLevel] ?? 1; // Default to A1 if invalid
+  const aiValue = CEFR_LEVEL_VALUES[aiSpeakingLevel] ?? 1; // Default to A1 if invalid
+
+  // The AI speaking assessment sets the maximum allowed level
+  // Final level will be the lower of: calculated level or AI speaking level
+  const finalValue = Math.min(calculatedValue, aiValue);
+
   // Ensure it's within valid range
-  const clampedValue = Math.max(0, Math.min(6, averageValue));
-  
+  const clampedValue = Math.max(0, Math.min(6, finalValue));
+
   return CEFR_VALUES_TO_LEVEL[clampedValue] || 'A1';
 }
 

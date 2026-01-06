@@ -508,6 +508,74 @@ export default function EvaluationEditorContent() {
                       </div>
                     )}
 
+                    {(question.question_type === 'dropdown' || question.question_type === 'fill_blank') && (
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                          Options
+                        </label>
+                        <div className="space-y-2">
+                          {(question.content?.options || []).map((option: string, optIndex: number) => (
+                            <Input
+                              key={optIndex}
+                              value={option}
+                              onChange={(e) => {
+                                const newOptions = [...(question.content?.options || [])]
+                                newOptions[optIndex] = e.target.value
+                                updateQuestion(question.id, { content: { ...question.content, options: newOptions } })
+                              }}
+                              placeholder={`Option ${optIndex + 1}`}
+                              className="bg-white border-purple-200 text-slate-800 focus:border-purple-400"
+                            />
+                          ))}
+                          <Button
+                            onClick={() => {
+                              const newOptions = [...(question.content?.options || []), '']
+                              updateQuestion(question.id, { content: { ...question.content, options: newOptions } })
+                            }}
+                            variant="secondary"
+                            size="sm"
+                            className="w-full border-dashed border-purple-300 text-purple-600 hover:bg-purple-50"
+                          >
+                            + Add Option
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {question.question_type === 'drag_fill' && (
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                          Words
+                        </label>
+                        <div className="space-y-2">
+                          {(question.content?.words || []).map((word: string, wordIndex: number) => (
+                            <Input
+                              key={wordIndex}
+                              value={word}
+                              onChange={(e) => {
+                                const newWords = [...(question.content?.words || [])]
+                                newWords[wordIndex] = e.target.value
+                                updateQuestion(question.id, { content: { ...question.content, words: newWords } })
+                              }}
+                              placeholder={`Word ${wordIndex + 1}`}
+                              className="bg-white border-purple-200 text-slate-800 focus:border-purple-400"
+                            />
+                          ))}
+                          <Button
+                            onClick={() => {
+                              const newWords = [...(question.content?.words || []), '']
+                              updateQuestion(question.id, { content: { ...question.content, words: newWords } })
+                            }}
+                            variant="secondary"
+                            size="sm"
+                            className="w-full border-dashed border-purple-300 text-purple-600 hover:bg-purple-50"
+                          >
+                            + Add Word
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
                     {question.question_type === 'speaking' && (
                       <div className="text-sm text-slate-600 p-4 bg-purple-50 rounded border border-purple-200">
                         Speaking questions are AI-evaluated and don't require correct answers or points. The AI will assess pronunciation, grammar, vocabulary, and fluency.

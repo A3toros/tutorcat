@@ -197,6 +197,18 @@ export const handler: Handler = async (event) => {
           ORDER BY l.level, l.lesson_number
         `;
 
+        // Debug logging
+        console.log('Admin-lessons: Total lessons returned:', lessonsResult.length);
+        const a1Lessons = lessonsResult.filter((l: any) => l.level === 'A1');
+        console.log('Admin-lessons: A1 lessons count:', a1Lessons.length);
+        console.log('Admin-lessons: A1 lesson numbers:', a1Lessons.map((l: any) => l.lesson_number).sort((a: number, b: number) => a - b));
+        const levelCounts: any = {};
+        lessonsResult.forEach((l: any) => {
+          const level = l.level;
+          levelCounts[level] = (levelCounts[level] || 0) + 1;
+        });
+        console.log('Admin-lessons: Level counts:', levelCounts);
+
         return {
           statusCode: 200,
           headers,

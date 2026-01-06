@@ -58,20 +58,34 @@ class ApiClient {
 
       // Check for 401 (unauthorized) - token expired for admin requests
       if (response.status === 401 && endpoint.includes('admin')) {
-        const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
-        const isOnAdminPage = currentPath.startsWith('/admin');
-        
-        // Only redirect if not already on admin page to prevent loops
-        // Cookies are managed by the browser, no need to clear localStorage
-        if (!isOnAdminPage && typeof window !== 'undefined') {
-          window.location.href = '/';
-        } else {
-          // Silent - prevent redirect loop
+        // Admin token expired - trigger full logout
+        if (typeof window !== 'undefined') {
+          console.warn('Admin token expired, logging out user');
+
+          // Import and call logout dynamically to avoid circular imports
+          import('@/contexts/AuthContext').then(({ useAuth }) => {
+            // We can't use the hook directly here, so we'll trigger logout via localStorage/cookies
+            // The AuthContext will detect the logout on next check
+
+            // Clear localStorage (preserve cookie consent)
+            const cookieConsentData = localStorage.getItem('cookie_consent_data');
+            localStorage.clear();
+            if (cookieConsentData) {
+              localStorage.setItem('cookie_consent_data', cookieConsentData);
+            }
+
+            // Redirect to home page (logout will be detected by AuthContext)
+            window.location.href = '/';
+          }).catch(error => {
+            console.error('Failed to handle admin logout:', error);
+            // Fallback: just redirect
+            window.location.href = '/';
+          });
         }
-        
+
         return {
           success: false,
-          error: 'Session expired. Please log in again.',
+          error: 'Admin session expired. Logging out...',
         }
       }
 
