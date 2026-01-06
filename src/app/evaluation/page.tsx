@@ -12,7 +12,7 @@ import { useApi } from '@/hooks/useApi'
 import VocabularyTest from '@/components/evaluation/VocabularyTest'
 import GrammarTest from '@/components/evaluation/GrammarTest'
 import SpeakingTest from '@/components/evaluation/SpeakingTest'
-import { CEFR_MAPPING, calculateCEFRLevel, findMiddleGroundLevel } from '@/lib/evaluationConfig'
+import { CEFR_MAPPING, calculateCEFRLevel, calculateLevelFromScores } from '@/lib/evaluationConfig'
 
 interface EvaluationTest {
   id: string;
@@ -218,34 +218,29 @@ function EvaluationContent() {
       // Calculate level from test percentage
       const calculatedLevel = calculateCEFRLevel(evaluationResults.percentage)
       
-      // Collect AI-assessed levels from speaking feedback
-      const aiAssessedLevels: string[] = []
+      // Collect AI-assessed speaking percentages from speaking feedback
+      const aiSpeakingPercentages: number[] = []
       if (evaluationResults.answers) {
         Object.values(evaluationResults.answers).forEach((answer: any) => {
-          if (answer.feedback?.assessed_level) {
-            aiAssessedLevels.push(answer.feedback.assessed_level)
+          if (answer.feedback?.overall_score !== undefined) {
+            aiSpeakingPercentages.push(answer.feedback.overall_score)
           }
-          if (answer.result?.feedback?.assessed_level) {
-            aiAssessedLevels.push(answer.result.feedback.assessed_level)
+          if (answer.result?.feedback?.overall_score !== undefined) {
+            aiSpeakingPercentages.push(answer.result.feedback.overall_score)
           }
         })
       }
-      
-      // Find average AI-assessed level if multiple speaking questions
-      let aiAssessedLevel = calculatedLevel
-      if (aiAssessedLevels.length > 0) {
-        if (aiAssessedLevels.length === 1) {
-          aiAssessedLevel = aiAssessedLevels[0]
-        } else {
-          let currentLevel = aiAssessedLevels[0]
-          for (let i = 1; i < aiAssessedLevels.length; i++) {
-            currentLevel = findMiddleGroundLevel(currentLevel, aiAssessedLevels[i])
-          }
-          aiAssessedLevel = currentLevel
-        }
+
+      // Calculate average speaking percentage if multiple speaking questions
+      let averageSpeakingPercentage = 0
+      if (aiSpeakingPercentages.length > 0) {
+        const sum = aiSpeakingPercentages.reduce((acc, score) => acc + score, 0)
+        averageSpeakingPercentage = sum / aiSpeakingPercentages.length
       }
-      
-      const finalLevel = findMiddleGroundLevel(calculatedLevel, aiAssessedLevel)
+
+      // Calculate final level using 50/50 weighted formula
+      const grammarTestPercentage = evaluationResults.percentage
+      const finalLevel = calculateLevelFromScores(averageSpeakingPercentage, grammarTestPercentage)
       
       hasSubmittedRef.current = true
       submitEvaluationResults(evaluationResults, finalLevel)
@@ -392,39 +387,31 @@ function EvaluationContent() {
     // Calculate level from test percentage
     const calculatedLevel = calculateCEFRLevel(evaluationResults.percentage)
     
-    // Collect AI-assessed levels from speaking feedback
-    const aiAssessedLevels: string[] = []
+    // Collect AI-assessed speaking percentages from speaking feedback
+    const aiSpeakingPercentages: number[] = []
     if (evaluationResults.answers) {
       Object.values(evaluationResults.answers).forEach((answer: any) => {
         // Check if this is a speaking answer with AI feedback
-        if (answer.feedback?.assessed_level) {
-          aiAssessedLevels.push(answer.feedback.assessed_level)
+        if (answer.feedback?.overall_score !== undefined) {
+          aiSpeakingPercentages.push(answer.feedback.overall_score)
         }
         // Also check if feedback is nested in result object
-        if (answer.result?.feedback?.assessed_level) {
-          aiAssessedLevels.push(answer.result.feedback.assessed_level)
+        if (answer.result?.feedback?.overall_score !== undefined) {
+          aiSpeakingPercentages.push(answer.result.feedback.overall_score)
         }
       })
     }
-    
-    // Find average AI-assessed level if multiple speaking questions
-    let aiAssessedLevel = calculatedLevel // Default to calculated level
-    if (aiAssessedLevels.length > 0) {
-      // If multiple assessments, find middle ground between them first
-      if (aiAssessedLevels.length === 1) {
-        aiAssessedLevel = aiAssessedLevels[0]
-      } else {
-        // Average multiple assessments
-        let currentLevel = aiAssessedLevels[0]
-        for (let i = 1; i < aiAssessedLevels.length; i++) {
-          currentLevel = findMiddleGroundLevel(currentLevel, aiAssessedLevels[i])
-        }
-        aiAssessedLevel = currentLevel
-      }
+
+    // Calculate average speaking percentage if multiple speaking questions
+    let averageSpeakingPercentage = 0
+    if (aiSpeakingPercentages.length > 0) {
+      const sum = aiSpeakingPercentages.reduce((acc, score) => acc + score, 0)
+      averageSpeakingPercentage = sum / aiSpeakingPercentages.length
     }
-    
-    // Find middle ground between calculated level and AI-assessed level
-    const finalLevel = findMiddleGroundLevel(calculatedLevel, aiAssessedLevel)
+
+    // Calculate final level using 50/50 weighted formula
+    const grammarTestPercentage = evaluationResults.percentage
+    const finalLevel = calculateLevelFromScores(averageSpeakingPercentage, grammarTestPercentage)
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-secondary-50 py-8">
@@ -557,31 +544,28 @@ function EvaluationContent() {
                     setSubmissionError(null)
                     // Retry submission
                     if (evaluationResults) {
-                      const calculatedLevel = calculateCEFRLevel(evaluationResults.percentage)
-                      const aiAssessedLevels: string[] = []
+                      const aiSpeakingPercentages: number[] = []
                       if (evaluationResults.answers) {
                         Object.values(evaluationResults.answers).forEach((answer: any) => {
-                          if (answer.feedback?.assessed_level) {
-                            aiAssessedLevels.push(answer.feedback.assessed_level)
+                          if (answer.feedback?.overall_score !== undefined) {
+                            aiSpeakingPercentages.push(answer.feedback.overall_score)
                           }
-                          if (answer.result?.feedback?.assessed_level) {
-                            aiAssessedLevels.push(answer.result.feedback.assessed_level)
+                          if (answer.result?.feedback?.overall_score !== undefined) {
+                            aiSpeakingPercentages.push(answer.result.feedback.overall_score)
                           }
                         })
                       }
-                      let aiAssessedLevel = calculatedLevel
-                      if (aiAssessedLevels.length > 0) {
-                        if (aiAssessedLevels.length === 1) {
-                          aiAssessedLevel = aiAssessedLevels[0]
-                        } else {
-                          let currentLevel = aiAssessedLevels[0]
-                          for (let i = 1; i < aiAssessedLevels.length; i++) {
-                            currentLevel = findMiddleGroundLevel(currentLevel, aiAssessedLevels[i])
-                          }
-                          aiAssessedLevel = currentLevel
-                        }
+
+                      // Calculate average speaking percentage
+                      let averageSpeakingPercentage = 0
+                      if (aiSpeakingPercentages.length > 0) {
+                        const sum = aiSpeakingPercentages.reduce((acc, score) => acc + score, 0)
+                        averageSpeakingPercentage = sum / aiSpeakingPercentages.length
                       }
-                      const finalLevel = findMiddleGroundLevel(calculatedLevel, aiAssessedLevel)
+
+                      // Calculate final level using 50/50 weighted formula
+                      const grammarTestPercentage = evaluationResults.percentage
+                      const finalLevel = calculateLevelFromScores(averageSpeakingPercentage, grammarTestPercentage)
                       hasSubmittedRef.current = false
                       submitEvaluationResults(evaluationResults, finalLevel)
                     }

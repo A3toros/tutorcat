@@ -43,150 +43,19 @@ export interface EvaluationConfig {
 
 // CEFR Level mapping based on total score percentage
 export const CEFR_MAPPING: CEFRMapping[] = [
-  { min: 0, max: 20, level: 'Pre-A1' },
-  { min: 21, max: 35, level: 'A1' },
-  { min: 36, max: 50, level: 'A2' },
-  { min: 51, max: 65, level: 'B1' },
-  { min: 66, max: 80, level: 'B2' },
-  { min: 81, max: 90, level: 'C1' },
-  { min: 91, max: 100, level: 'C2' }
+  { min: 0, max: 19, level: 'Pre-A1' },
+  { min: 20, max: 39, level: 'A1' },
+  { min: 40, max: 59, level: 'A2' },
+  { min: 60, max: 69, level: 'B1' },
+  { min: 70, max: 79, level: 'B2' },
+  { min: 80, max: 89, level: 'C1' },
+  { min: 90, max: 100, level: 'C2' }
 ];
 
-// Updated evaluation test configuration with vocabulary and grammar only
-export const EVALUATION_CONFIG: EvaluationConfig = {
-  testId: 'tutorcat-level-check-v2',
-  targetDurationMinutes: 6,
-  cefrMapping: CEFR_MAPPING,
-  scoringWeights: {
-    vocabulary: 0.3,    // 30%
-    grammar: 0.3,       // 30%
-    listening: 0,       // Removed
-    speaking: 0.4       // 40%
-  },
-  sections: [
-    {
-      id: 'vocabulary',
-      questionCount: 5,
-      questions: [
-        {
-          id: 'vocab-1',
-          type: 'multiple_choice',
-          prompt: 'Choose the correct meaning of: exhausted',
-          options: ['very tired', 'very happy', 'very fast', 'very angry'],
-          correct: 'very tired',
-          level: 'A2'
-        },
-        {
-          id: 'vocab-2',
-          type: 'multiple_choice',
-          prompt: 'Choose the correct word: She ___ the meeting because she was sick.',
-          options: ['missed', 'lost', 'forgot', 'escaped'],
-          correct: 'missed',
-          level: 'A2'
-        },
-        {
-          id: 'vocab-3',
-          type: 'drag_match',
-          prompt: 'Match the word with its meaning',
-          pairs: [
-            { word: 'borrow', match: 'take with intention to return' },
-            { word: 'lend', match: 'give temporarily' }
-          ],
-          correct: 'borrow:take with intention to return,lend:give temporarily',
-          level: 'B1'
-        },
-        {
-          id: 'vocab-4',
-          type: 'multiple_choice',
-          prompt: 'Which word is closest in meaning to \'improve\'?',
-          options: ['make better', 'make worse', 'stop', 'repeat'],
-          correct: 'make better',
-          level: 'A1'
-        },
-        {
-          id: 'vocab-5',
-          type: 'fill_blank',
-          prompt: 'I was ___ when I heard the news.',
-          options: ['surprised', 'happy', 'sad', 'angry'],
-          correct: 'surprised',
-          level: 'A1'
-        }
-      ]
-    },
-    {
-      id: 'grammar',
-      questionCount: 5,
-      questions: [
-        {
-          id: 'grammar-1',
-          type: 'dropdown',
-          prompt: 'Yesterday, I ___ to school.',
-          options: ['go', 'went', 'going', 'gone'],
-          correct: 'went',
-          level: 'A1'
-        },
-        {
-          id: 'grammar-2',
-          type: 'dropdown',
-          prompt: 'She has lived here ___ five years.',
-          options: ['since', 'for', 'during', 'from'],
-          correct: 'for',
-          level: 'A2'
-        },
-        {
-          id: 'grammar-3',
-          type: 'drag_fill',
-          prompt: 'If I ___ more time, I would travel more.',
-          words: ['had', 'have', 'has', 'having'],
-          correct: 'had',
-          level: 'B1'
-        },
-        {
-          id: 'grammar-4',
-          type: 'dropdown',
-          prompt: 'This is the ___ movie I have ever seen.',
-          options: ['more interesting', 'most interesting', 'very interesting', 'much interesting'],
-          correct: 'most interesting',
-          level: 'A2'
-        },
-        {
-          id: 'grammar-5',
-          type: 'drag_fill',
-          prompt: 'The report ___ by the manager yesterday.',
-          words: ['was written', 'wrote', 'is written', 'has written'],
-          correct: 'was written',
-          level: 'B2'
-        }
-      ]
-    },
-    {
-      id: 'speaking',
-      questionCount: 2,
-      scoring: {
-        pronunciation: 0.35,
-        grammarAccuracy: 0.25,
-        vocabularyRange: 0.2,
-        fluency: 0.2
-      },
-      questions: [
-        {
-          id: 'speaking-1',
-          type: 'speaking',
-          prompt: 'Describe your daily routine.',
-          correct: '', // AI evaluated
-          level: 'A2'
-        },
-        {
-          id: 'speaking-2',
-          type: 'speaking',
-          prompt: 'Do you agree or disagree that technology makes life easier? Explain why.',
-          correct: '', // AI evaluated
-          level: 'B1'
-        }
-      ]
-    }
-  ]
-};
+// NOTE: Evaluation test configuration is now loaded from the database
+// via the get-evaluation-test API endpoint. This file contains only
+// the CEFR mapping and utility functions. Test questions are managed
+// through the admin panel and stored in the evaluation_test table.
 
 // Function to calculate CEFR level from total percentage
 export function calculateCEFRLevel(percentage: number): string {
@@ -216,24 +85,17 @@ const CEFR_VALUES_TO_LEVEL: Record<number, string> = {
   6: 'C2'
 };
 
-// Function to find constrained level based on AI speaking assessment
-// The final level cannot be higher than the AI speaking assessment (level2)
-export function findMiddleGroundLevel(calculatedLevel: string, aiSpeakingLevel: string): string {
-  const calculatedValue = CEFR_LEVEL_VALUES[calculatedLevel] ?? 1; // Default to A1 if invalid
-  const aiValue = CEFR_LEVEL_VALUES[aiSpeakingLevel] ?? 1; // Default to A1 if invalid
-
-  // The AI speaking assessment sets the maximum allowed level
-  // Final level will be the lower of: calculated level or AI speaking level
-  const finalValue = Math.min(calculatedValue, aiValue);
-
-  // Ensure it's within valid range
-  const clampedValue = Math.max(0, Math.min(6, finalValue));
-
-  return CEFR_VALUES_TO_LEVEL[clampedValue] || 'A1';
+// Function to calculate overall score using 70/30 weighting
+// Speaking score = 70%, Grammar test score = 30%
+export function calculateOverallScore(speakingPercentage: number, grammarPercentage: number): number {
+  return (speakingPercentage * 0.7) + (grammarPercentage * 0.3);
 }
 
-// Function to get questions for a specific test type
-export function getQuestionsForTest(testType: 'vocabulary' | 'grammar' | 'speaking'): EvaluationQuestion[] {
-  const section = EVALUATION_CONFIG.sections.find(s => s.id === testType);
-  return section?.questions || [];
+// Function to calculate CEFR level from speaking and grammar percentages
+export function calculateLevelFromScores(speakingPercentage: number, grammarPercentage: number): string {
+  const overallPercentage = calculateOverallScore(speakingPercentage, grammarPercentage);
+  return calculateCEFRLevel(overallPercentage);
 }
+
+// NOTE: getQuestionsForTest function removed - questions are now loaded from database
+// via get-evaluation-test API endpoint
