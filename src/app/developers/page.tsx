@@ -21,31 +21,23 @@ export default function DevelopersPage() {
     {
       id: 'dev1',
       name: 'Mattcha Srirojwong',
-      roleKey: 'meetTeam.roles.frontendDeveloper',
+      roleKey: 'meetTeam.roles.backendDeveloper',
       descriptionKey: 'meetTeam.descriptions.mattcha',
       photo: '/developer.png',
       isCurator: false
     },
     {
       id: 'dev2',
-      name: 'Arnon Dangmukda',
-      roleKey: 'meetTeam.roles.backendDeveloper',
-      descriptionKey: 'meetTeam.descriptions.arnon',
+      name: 'Jindaporn Tikpmporn',
+      roleKey: 'meetTeam.roles.webDesigner',
+      descriptionKey: 'meetTeam.descriptions.jindaporn',
       photo: '/developer.png',
       isCurator: false
     },
     {
       id: 'dev3',
-      name: 'Jaroenjit Anatamsombat',
-      roleKey: 'meetTeam.roles.webDesigner',
-      descriptionKey: 'meetTeam.descriptions.jaroenjit',
-      photo: '/developer.png',
-      isCurator: false
-    },
-    {
-      id: 'dev4',
       name: 'Nichapath Chunlawithet',
-      roleKey: 'meetTeam.roles.qaEngineer',
+      roleKey: 'meetTeam.roles.frontendDeveloper',
       descriptionKey: 'meetTeam.descriptions.nichapath',
       photo: '/developer.png',
       isCurator: false
@@ -90,7 +82,7 @@ export default function DevelopersPage() {
           <h2 className="text-2xl font-semibold text-neutral-800 mb-6 text-center">
             {t('meetTeam.developmentTeam', 'Development Team')}
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {developers.map((developer, index) => (
               <motion.div
                 key={developer.id}

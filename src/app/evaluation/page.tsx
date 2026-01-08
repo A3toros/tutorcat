@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { ProtectedRoute, useUser } from '@/components/auth/ProtectedRoute'
 import { Button, Card, Mascot, ProgressBar } from '@/components/ui'
+import Modal from '@/components/ui/Modal'
 import MascotThinking from '@/components/ui/MascotThinking'
 import { useNotification } from '@/contexts/NotificationContext'
 import { useApi } from '@/hooks/useApi'
@@ -665,6 +666,7 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
+  const [showStopConfirmation, setShowStopConfirmation] = useState(false);
   const [currentStep, setCurrentStep] = useState<'idle' | 'transcribing' | 'analyzing' | 'feedback'>('idle');
   const [transcript, setTranscript] = useState<string>(savedAnswer?.transcript || '');
   const [feedback, setFeedback] = useState<any>(savedAnswer?.feedback || null);
@@ -795,8 +797,15 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
     }
   };
 
-  // Stop recording
+  // Stop recording - Show confirmation modal first
   const stopRecording = () => {
+    setShowStopConfirmation(true);
+  };
+
+  // Confirm stop recording - Actually stop the recording
+  const confirmStopRecording = () => {
+    setShowStopConfirmation(false);
+    
     // Immediately disable button and show gray state
     setIsStopping(true);
     
@@ -821,6 +830,7 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
 
     setIsRecording(false);
     setIsProcessing(true);
+    setCurrentStep('transcribing');
   };
 
   // Handle recording complete
@@ -1068,6 +1078,34 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
           {error && <p className="text-red-500 mt-4">{error}</p>}
         </div>
       )}
+      
+      {/* Stop Recording Confirmation Modal */}
+      <Modal
+        isOpen={showStopConfirmation}
+        onClose={() => setShowStopConfirmation(false)}
+        title={t('evaluation.speaking.stopRecordingTitle', 'Stop Recording?')}
+        size="sm"
+      >
+        <div className="text-center">
+          <p className="text-gray-600 mb-6">
+            {t('evaluation.speaking.stopRecordingConfirm', 'Are you sure you want to stop recording?')}
+          </p>
+          <div className="flex justify-center space-x-4">
+            <Button
+              onClick={() => setShowStopConfirmation(false)}
+              className="bg-gray-300 hover:bg-gray-400 text-gray-800"
+            >
+              {t('common.no', 'No')}
+            </Button>
+            <Button
+              onClick={confirmStopRecording}
+              className="bg-red-500 hover:bg-red-600 text-white"
+            >
+              {t('common.yes', 'Yes')}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

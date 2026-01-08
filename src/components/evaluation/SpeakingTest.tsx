@@ -8,6 +8,7 @@ type SpeakingTestStep = 'permission' | 'recording' | 'processing' | 'transcribin
 // - Transcription: whisper-1 (fast, accurate for complete audio)
 // - Feedback: gpt-4o-mini (intelligent analysis)
 import { Card, Button } from '../ui';
+import Modal from '../ui/Modal';
 import { getAIFeedbackHelper } from '../../utils/aiFeedbackHelper';
 import Mascot from '../ui/Mascot';
 import MascotThinking from '../ui/MascotThinking';
@@ -54,6 +55,9 @@ const SpeakingTest: React.FC<SpeakingTestProps> = ({ onComplete }) => {
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [failedPayload, setFailedPayload] = useState<any>(null);
   const [isResending, setIsResending] = useState(false);
+
+  // NEW: Confirmation modal state
+  const [showStopConfirmation, setShowStopConfirmation] = useState(false);
 
 
   const aiFeedbackHelper = getAIFeedbackHelper();
@@ -1056,9 +1060,16 @@ const SpeakingTest: React.FC<SpeakingTestProps> = ({ onComplete }) => {
     }
   }, [failedPayload, audioBlob, currentPrompt.id, makeRequestWithRetry, handleAnalyzeTranscript]);
 
-  // Stop recording - IMMEDIATE STOP + UI UPDATE
+  // Stop recording - Show confirmation modal first
   const stopRecording = useCallback(() => {
-    console.log('🛑 STOP SPEAKING PRESSED - Immediate stop + UI update');
+    console.log('🛑 STOP SPEAKING PRESSED - Showing confirmation modal');
+    setShowStopConfirmation(true);
+  }, []);
+
+  // Confirm stop recording - Actually stop the recording
+  const confirmStopRecording = useCallback(() => {
+    console.log('🛑 CONFIRMED - Immediate stop + UI update');
+    setShowStopConfirmation(false);
 
     // IMMEDIATE UI CHANGE: Show "Analyzing Your Speech" right away
     setIsRecording(false);
@@ -1066,7 +1077,7 @@ const SpeakingTest: React.FC<SpeakingTestProps> = ({ onComplete }) => {
     setCurrentStep('analyzing');
     setAnalysisState('analyzing');
     setError(null);
-    console.log('🎤 Stop recording clicked - UI immediately shows Analyzing...');
+    console.log('🎤 Stop recording confirmed - UI immediately shows Analyzing...');
 
     // Store timing reference for logging
     (window as any).speakingTestStopTime = Date.now();
@@ -1550,6 +1561,34 @@ const SpeakingTest: React.FC<SpeakingTestProps> = ({ onComplete }) => {
           </Button>
         </div>
       </Card.Body>
+      
+      {/* Stop Recording Confirmation Modal */}
+      <Modal
+        isOpen={showStopConfirmation}
+        onClose={() => setShowStopConfirmation(false)}
+        title={t('evaluation.speaking.stopRecordingTitle', 'Stop Recording?')}
+        size="sm"
+      >
+        <div className="text-center">
+          <p className="text-gray-600 mb-6">
+            {t('evaluation.speaking.stopRecordingConfirm', 'Are you sure you want to stop recording?')}
+          </p>
+          <div className="flex justify-center space-x-4">
+            <Button
+              onClick={() => setShowStopConfirmation(false)}
+              className="bg-gray-300 hover:bg-gray-400 text-gray-800"
+            >
+              {t('common.no', 'No')}
+            </Button>
+            <Button
+              onClick={confirmStopRecording}
+              className="bg-red-500 hover:bg-red-600 text-white"
+            >
+              {t('common.yes', 'Yes')}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </Card>
   );
 };
