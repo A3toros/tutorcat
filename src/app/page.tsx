@@ -198,18 +198,10 @@ function HomeContent() {
       {/* Stats Section */}
       <div className="py-16 bg-white">
         <div className="container mx-auto px-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+          <div className="grid grid-cols-2 gap-8 text-center">
             <div>
-              <div className="text-3xl font-bold text-primary-600 mb-2">10K+</div>
-              <div className="text-neutral-600">{t('common.activeLearners', 'Active Learners')}</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-secondary-600 mb-2">500+</div>
-              <div className="text-neutral-600">{t('common.lessonsCompleted', 'Lessons Completed')}</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-accent-600 mb-2">50+</div>
-              <div className="text-neutral-600">{t('common.countries', 'Countries')}</div>
+              <div className="text-3xl font-bold text-secondary-600 mb-2">600+</div>
+              <div className="text-neutral-600">{t('common.lessons', 'Lessons')}</div>
             </div>
             <div>
               <div className="text-3xl font-bold text-neutral-600 mb-2">4.9★</div>

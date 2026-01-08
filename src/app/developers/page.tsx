@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { Card } from '@/components/ui'
@@ -16,6 +16,11 @@ interface TeamMember {
 
 export default function DevelopersPage() {
   const { t } = useTranslation()
+  const [isClient, setIsClient] = useState(false)
+  
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
   
   const teamMembers: TeamMember[] = [
     {
@@ -115,11 +120,11 @@ export default function DevelopersPage() {
                           </>
                         )}
                       </h3>
-                      <p className="text-primary-600 font-semibold mb-3">
-                        {t(developer.roleKey)}
+                      <p className="text-primary-600 font-semibold mb-3" suppressHydrationWarning>
+                        {isClient ? t(developer.roleKey, 'Developer') : 'Developer'}
                       </p>
-                      <p className="text-neutral-600 text-sm leading-relaxed">
-                        {t(developer.descriptionKey)}
+                      <p className="text-neutral-600 text-sm leading-relaxed" suppressHydrationWarning>
+                        {isClient ? t(developer.descriptionKey, 'Team member description') : 'Team member description'}
                       </p>
                     </div>
                   </Card.Body>
@@ -166,11 +171,11 @@ export default function DevelopersPage() {
                           </>
                         )}
                       </h3>
-                      <p className="text-primary-600 font-semibold mb-4">
-                        {t(curator.roleKey)}
+                      <p className="text-primary-600 font-semibold mb-4" suppressHydrationWarning>
+                        {isClient ? t(curator.roleKey, 'Teacher & Platform Developer') : 'Teacher & Platform Developer'}
                       </p>
-                      <p className="text-neutral-600 leading-relaxed">
-                        {t(curator.descriptionKey)}
+                      <p className="text-neutral-600 leading-relaxed" suppressHydrationWarning>
+                        {isClient ? t(curator.descriptionKey, 'Team member description') : 'Team member description'}
                       </p>
                     </div>
                   </div>

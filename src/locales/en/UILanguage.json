@@ -21,7 +21,9 @@
     "submit": "Submit",
     "yes": "Yes",
     "no": "No",
-    "allRightsReserved": "All rights reserved."
+    "allRightsReserved": "All rights reserved.",
+    "lessons": "Lessons",
+    "rating": "Rating"
   },
   "header": {
     "brand": "TutorCat",
@@ -110,7 +112,7 @@
     "setNewPassword": "Set New Password",
     "newPasswordDesc": "Enter your new password",
     "newPassword": "New Password",
-    "passwordMinLength": "Password must be at least 8 characters",
+    "passwordMinLength": "Password must be at least 8 characters and include letters and numbers",
     "passwordsDoNotMatch": "Passwords do not match",
     "resetPassword": "Reset Password",
     "passwordResetSuccess": "Password reset successfully. You can now log in.",
@@ -300,6 +302,16 @@
     "errorTitle": "Something went wrong",
     "infoTitle": "Information",
     "warningTitle": "Warning"
+  },
+  "validation": {
+    "required": "This field is required",
+    "emailInvalid": "Please enter a valid email address",
+    "passwordTooShort": "Password must be at least 8 characters long",
+    "passwordWeak": "Password must contain uppercase, lowercase, number, and special character",
+    "passwordsDoNotMatch": "Passwords do not match",
+    "nameInvalid": "Name can only contain letters, spaces, hyphens, and apostrophes",
+    "usernameInvalid": "Username can only contain letters, numbers, and underscores",
+    "urlInvalid": "Please enter a valid URL starting with http:// or https://"
   },
   "errors": {
     "networkError": "Network error. Please check your connection.",
@@ -615,6 +627,29 @@
     "builtWith": "Built with ❤️ for education",
     "educationalNote": "TutorCat is an educational platform developed by Mathayomwatsing School to enhance language learning through AI-powered feedback and gamified experiences. For educational use only."
   },
+  "evaluation": {
+    "title": "English Level Evaluation",
+    "description": "This comprehensive evaluation will assess your English skills across vocabulary, grammar, and speaking to determine your CEFR level.",
+    "vocabulary": "Vocabulary",
+    "vocabularyDesc": "Word knowledge & matching",
+    "grammar": "Grammar",
+    "grammarDesc": "Sentence structure & rules",
+    "speaking": "Speaking",
+    "speakingDesc": "Oral communication skills",
+    "cefrLevels": "CEFR English Levels",
+    "preA1": "Very basic English",
+    "a1": "Basic phrases",
+    "a2": "Simple conversations",
+    "b1": "Independent user",
+    "b2": "Fluent conversations",
+    "c1": "Complex texts",
+    "c2": "Near-native fluency",
+    "tip": "Tip",
+    "speakLonger": "Speak longer for more accurate results. The more you say, the better we can assess your level.",
+    "noReRecordWarning": "Note that when you press stop, you cannot rerecord, your speech will be immediately sent for evaluation.",
+    "noReRecord": "Please note that once you press stop, there will be no re-record option, your speech will be submitted or evaluated instantly.",
+    "clickToStartRecording": "Click to start recording"
+  },
   "meetTeam": {
     "title": "Meet the Team",
     "subtitle": "The talented individuals behind TutorCat, dedicated to creating an innovative language learning experience",
@@ -629,9 +664,32 @@
     },
     "descriptions": {
       "mattcha": "Passionate about creating beautiful and interactive user interfaces. Loves coding because it allows bringing creative ideas to life through React and Next.js. Built the lesson flow, activity components, and dashboard UI using TypeScript, Tailwind CSS, and Framer Motion animations. Implemented drag-and-drop interactions with Konva.js and integrated Lottie animations for an engaging learning experience.",
-      "jaroenjit": "Loves coding because it combines creativity with technical skills to create meaningful user experiences. Designed the entire UI/UX of TutorCat, including the landing page, lesson interface, and admin panel. Created responsive layouts using Tailwind CSS, designed the color scheme and typography, and ensured accessibility across all devices. Focused on making the platform intuitive and visually appealing for language learners.",
+      "jindaporn": "Creative web designer with a keen eye for modern aesthetics and user experience. Specializes in crafting responsive layouts and intuitive interfaces that make language learning enjoyable and accessible. Designed the visual identity of TutorCat, including color schemes, typography, and component styling. Ensures the platform maintains consistency across all devices while delivering an engaging and professional appearance for learners.",
+      "jaroenjit": "Loves coding because it combines creativity with technical skills to create meaningful user experiences. Designed the entire UI/UX of TutorCat, including landing page, lesson interface, and admin panel. Created responsive layouts using Tailwind CSS, designed color scheme and typography, and ensured accessibility across all devices. Focused on making the platform intuitive and visually appealing for language learners.",
       "nichapath": "Passionate about ensuring quality and reliability in software. Loves coding because it teaches attention to detail and systematic thinking. Tested all features including lesson activities, authentication flows, and database operations. Verified cross-browser compatibility, mobile responsiveness, and API endpoint functionality. Created test cases for grammar exercises, vocabulary matching, speaking activities, and achievement system to ensure a bug-free learning experience.",
       "aleksandr": "Lead educator and platform curator with extensive experience in language teaching and educational technology. Oversees curriculum development and ensures the platform meets educational standards. Coordinates the development team and provides guidance on pedagogical features."
+    },
+    "evaluation": {
+      "title": "English Level Evaluation",
+      "description": "This comprehensive evaluation will assess your English skills across vocabulary, grammar, and speaking to determine your CEFR level.",
+      "vocabulary": "Vocabulary",
+      "vocabularyDesc": "Word knowledge & matching",
+      "grammar": "Grammar",
+      "grammarDesc": "Sentence structure & rules",
+      "speaking": "Speaking",
+      "speakingDesc": "Oral communication skills",
+      "cefrLevels": "CEFR English Levels",
+      "preA1": "Very basic English",
+      "a1": "Basic phrases",
+      "a2": "Simple conversations",
+      "b1": "Independent user",
+      "b2": "Fluent conversations",
+      "c1": "Complex texts",
+      "c2": "Near-native fluency",
+      "tip": "Tip",
+      "speakLonger": "Speak longer for more accurate results. The more you say, the better we can assess your level.",
+      "noReRecordWarning": "Note that when you press stop, you cannot rerecord, your speech will be immediately sent for evaluation.",
+      "noReRecord": "Please note that once you press stop, there will be no re-record option, your speech will be submitted or evaluated instantly."
     }
   }
 }

@@ -127,9 +127,10 @@ const SignupPage: React.FC = () => {
     const validation = validateUserRegistration(formData)
 
     if (!validation.isValid) {
-      // Show the first validation error
+      // Show the first validation error - translate the key
       const firstError = Object.values(validation.errors)[0]
-      showNotification(firstError, 'error')
+      const translatedError = t(firstError, firstError) // Use translation, fallback to original
+      showNotification(translatedError, 'error')
       return false
     }
 

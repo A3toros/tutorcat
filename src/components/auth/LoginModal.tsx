@@ -3,9 +3,8 @@
 import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button, Input, Modal } from '@/components/ui'
-import { useNotification } from '@/contexts/NotificationContext'
-import { useModal } from '@/contexts/ModalContext'
 import { useAuth } from '@/contexts/AuthContext'
+import { useModal } from '@/contexts/ModalContext'
 import { apiClient } from '@/lib/api'
 
 interface LoginModalProps {
@@ -14,17 +13,18 @@ interface LoginModalProps {
 
 const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
   const { t } = useTranslation()
-  const { showNotification } = useNotification()
   const { showModal } = useModal()
   const { refreshAuth } = useAuth()
   const [loginIdentifier, setLoginIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const handleLogin = async () => {
+    setError(null)
     if (!loginIdentifier.trim() || !password) {
-      showNotification(t('auth.loginIdentifierAndPasswordRequired', 'Username/email and password are required'), 'error')
+      setError(t('auth.loginIdentifierAndPasswordRequired', 'Username/email and password are required'))
       return
     }
 
@@ -57,7 +57,6 @@ const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
         // Update auth context
         await refreshAuth()
 
-        showNotification(t('auth.loginSuccess', 'Login successful'), 'success')
         showModal(null) // Close modal
 
         // Small delay to ensure localStorage is persisted before redirect
@@ -67,10 +66,11 @@ const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
           onSuccess()
         }
       } else {
-        showNotification(response.error || t('auth.loginError', 'Invalid username or password'), 'error')
+        // Always use translation for login errors, ignore API error message
+        setError(t('auth.loginError', 'Incorrect email or password'))
       }
     } catch (error) {
-      showNotification(t('auth.loginError', 'Login failed'), 'error')
+      setError(t('auth.loginError', 'Login failed'))
     } finally {
       setLoading(false)
     }
@@ -157,6 +157,13 @@ const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
             {t('auth.forgotPassword', 'Forgot Password?')}
           </button>
         </div>
+
+        {/* Error Display */}
+        {error && (
+          <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-red-600 text-sm">{error}</p>
+          </div>
+        )}
       </div>
     </div>
   )

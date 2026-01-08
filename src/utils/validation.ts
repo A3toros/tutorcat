@@ -17,16 +17,16 @@ export const VALIDATION_PATTERNS = {
   URL: /^https?:\/\/.+/,
 };
 
-// Common validation messages
+// Common validation messages - using translation keys
 export const VALIDATION_MESSAGES = {
-  REQUIRED: 'This field is required',
-  EMAIL_INVALID: 'Please enter a valid email address',
-  PASSWORD_TOO_SHORT: 'Password must be at least 8 characters long',
-  PASSWORD_WEAK: 'Password must contain uppercase, lowercase, number, and special character',
-  PASSWORD_MISMATCH: 'Passwords do not match',
-  NAME_INVALID: 'Name can only contain letters, spaces, hyphens, and apostrophes',
-  USERNAME_INVALID: 'Username can only contain letters, numbers, and underscores',
-  URL_INVALID: 'Please enter a valid URL starting with http:// or https://',
+  REQUIRED: 'validation.required',
+  EMAIL_INVALID: 'validation.emailInvalid',
+  PASSWORD_TOO_SHORT: 'validation.passwordTooShort',
+  PASSWORD_WEAK: 'validation.passwordWeak',
+  PASSWORD_MISMATCH: 'validation.passwordsDoNotMatch',
+  NAME_INVALID: 'validation.nameInvalid',
+  USERNAME_INVALID: 'validation.usernameInvalid',
+  URL_INVALID: 'validation.urlInvalid',
   LENGTH_MIN: (min: number) => `Must be at least ${min} characters`,
   LENGTH_MAX: (max: number) => `Must be no more than ${max} characters`,
 };

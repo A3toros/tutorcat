@@ -320,22 +320,22 @@ function EvaluationContent() {
           <Card className="mb-8">
             <Card.Body className="text-center py-8">
               <div className="text-6xl mb-4">📝</div>
-              <h3 className="text-2xl font-bold mb-4">English Level Evaluation</h3>
+              <h3 className="text-2xl font-bold mb-4">{t('evaluation.title', 'English Level Evaluation')}</h3>
               <p className="text-lg text-neutral-600 max-w-2xl mx-auto">
-                This comprehensive evaluation will assess your English skills across vocabulary, grammar, and speaking to determine your CEFR level.
+                {t('evaluation.description', 'This comprehensive evaluation will assess your English skills across vocabulary, grammar, and speaking to determine your CEFR level.')}
               </p>
               <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm max-w-lg mx-auto">
                 <div className="bg-blue-50 p-3 rounded-lg text-center">
-                  <div className="font-semibold text-blue-600 text-lg mb-1">📚 Vocabulary</div>
-                  <div className="text-blue-500">Word knowledge & matching</div>
+                  <div className="font-semibold text-blue-600 text-lg mb-1">📚 {t('evaluation.vocabulary', 'Vocabulary')}</div>
+                  <div className="text-blue-500">{t('evaluation.vocabularyDesc', 'Word knowledge & matching')}</div>
                 </div>
                 <div className="bg-green-50 p-3 rounded-lg text-center">
-                  <div className="font-semibold text-green-600 text-lg mb-1">📝 Grammar</div>
-                  <div className="text-green-500">Sentence structure & rules</div>
+                  <div className="font-semibold text-green-600 text-lg mb-1">📝 {t('evaluation.grammar', 'Grammar')}</div>
+                  <div className="text-green-500">{t('evaluation.grammarDesc', 'Sentence structure & rules')}</div>
                 </div>
                 <div className="bg-purple-50 p-3 rounded-lg text-center">
-                  <div className="font-semibold text-purple-600 text-lg mb-1">🎤 Speaking</div>
-                  <div className="text-purple-500">Oral communication skills</div>
+                  <div className="font-semibold text-purple-600 text-lg mb-1">🎤 {t('evaluation.speaking', 'Speaking')}</div>
+                  <div className="text-purple-500">{t('evaluation.speakingDesc', 'Oral communication skills')}</div>
                 </div>
               </div>
             </Card.Body>
@@ -350,13 +350,13 @@ function EvaluationContent() {
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-4">
                 {CEFR_MAPPING.map((cefr, index) => {
                   const descriptions = {
-                    'Pre-A1': 'Very basic English',
-                    'A1': 'Basic phrases',
-                    'A2': 'Simple conversations',
-                    'B1': 'Independent user',
-                    'B2': 'Fluent conversations',
-                    'C1': 'Complex texts',
-                    'C2': 'Near-native fluency'
+                    'Pre-A1': t('evaluation.preA1', 'Very basic English'),
+                    'A1': t('evaluation.a1', 'Basic phrases'),
+                    'A2': t('evaluation.a2', 'Simple conversations'),
+                    'B1': t('evaluation.b1', 'Independent user'),
+                    'B2': t('evaluation.b2', 'Fluent conversations'),
+                    'C1': t('evaluation.c1', 'Complex texts'),
+                    'C2': t('evaluation.c2', 'Near-native fluency')
                   };
                   return (
                     <div key={cefr.level} className="text-center p-3 bg-gray-50 rounded-lg">
@@ -930,7 +930,12 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
         </h3>
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
           <p className="text-sm text-yellow-800 text-center">
-            💡 <strong>{t('evaluation.speaking.tip', 'Tip')}:</strong> {t('evaluation.speaking.speakLonger', 'Speak longer for more accurate results. The more you say, the better we can assess your level.')}
+            💡 <strong>{t('evaluation.tip', 'Tip')}:</strong> {t('evaluation.speakLonger', 'Speak longer for more accurate results. The more you say, the better we can assess your level.')}
+          </p>
+        </div>
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-4">
+          <p className="text-sm text-orange-800 text-center">
+            ⚠️ {t('evaluation.noReRecordWarning', 'Note that when you press stop, you cannot rerecord, your speech will be immediately sent for evaluation.')}
           </p>
         </div>
         <div className="text-center">
@@ -950,7 +955,12 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
       </h3>
       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
         <p className="text-sm text-yellow-800 text-center">
-          💡 <strong>{t('evaluation.speaking.tip', 'Tip')}:</strong> {t('evaluation.speaking.speakLonger', 'Speak longer for more accurate results. The more you say, the better we can assess your level.')}
+          💡 <strong>{t('evaluation.tip', 'Tip')}:</strong> {t('evaluation.speakLonger', 'Speak longer for more accurate results. The more you say, the better we can assess your level.')}
+        </p>
+      </div>
+      <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-4">
+        <p className="text-sm text-orange-800 text-center">
+          ⚠️ {t('evaluation.noReRecordWarning', 'Note that when you press stop, you cannot rerecord, your speech will be immediately sent for evaluation.')}
         </p>
       </div>
 
@@ -1043,7 +1053,7 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
                   e.currentTarget.style.display = 'none';
                 }}
               />
-              <p className="text-sm text-gray-600">Click to start recording</p>
+              <p className="text-sm text-gray-600">{t('evaluation.clickToStartRecording', 'Click to start recording')}</p>
             </div>
           ) : (
             <div className="space-y-4">
