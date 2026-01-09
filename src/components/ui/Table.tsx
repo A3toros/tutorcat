@@ -67,14 +67,14 @@ const TableHead: React.FC<TableHeadProps> = ({ children, className = '', ...prop
   )
 }
 
-interface TableCellProps {
+interface TableCellProps extends React.TdHTMLAttributes<HTMLTableCellElement> {
   children: React.ReactNode
   className?: string
 }
 
-const TableCell: React.FC<TableCellProps> = ({ children, className = '' }) => {
+const TableCell: React.FC<TableCellProps> = ({ children, className = '', ...props }) => {
   return (
-    <td className={`px-4 py-3 text-sm text-neutral-900 ${className}`}>
+    <td className={`px-4 py-3 text-sm text-neutral-900 ${className}`} {...props}>
       {children}
     </td>
   )
