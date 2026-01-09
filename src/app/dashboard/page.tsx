@@ -812,16 +812,6 @@ function DashboardContent() {
                               >
                                 {t('dashboard.view', 'View')}
                               </Button>
-                              {!lesson.completed && (
-                                <Button
-                                  size="sm"
-                                  variant="secondary"
-                                  onClick={() => handleRetryLesson(lesson.id)}
-                                  className="text-xs px-2 py-1"
-                                >
-                                  {t('dashboard.retry', 'Retry')}
-                                </Button>
-                              )}
                             </div>
                           </div>
                         </motion.div>
@@ -997,7 +987,6 @@ function DashboardContent() {
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-3 flex-1">
-                          <StarRating rating={lesson.stars || 0} size="sm" showEmpty={false} />
                           <div className="flex-1">
                             <h4 className="font-semibold text-slate-800">
                               {lesson.title || `Lesson ${lesson.lesson_number}: ${lesson.topic}`}
@@ -1025,10 +1014,10 @@ function DashboardContent() {
                               variant="secondary"
                               onClick={() => {
                                 setIsRecentActivityModalOpen(false)
-                                router.push(`/lessons?lessonId=${lesson.id}`)
+                                handleViewLesson(lesson.id)
                               }}
                             >
-                              {t('dashboard.continue', 'Continue')}
+                              {t('dashboard.view', 'View')}
                             </Button>
                           )}
                         </div>

@@ -45,8 +45,14 @@ export default function AdminDashboardContent() {
     hasRealData: false
   })
   const [isLoading, setIsLoading] = useState(true)
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
+  const [totalUsers, setTotalUsers] = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
+  const [sortColumn, setSortColumn] = useState<string>('created_at')
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
+  const [levelFilter, setLevelFilter] = useState<string>('')
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [chartPeriod, setChartPeriod] = useState<'week' | 'month' | 'year'>('month')
   const [userLessons, setUserLessons] = useState<any[]>([])
@@ -66,7 +72,7 @@ export default function AdminDashboardContent() {
     evaluationTests: 0
   })
 
-  const usersPerPage = 25
+  const usersPerPage = 50
 
   // Handle hydration issues by delaying language detection until client-side
   useEffect(() => {
@@ -103,17 +109,35 @@ export default function AdminDashboardContent() {
   // Authentication is handled by AdminProtectedRoute wrapper
   // Admin token is in HTTP cookie, sent automatically with API requests
   useEffect(() => {
-    loadUsers()
     loadStats(chartPeriod)
     loadContent()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chartPeriod])
 
+  // Initial load of users
+  useEffect(() => {
+    loadUsers()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const loadUsers = useCallback(async () => {
     try {
+      setIsLoadingUsers(true)
       // Admin token is in HTTP cookie, sent automatically with credentials: 'include'
-      console.log('LoadUsers: Making request to admin-get-users API...', { usingCookies: true })
-      const response = await adminApiRequest('/.netlify/functions/admin-get-users', {
+      // When searching, fetch all results without pagination. When not searching, use pagination.
+      const searchParam = searchTerm ? `&search=${encodeURIComponent(searchTerm)}` : ''
+      const sortParam = `&sort=${sortColumn}&order=${sortDirection}`
+      const levelParam = levelFilter ? `&level=${encodeURIComponent(levelFilter)}` : ''
+      let url: string
+      if (searchTerm) {
+        // Search mode: fetch all matching users (use a high limit like 10000)
+        url = `/.netlify/functions/admin-get-users?page=1&limit=10000${searchParam}${sortParam}${levelParam}`
+      } else {
+        // Normal mode: use pagination
+        url = `/.netlify/functions/admin-get-users?page=${currentPage}&limit=${usersPerPage}${searchParam}${sortParam}${levelParam}`
+      }
+      console.log('LoadUsers: Making request to admin-get-users API...', { url, usingCookies: true })
+      const response = await adminApiRequest(url, {
         method: 'GET'
       })
       console.log('LoadUsers: Response status:', response.status)
@@ -140,6 +164,16 @@ export default function AdminDashboardContent() {
         }))
 
         setUsers(transformedUsers)
+        // Update pagination info from API response
+        if (result.pagination) {
+          setTotalUsers(result.pagination.total)
+          // When searching, show all results on one page. When not searching, use pagination.
+          if (searchTerm) {
+            setTotalPages(1)
+          } else {
+            setTotalPages(result.pagination.totalPages)
+          }
+        }
       } else {
         throw new Error(result.error || 'Failed to load users')
       }
@@ -148,10 +182,16 @@ export default function AdminDashboardContent() {
       const errorMessage = (error as Error).message
       showNotification('Failed to load users: ' + errorMessage, 'error')
       setUsers([])
+      setTotalUsers(0)
+      setTotalPages(1)
     } finally {
-      setIsLoading(false)
+      setIsLoadingUsers(false)
+      // Only set main isLoading to false on initial load
+      if (isLoading) {
+        setIsLoading(false)
+      }
     }
-  }, [showNotification, t])
+  }, [showNotification, t, usersPerPage, currentPage, searchTerm, sortColumn, sortDirection, levelFilter, isLoading])
 
   const handleRevokeSession = async (user: User) => {
     if (!confirm(`Are you sure you want to revoke all sessions for ${user.email}? This will log them out from all devices.`)) {
@@ -382,17 +422,39 @@ export default function AdminDashboardContent() {
     window.location.href = '/'
   }
 
-  const filteredUsers = users.filter(user =>
-    user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (user.username && user.username.toLowerCase().includes(searchTerm.toLowerCase()))
-  )
+  // Handle search with debounce - reset to page 1 when search changes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setCurrentPage(1)
+      // Load users will be triggered by the effect below
+    }, 500) // 500ms debounce
 
-  const paginatedUsers = filteredUsers.slice(
-    (currentPage - 1) * usersPerPage,
-    currentPage * usersPerPage
-  )
+    return () => clearTimeout(timer)
+  }, [searchTerm])
 
-  const totalPages = Math.ceil(filteredUsers.length / usersPerPage)
+  // Reset to page 1 when level filter changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [levelFilter])
+
+  // Load users when search, page, sort, or level filter changes
+  useEffect(() => {
+    loadUsers()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, searchTerm, sortColumn, sortDirection, levelFilter])
+
+  // Handle column sorting
+  const handleSort = (column: string) => {
+    console.log('Sort clicked:', column, 'Current sort:', sortColumn, sortDirection)
+    if (sortColumn === column) {
+      // Toggle direction if same column
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')
+    } else {
+      // New column, default to ascending
+      setSortColumn(column)
+      setSortDirection('asc')
+    }
+  }
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'Never'
@@ -794,6 +856,21 @@ export default function AdminDashboardContent() {
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="bg-white border-purple-200 text-slate-800 placeholder-purple-400 w-64 focus:border-purple-400"
                 />
+                <Select
+                  value={levelFilter}
+                  onChange={(e) => setLevelFilter(e.target.value)}
+                  className="bg-white border-purple-200 text-slate-800 w-48 focus:border-purple-400"
+                >
+                  <option value="">{t('allLevels', 'All Levels')}</option>
+                  <option value="Not Assessed">{t('notAssessed', 'Not Assessed')}</option>
+                  <option value="Pre-A1">Pre-A1</option>
+                  <option value="A1">A1</option>
+                  <option value="A2">A2</option>
+                  <option value="B1">B1</option>
+                  <option value="B2">B2</option>
+                  <option value="C1">C1</option>
+                  <option value="C2">C2</option>
+                </Select>
               </div>
             </div>
           </Card.Header>
@@ -802,17 +879,105 @@ export default function AdminDashboardContent() {
             <Table>
               <Header>
                 <Row>
-                  <Head className="text-slate-600 bg-purple-100">{t('email', 'Email')}</Head>
-                  <Head className="text-slate-600 bg-purple-100">{t('username', 'Username')}</Head>
-                  <Head className="text-slate-600 bg-purple-100">{t('level', 'Level')}</Head>
-                  <Head className="text-slate-600 bg-purple-100">{t('stars', 'Stars')}</Head>
-                  <Head className="text-slate-600 bg-purple-100">{t('lastLogin', 'Last Login')}</Head>
-                  <Head className="text-slate-600 bg-purple-100">{t('status', 'Status')}</Head>
+                  <Head 
+                    className={`text-slate-600 bg-purple-100 select-none ${isLoadingUsers ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-purple-200'}`}
+                    onClick={() => !isLoadingUsers && handleSort('email')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>{t('email', 'Email')}</span>
+                      {sortColumn === 'email' && (
+                        <span className="text-purple-600">
+                          {sortDirection === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </div>
+                  </Head>
+                  <Head 
+                    className={`text-slate-600 bg-purple-100 select-none ${isLoadingUsers ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-purple-200'}`}
+                    onClick={() => !isLoadingUsers && handleSort('username')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>{t('username', 'Username')}</span>
+                      {sortColumn === 'username' && (
+                        <span className="text-purple-600">
+                          {sortDirection === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </div>
+                  </Head>
+                  <Head 
+                    className={`text-slate-600 bg-purple-100 select-none ${isLoadingUsers ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-purple-200'}`}
+                    onClick={() => !isLoadingUsers && handleSort('level')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>{t('level', 'Level')}</span>
+                      {sortColumn === 'level' && (
+                        <span className="text-purple-600">
+                          {sortDirection === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </div>
+                  </Head>
+                  <Head 
+                    className={`text-slate-600 bg-purple-100 select-none ${isLoadingUsers ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-purple-200'}`}
+                    onClick={() => !isLoadingUsers && handleSort('total_stars')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>{t('stars', 'Stars')}</span>
+                      {sortColumn === 'total_stars' && (
+                        <span className="text-purple-600">
+                          {sortDirection === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </div>
+                  </Head>
+                  <Head 
+                    className={`text-slate-600 bg-purple-100 select-none ${isLoadingUsers ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-purple-200'}`}
+                    onClick={() => !isLoadingUsers && handleSort('last_login')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>{t('lastLogin', 'Last Login')}</span>
+                      {sortColumn === 'last_login' && (
+                        <span className="text-purple-600">
+                          {sortDirection === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </div>
+                  </Head>
+                  <Head 
+                    className={`text-slate-600 bg-purple-100 select-none ${isLoadingUsers ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-purple-200'}`}
+                    onClick={() => !isLoadingUsers && handleSort('email_verified')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>{t('status', 'Status')}</span>
+                      {sortColumn === 'email_verified' && (
+                        <span className="text-purple-600">
+                          {sortDirection === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </div>
+                  </Head>
                   <Head className="text-slate-600 bg-purple-100">{t('actions', 'Actions')}</Head>
                 </Row>
               </Header>
               <Body>
-                {paginatedUsers.map((user) => (
+                {isLoadingUsers ? (
+                  <Row>
+                    <Cell colSpan={7} className="text-center py-8">
+                      <div className="flex items-center justify-center">
+                        <div className="animate-spin w-6 h-6 border-3 border-purple-500 border-t-transparent rounded-full mr-3"></div>
+                        <span className="text-slate-600">{t('loading', 'Loading...')}</span>
+                      </div>
+                    </Cell>
+                  </Row>
+                ) : users.length === 0 ? (
+                  <Row>
+                    <Cell colSpan={7} className="text-center py-8 text-slate-600">
+                      {t('noUsers', 'No users found')}
+                    </Cell>
+                  </Row>
+                ) : (
+                  users.map((user) => (
                   <Row key={user.id} className="border-purple-200 hover:bg-purple-25">
                     <Cell className="text-slate-700">{user.email}</Cell>
                     <Cell className="text-slate-700">
@@ -840,6 +1005,7 @@ export default function AdminDashboardContent() {
                           size="sm"
                           variant="secondary"
                           onClick={() => handleViewUser(user)}
+                          disabled={isLoadingUsers}
                         >
                           {t('view', 'View')}
                         </Button>
@@ -847,7 +1013,7 @@ export default function AdminDashboardContent() {
                           size="sm"
                           variant="secondary"
                           onClick={() => handleRevokeSession(user)}
-                          disabled={isLoading}
+                          disabled={isLoadingUsers}
                         >
                           {t('revokeSession', 'Revoke Session')}
                         </Button>
@@ -855,49 +1021,114 @@ export default function AdminDashboardContent() {
                           size="sm"
                           variant="danger"
                           onClick={() => handleDeleteUser(user)}
-                          disabled={isLoading}
+                          disabled={isLoadingUsers}
                         >
                           {t('delete', 'Delete')}
                         </Button>
                       </div>
                     </Cell>
                   </Row>
-                ))}
+                  ))
+                )}
               </Body>
             </Table>
 
-            {/* Pagination */}
-            <div className="flex items-center justify-between mt-6">
-              <div className="text-purple-600">
-                {t('showing', 'Showing')} {((currentPage - 1) * usersPerPage) + 1} {t('to', 'to')}{' '}
-                {Math.min(currentPage * usersPerPage, filteredUsers.length)} {t('of', 'of')}{' '}
-                {filteredUsers.length} {t('users', 'users')}
+            {/* Pagination - only show when not searching */}
+            {!searchTerm && (
+              <div className="flex items-center justify-between mt-6">
+                <div className="text-purple-600">
+                  {t('showing', 'Showing')} {((currentPage - 1) * usersPerPage) + 1} {t('to', 'to')}{' '}
+                  {Math.min(currentPage * usersPerPage, totalUsers)} {t('of', 'of')}{' '}
+                  {totalUsers} {t('users', 'users')}
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={currentPage === 1 || isLoadingUsers}
+                    onClick={() => setCurrentPage(prev => prev - 1)}
+                  >
+                    {t('previous', 'Previous')}
+                  </Button>
+
+                  {/* Page Number Buttons */}
+                  <div className="flex items-center space-x-1">
+                    {Array.from({ length: Math.min(7, totalPages) }, (_, i) => {
+                      let pageNum: number
+                      if (totalPages <= 7) {
+                        // Show all pages if 7 or fewer
+                        pageNum = i + 1
+                      } else if (currentPage <= 4) {
+                        // Show first 5 pages, then ... and last
+                        if (i < 5) {
+                          pageNum = i + 1
+                        } else if (i === 5) {
+                          return <span key="ellipsis1" className="px-2 text-slate-400">...</span>
+                        } else {
+                          pageNum = totalPages
+                        }
+                      } else if (currentPage >= totalPages - 3) {
+                        // Show first, then ... and last 5 pages
+                        if (i === 0) {
+                          pageNum = 1
+                        } else if (i === 1) {
+                          return <span key="ellipsis1" className="px-2 text-slate-400">...</span>
+                        } else {
+                          pageNum = totalPages - 6 + i
+                        }
+                      } else {
+                        // Show first, ... current-1, current, current+1, ... last
+                        if (i === 0) {
+                          pageNum = 1
+                        } else if (i === 1) {
+                          return <span key="ellipsis1" className="px-2 text-slate-400">...</span>
+                        } else if (i < 5) {
+                          pageNum = currentPage - 2 + i
+                        } else if (i === 5) {
+                          return <span key="ellipsis2" className="px-2 text-slate-400">...</span>
+                        } else {
+                          pageNum = totalPages
+                        }
+                      }
+
+                      if (pageNum === undefined) return null
+
+                      return (
+                        <Button
+                          key={pageNum}
+                          variant={currentPage === pageNum ? 'primary' : 'secondary'}
+                          size="sm"
+                          disabled={isLoadingUsers}
+                          onClick={() => setCurrentPage(pageNum)}
+                          className="min-w-[2.5rem]"
+                        >
+                          {pageNum}
+                        </Button>
+                      )
+                    })}
+                  </div>
+
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={currentPage === totalPages || isLoadingUsers}
+                    onClick={() => setCurrentPage(prev => prev + 1)}
+                  >
+                    {t('next', 'Next')}
+                  </Button>
+                </div>
               </div>
+            )}
 
-              <div className="flex items-center space-x-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={currentPage === 1}
-                  onClick={() => setCurrentPage(prev => prev - 1)}
-                >
-                  {t('previous', 'Previous')}
-                </Button>
-
-                <span className="text-slate-300">
-                  {t('page', 'Page')} {currentPage} {t('of', 'of')} {totalPages}
-                </span>
-
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={currentPage === totalPages}
-                  onClick={() => setCurrentPage(prev => prev + 1)}
-                >
-                  {t('next', 'Next')}
-                </Button>
+            {/* Search Results Count - show when searching */}
+            {searchTerm && (
+              <div className="flex items-center justify-between mt-6">
+                <div className="text-purple-600">
+                  {t('showing', 'Showing')} {users.length} {t('of', 'of')} {totalUsers} {t('users', 'users')} {t('matching', 'matching')} "{searchTerm}"
+                </div>
               </div>
-            </div>
+            )}
           </Card.Body>
         </Card>
 

@@ -40,6 +40,7 @@ const VocabularyFillBlanks = memo<VocabularyFillBlanksProps>(({ lessonData, onCo
   const { t } = useTranslation();
   const [hasCalledOnComplete, setHasCalledOnComplete] = useState(false);
   const hasCalledOnCompleteRef = useRef(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Log on mount to verify component is rendered
   useEffect(() => {
@@ -135,6 +136,8 @@ const VocabularyFillBlanks = memo<VocabularyFillBlanksProps>(({ lessonData, onCo
   // Handle answer selection for single question format
   const handleSingleAnswer = useCallback((answer: string) => {
     setSingleAnswer(answer);
+    // Clear error message when user makes a new selection
+    setErrorMessage(null);
   }, []);
 
   // Handle answer selection for multiple blanks format (inline mode)
@@ -144,6 +147,8 @@ const VocabularyFillBlanks = memo<VocabularyFillBlanksProps>(({ lessonData, onCo
       [blankId]: answer
     }));
     setShowDropdown(null);
+    // Clear error message when user makes a new selection
+    setErrorMessage(null);
   }, []);
 
   // Calculate completion status
@@ -194,6 +199,24 @@ const VocabularyFillBlanks = memo<VocabularyFillBlanksProps>(({ lessonData, onCo
     const completion = getCompletionStatus();
     const timeSpent = Math.round((Date.now() - startTime) / 1000);
 
+    // Validate all answers are correct before proceeding
+    if (completion.correct < completion.total) {
+      // Some answers are incorrect - show error and reset
+      setErrorMessage('Some answers are incorrect. Please try again.');
+      // Reset all answers
+      if (isSingleQuestion) {
+        setSingleAnswer('');
+      } else {
+        setAnswers({});
+      }
+      return; // Don't complete, let user try again
+    }
+
+    // All answers are correct - proceed with completion
+    setHasCalledOnComplete(true);
+    hasCalledOnCompleteRef.current = true;
+    setErrorMessage(null);
+
     console.warn('✅ VocabularyFillBlanks: Calling onComplete with result', {
       activityId: `vocabulary-fill-blanks-${lessonData.activityOrder}`,
       activityType: 'vocabulary_fill_blanks',
@@ -202,9 +225,6 @@ const VocabularyFillBlanks = memo<VocabularyFillBlanksProps>(({ lessonData, onCo
       maxScore: completion.total,
       timeSpent
     });
-
-    setHasCalledOnComplete(true);
-    hasCalledOnCompleteRef.current = true;
 
     // Pass result object to onComplete - parent will handle background save
     const result = {
@@ -236,7 +256,7 @@ const VocabularyFillBlanks = memo<VocabularyFillBlanksProps>(({ lessonData, onCo
         console.warn('✅ VocabularyFillBlanks: Progression succeeded (component should have unmounted)');
       }
     }, 2000);
-  }, [lessonData, startTime, getCompletionStatus, answers, singleAnswer, isSingleQuestion, onComplete, hasCalledOnComplete]);
+  }, [lessonData, startTime, getCompletionStatus, answers, singleAnswer, isSingleQuestion, onComplete, hasCalledOnComplete, shuffledBlanks, shuffledSingleOptions]);
 
   const completion = getCompletionStatus();
 
@@ -397,6 +417,12 @@ const VocabularyFillBlanks = memo<VocabularyFillBlanksProps>(({ lessonData, onCo
                 </Button>
               </div>
             </div>
+          </div>
+        )}
+
+        {errorMessage && (
+          <div className="mt-4 mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-sm text-red-800 whitespace-pre-line">{errorMessage}</p>
           </div>
         )}
 

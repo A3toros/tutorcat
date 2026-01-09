@@ -54,14 +54,14 @@ const TableRow: React.FC<TableRowProps> = ({ children, className = '' }) => {
   )
 }
 
-interface TableHeadProps {
+interface TableHeadProps extends React.ThHTMLAttributes<HTMLTableCellElement> {
   children: React.ReactNode
   className?: string
 }
 
-const TableHead: React.FC<TableHeadProps> = ({ children, className = '' }) => {
+const TableHead: React.FC<TableHeadProps> = ({ children, className = '', ...props }) => {
   return (
-    <th className={`px-4 py-3 text-left text-sm font-medium text-neutral-600 ${className}`}>
+    <th className={`px-4 py-3 text-left text-sm font-medium text-neutral-600 ${className}`} {...props}>
       {children}
     </th>
   )

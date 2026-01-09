@@ -34,6 +34,7 @@ const VocabularyMatchingDrag = memo<VocabularyMatchingDragProps>(({ lessonData, 
   // State management
   const [displayData, setDisplayData] = useState<{leftWords: string[], rightWords: string[], correctPairs: number[]} | null>(null);
   const [studentAnswers, setStudentAnswers] = useState<{[key: number]: number}>({});
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
   // Container ref for actual width
   const containerRef = useRef<HTMLDivElement>(null);
@@ -417,7 +418,7 @@ const VocabularyMatchingDrag = memo<VocabularyMatchingDragProps>(({ lessonData, 
           return; // Exit early, don't place the word
         }
         
-        // Match found and dropzone is free!
+        // Match found and dropzone is free - accept any match (validation happens on Next button)
         console.log(`✅ Match found! Word "${displayData.leftWords[leftIndex]}" matched with "${rightWords[rightIndex]}"`);
         setStudentAnswers(prev => {
           const newAnswers = {
@@ -426,6 +427,8 @@ const VocabularyMatchingDrag = memo<VocabularyMatchingDragProps>(({ lessonData, 
           };
           return newAnswers;
         });
+        // Clear any previous error message when user makes a new match
+        setErrorMessage(null);
         break;
       }
     }
@@ -468,16 +471,33 @@ const VocabularyMatchingDrag = memo<VocabularyMatchingDragProps>(({ lessonData, 
     const timeSpent = Math.round((Date.now() - startTime) / 1000);
     const totalPairs = displayData.leftWords.length;
     let correctMatches = 0;
+    const incorrectMatches: string[] = [];
 
+    // Check all matches for correctness
     Object.entries(studentAnswers).forEach(([leftIndexStr, rightIndex]) => {
       const leftIndex = parseInt(leftIndexStr);
       const expectedRightIndex = displayData.correctPairs[leftIndex];
       if (rightIndex === expectedRightIndex) {
         correctMatches++;
+      } else {
+        // Track incorrect matches for error message
+        incorrectMatches.push(
+          `"${displayData.leftWords[leftIndex]}" should match with "${displayData.rightWords[expectedRightIndex]}"`
+        );
       }
     });
 
+    // If there are incorrect matches, show error and reset all
+    if (incorrectMatches.length > 0) {
+      setErrorMessage('Some matches are incorrect. Please try again.');
+      // Reset all matches
+      setStudentAnswers({});
+      return; // Don't complete, let user try again
+    }
+
+    // All matches are correct - proceed with completion
     setHasCalledOnComplete(true);
+    setErrorMessage(null);
 
     // If we have lessonId, this is a lesson activity - pass result to parent
     if (lessonData.lessonId) {
@@ -692,19 +712,26 @@ const VocabularyMatchingDrag = memo<VocabularyMatchingDragProps>(({ lessonData, 
 
         {lessonData.lessonId ? (
           // Show completion button for lesson activities
-        <div className="mt-6 flex justify-between items-center">
-          <div className="text-sm text-neutral-600">
-            {isComplete ? 'All words matched! Ready to continue.' : 'Match all words to continue'}
-          </div>
+        <div className="mt-6">
+          {errorMessage && (
+            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-800 whitespace-pre-line">{errorMessage}</p>
+            </div>
+          )}
+          <div className="flex justify-between items-center">
+            <div className="text-sm text-neutral-600">
+              {isComplete ? 'All words matched! Ready to continue.' : 'Match all words to continue'}
+            </div>
 
-          <Button
-            onClick={handleComplete}
-            disabled={!isComplete || hasCalledOnComplete}
-            size="sm"
-            className={isComplete ? 'bg-green-500 hover:bg-green-600' : ''}
-          >
-            Next
-          </Button>
+            <Button
+              onClick={handleComplete}
+              disabled={!isComplete || hasCalledOnComplete}
+              size="sm"
+              className={isComplete ? 'bg-green-500 hover:bg-green-600' : ''}
+            >
+              Next
+            </Button>
+          </div>
         </div>
         ) : (
           // Auto-complete for evaluation context
