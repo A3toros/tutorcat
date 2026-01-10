@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { fetchAndCacheVideo } from '@/lib/videoCache'
+import { getCloudinaryThumbnailUrl, generateVideoThumbnail } from '@/lib/videoThumbnail'
 
 interface VideoPlayerProps {
   src: string
@@ -35,6 +36,7 @@ export default function VideoPlayer({
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
   const [isCached, setIsCached] = useState(false)
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(poster || null)
 
   useEffect(() => {
     let isMounted = true
@@ -90,6 +92,59 @@ export default function VideoPlayer({
     checkCache()
   }, [src])
 
+  // Generate thumbnail from middle of video if not provided
+  useEffect(() => {
+    if (poster) {
+      setThumbnailUrl(poster)
+      return
+    }
+
+    let isMounted = true
+
+    // Try Cloudinary thumbnail first (faster)
+    const cloudinaryThumb = getCloudinaryThumbnailUrl(src, 50)
+    if (cloudinaryThumb) {
+      // Test if the thumbnail URL works
+      const img = new Image()
+      img.onload = () => {
+        if (isMounted) {
+          setThumbnailUrl(cloudinaryThumb)
+        }
+      }
+      img.onerror = () => {
+        // Cloudinary thumbnail failed, try client-side generation
+        generateThumbnailFromVideo()
+      }
+      img.src = cloudinaryThumb
+      return
+    }
+
+    // Fallback to client-side generation
+    generateThumbnailFromVideo()
+
+    async function generateThumbnailFromVideo() {
+      try {
+        // Wait for video to be loaded first
+        const { fetchAndCacheVideo } = await import('@/lib/videoCache')
+        const blob = await fetchAndCacheVideo(src)
+        
+        if (!isMounted) return
+
+        // Generate thumbnail from the blob
+        const thumb = await generateVideoThumbnail(blob, 50)
+        if (thumb && isMounted) {
+          setThumbnailUrl(thumb)
+        }
+      } catch (e) {
+        console.warn('Failed to generate thumbnail:', e)
+      }
+    }
+
+    return () => {
+      isMounted = false
+    }
+  }, [src, poster])
+
   if (error) {
     return (
       <div className={`flex items-center justify-center bg-neutral-100 rounded-lg ${className}`}>
@@ -124,7 +179,7 @@ export default function VideoPlayer({
           muted={muted}
           controls={controls}
           playsInline={playsInline}
-          poster={poster}
+          poster={thumbnailUrl || undefined}
           preload="metadata"
         />
       )}

@@ -1,9 +1,9 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
-import { Card } from '@/components/ui'
+import { Card, Modal } from '@/components/ui'
 
 interface TeamMember {
   id: string
@@ -12,11 +12,14 @@ interface TeamMember {
   descriptionKey: string
   photo: string
   isCurator?: boolean
+  contributions?: string[]
+  technologies?: string[]
 }
 
 export default function DevelopersPage() {
   const { t } = useTranslation()
   const [isClient, setIsClient] = useState(false)
+  const [selectedDeveloper, setSelectedDeveloper] = useState<TeamMember | null>(null)
   
   useEffect(() => {
     setIsClient(true)
@@ -28,8 +31,24 @@ export default function DevelopersPage() {
       name: 'Mattcha Srirojwong',
       roleKey: 'meetTeam.roles.backendDeveloper',
       descriptionKey: 'meetTeam.descriptions.mattcha',
-      photo: '/developer.png',
-      isCurator: false
+      photo: '/Mattcha-Srirojwong.webp',
+      isCurator: false,
+      contributions: [
+        'Built 36 Netlify serverless functions for API endpoints',
+        'Implemented JWT authentication system with secure HTTP-only cookies',
+        'Created PostgreSQL database schema with Neon DB integration',
+        'Developed AI integration endpoints (OpenAI GPT-4, AssemblyAI speech-to-text)',
+        'Built authentication flows: login, signup, OTP verification, password reset',
+        'Created admin API endpoints for user management and statistics',
+        'Implemented lesson and activity submission endpoints',
+        'Built evaluation test system with scoring algorithms',
+        'Developed achievement system with XP calculation and leveling',
+        'Created email service integration using Resend for OTP delivery',
+        'Implemented secure password hashing with bcrypt',
+        'Built dashboard data aggregation endpoints',
+        'Created session management and cleanup functions'
+      ],
+      technologies: ['Node.js', 'TypeScript', 'Netlify Functions', 'PostgreSQL', 'Neon DB', 'JWT', 'bcrypt', 'OpenAI API', 'AssemblyAI', 'Resend']
     },
     {
       id: 'dev2',
@@ -37,15 +56,44 @@ export default function DevelopersPage() {
       roleKey: 'meetTeam.roles.webDesigner',
       descriptionKey: 'meetTeam.descriptions.jindaporn',
       photo: '/developer.png',
-      isCurator: false
+      isCurator: false,
+      contributions: [
+        'Designed the complete visual identity of TutorCat',
+        'Created color schemes and typography system',
+        'Designed responsive layouts for all pages',
+        'Styled UI components with Tailwind CSS',
+        'Ensured design consistency across desktop, tablet, and mobile',
+        'Created component styling system',
+        'Designed visual hierarchy and spacing',
+        'Created engaging and professional appearance for learners'
+      ],
+      technologies: ['Tailwind CSS', 'CSS', 'Design Systems', 'Responsive Design', 'Typography', 'Color Theory']
     },
     {
       id: 'dev3',
       name: 'Nichapath Chunlawithet',
       roleKey: 'meetTeam.roles.frontendDeveloper',
       descriptionKey: 'meetTeam.descriptions.nichapath',
-      photo: '/developer.png',
-      isCurator: false
+      photo: '/Nichapath-Chunlawithet.webp',
+      isCurator: false,
+      contributions: [
+        'Built lesson flow and activity components (vocabulary, grammar, speaking, reading)',
+        'Created drag-and-drop vocabulary matching with Konva.js',
+        'Implemented sentence construction exercises with interactive word dragging',
+        'Built speaking practice component with audio recording and AI feedback',
+        'Developed reading improvement activity with similarity checking',
+        'Created dashboard UI with progress tracking and statistics',
+        'Built achievement system UI with modal displays',
+        'Implemented Framer Motion animations for smooth transitions',
+        'Created Lottie animations for mascot interactions',
+        'Built responsive layouts using Tailwind CSS',
+        'Developed evaluation test components (vocabulary, grammar, speaking, writing)',
+        'Created admin panel UI components',
+        'Implemented video player with caching system',
+        'Built authentication modals and protected routes',
+        'Developed i18n integration for multi-language support'
+      ],
+      technologies: ['React', 'Next.js', 'TypeScript', 'Tailwind CSS', 'Framer Motion', 'Konva.js', 'React Konva', 'Lottie React', 'IndexedDB', 'Web APIs']
     },
     {
       id: 'curator',
@@ -95,7 +143,10 @@ export default function DevelopersPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.5 + index * 0.1 }}
               >
-                <Card className="h-full hover:shadow-xl transition-shadow duration-300">
+                <Card 
+                  className="h-full hover:shadow-xl transition-shadow duration-300 cursor-pointer"
+                  onClick={() => setSelectedDeveloper(developer)}
+                >
                   <Card.Body className="p-6">
                     {/* Photo */}
                     <div className="w-32 h-32 rounded-full overflow-hidden mx-auto mb-4 border-4 border-primary-200">
@@ -123,8 +174,11 @@ export default function DevelopersPage() {
                       <p className="text-primary-600 font-semibold mb-3" suppressHydrationWarning>
                         {isClient ? t(developer.roleKey, 'Developer') : 'Developer'}
                       </p>
-                      <p className="text-neutral-600 text-sm leading-relaxed" suppressHydrationWarning>
+                      <p className="text-neutral-600 text-sm leading-relaxed mb-3" suppressHydrationWarning>
                         {isClient ? t(developer.descriptionKey, 'Team member description') : 'Team member description'}
+                      </p>
+                      <p className="text-primary-500 text-xs font-medium mt-2">
+                        Click to see detailed contributions →
                       </p>
                     </div>
                   </Card.Body>
@@ -197,6 +251,77 @@ export default function DevelopersPage() {
           </p>
         </motion.div>
       </div>
+
+      {/* Developer Detail Modal */}
+      <AnimatePresence>
+        {selectedDeveloper && (
+          <Modal
+            isOpen={!!selectedDeveloper}
+            onClose={() => setSelectedDeveloper(null)}
+            title={selectedDeveloper.name}
+          >
+            <div className="p-6">
+              {/* Photo and Role */}
+              <div className="flex items-center gap-6 mb-6">
+                <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-primary-200 flex-shrink-0">
+                  <img 
+                    src={selectedDeveloper.photo} 
+                    alt={selectedDeveloper.name}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.src = '/developer.png'
+                    }}
+                  />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-bold text-neutral-800 mb-1">
+                    {selectedDeveloper.name}
+                  </h3>
+                  <p className="text-primary-600 font-semibold" suppressHydrationWarning>
+                    {isClient ? t(selectedDeveloper.roleKey, 'Developer') : 'Developer'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Contributions */}
+              {selectedDeveloper.contributions && selectedDeveloper.contributions.length > 0 && (
+                <div className="mb-6">
+                  <h4 className="text-lg font-semibold text-neutral-800 mb-3">
+                    Key Contributions
+                  </h4>
+                  <ul className="space-y-2">
+                    {selectedDeveloper.contributions.map((contribution, index) => (
+                      <li key={index} className="flex items-start gap-2 text-neutral-700">
+                        <span className="text-primary-500 mt-1">•</span>
+                        <span className="flex-1">{contribution}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Technologies */}
+              {selectedDeveloper.technologies && selectedDeveloper.technologies.length > 0 && (
+                <div>
+                  <h4 className="text-lg font-semibold text-neutral-800 mb-3">
+                    Technologies Used
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedDeveloper.technologies.map((tech, index) => (
+                      <span
+                        key={index}
+                        className="px-3 py-1 bg-primary-100 text-primary-700 rounded-full text-sm font-medium"
+                      >
+                        {tech}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </Modal>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
