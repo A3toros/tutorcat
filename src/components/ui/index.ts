@@ -13,6 +13,7 @@ export { default as Textarea } from './Textarea'
 export { default as StarRating } from './StarRating'
 export { default as CookieConsentBanner } from './CookieConsentBanner'
 export { default as ActivityListItem } from './ActivityListItem'
+export { default as VideoPlayer } from './VideoPlayer'
 
 // Modal Components
 export { default as Modal } from './Modal'

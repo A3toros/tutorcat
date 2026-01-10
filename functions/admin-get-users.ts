@@ -147,20 +147,24 @@ const handler: Handler = async (event, context) => {
     ]);
 
     // Sort results in memory (safe because sortColumn is validated)
-    const sortedUsers = [...allUsersResult].sort((a: any, b: any) => {
-      let aVal = a[sortColumn];
-      let bVal = b[sortColumn];
-      
-      // Handle null values - nulls go to end
-      if (aVal === null || aVal === undefined) aVal = sortOrder === 'ASC' ? '\uffff' : '';
-      if (bVal === null || bVal === undefined) bVal = sortOrder === 'ASC' ? '\uffff' : '';
-      
-      // Handle different data types
-      if (typeof aVal === 'string') {
-        aVal = aVal.toLowerCase();
-        bVal = bVal.toLowerCase();
+    const normalizeForSort = (value: any) => {
+      if (value === null || value === undefined) return sortOrder === 'ASC' ? '\uffff' : '';
+      if (value instanceof Date) return value.getTime();
+      if (typeof value === 'string') return value.toLowerCase();
+      if (typeof value === 'number') return value;
+      if (typeof value === 'boolean') return value ? 1 : 0;
+      // Fallback: coerce to string safely
+      try {
+        return String(value).toLowerCase();
+      } catch {
+        return String(value);
       }
-      
+    };
+
+    const sortedUsers = [...allUsersResult].sort((a: any, b: any) => {
+      const aVal = normalizeForSort(a[sortColumn]);
+      const bVal = normalizeForSort(b[sortColumn]);
+
       if (sortOrder === 'ASC') {
         return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
       } else {

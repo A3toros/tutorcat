@@ -178,8 +178,13 @@ export default function AdminDashboardContent() {
         throw new Error(result.error || 'Failed to load users')
       }
     } catch (error) {
-      console.error('Failed to load users:', error)
       const errorMessage = (error as Error).message
+      // Don't show notification or update state if it's a 401 - redirect is happening
+      if (errorMessage.includes('Admin session expired') || errorMessage.includes('401')) {
+        console.log('Admin session expired, redirecting...')
+        return // Exit early, redirect is handled by adminApiRequest
+      }
+      console.error('Failed to load users:', error)
       showNotification('Failed to load users: ' + errorMessage, 'error')
       setUsers([])
       setTotalUsers(0)
@@ -336,8 +341,14 @@ export default function AdminDashboardContent() {
         throw new Error(result.error || 'Failed to load stats')
       }
     } catch (error) {
+      const errorMessage = (error as Error).message
+      // Don't show notification or update state if it's a 401 - redirect is happening
+      if (errorMessage.includes('Admin session expired') || errorMessage.includes('401')) {
+        console.log('Admin session expired, redirecting...')
+        return // Exit early, redirect is handled by adminApiRequest
+      }
       console.error('Failed to load stats:', error)
-      showNotification('Failed to load statistics: ' + (error as Error).message, 'error')
+      showNotification('Failed to load statistics: ' + errorMessage, 'error')
       setStats({
         totalUsers: 0,
         activeToday: 0,

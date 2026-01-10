@@ -2,8 +2,8 @@
 
 import { useTranslation } from 'react-i18next'
 import { useRouter } from 'next/navigation'
-import { useEffect } from 'react'
-import { Button, Card, Mascot } from '@/components/ui'
+import { useEffect, useState } from 'react'
+import { Button, Card, Mascot, VideoPlayer } from '@/components/ui'
 import { useNotification } from '@/contexts/NotificationContext'
 import { useModal } from '@/contexts/ModalContext'
 import { useAuth } from '@/contexts/AuthContext'
@@ -15,6 +15,18 @@ function HomeContent() {
   const { showNotification } = useNotification()
   const { showModal } = useModal()
   const { isAuthenticated, isLoading, user } = useAuth()
+  const [isMobile, setIsMobile] = useState(false)
+
+  // Detect mobile vs desktop
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024) // lg breakpoint
+    }
+    
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   // Redirect authenticated users away from home page
   // This ONLY runs on the home page (/) to prevent loops
@@ -195,10 +207,38 @@ function HomeContent() {
         </div>
       </div>
 
+      {/* Video Section */}
+      <div className="py-16 bg-gradient-to-b from-white to-neutral-50">
+        <div className="container mx-auto px-4 max-w-5xl">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl lg:text-4xl font-bold mb-4 bg-gradient-primary bg-clip-text text-transparent">
+              {t('auth.watchDemo', 'Proudly presented by Mathayomwatsing')}
+            </h2>
+          </div>
+          
+          <div className="relative rounded-2xl overflow-hidden shadow-2xl flex items-center justify-center">
+            <div className={`w-full mx-auto ${isMobile ? 'max-w-[540px]' : 'max-w-5xl'}`} style={isMobile ? { aspectRatio: '9/16' } : { aspectRatio: '16/9' }}>
+              <VideoPlayer
+                src={isMobile 
+                  ? "https://res.cloudinary.com/dnovxoaqi/video/upload/v1768026339/Sequence_01_1_a0e55g.mp4"
+                  : "https://res.cloudinary.com/dnovxoaqi/video/upload/v1768027056/0001-0402_ycsdrv.mkv"
+                }
+                className="w-full h-full"
+                controls={true}
+                autoPlay={false}
+                loop={false}
+                muted={false}
+                playsInline={true}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Stats Section */}
       <div className="py-16 bg-white">
         <div className="container mx-auto px-4">
-          <div className="grid grid-cols-2 gap-8 text-center">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 text-center">
             <div>
               <div className="text-3xl font-bold text-secondary-600 mb-2">600+</div>
               <div className="text-neutral-600">{t('common.lessons', 'Lessons')}</div>
@@ -206,6 +246,14 @@ function HomeContent() {
             <div>
               <div className="text-3xl font-bold text-neutral-600 mb-2">4.9★</div>
               <div className="text-neutral-600">{t('common.rating', 'Rating')}</div>
+            </div>
+            <div>
+              <div className="text-3xl font-bold text-primary-600 mb-2">300+</div>
+              <div className="text-neutral-600">{t('common.students', 'Students')}</div>
+            </div>
+            <div>
+              <div className="text-3xl font-bold text-accent-600 mb-2">2</div>
+              <div className="text-neutral-600">{t('common.languages', 'Languages')}</div>
             </div>
           </div>
         </div>

@@ -45,10 +45,22 @@ export async function adminApiRequest(
 
   // Check for 401 (unauthorized) - token expired
   if (response.status === 401) {
-    // Admin token expired - trigger full logout
-    console.warn('Admin token expired, logging out user');
+    // Admin token expired - trigger full logout to clear ALL cookies (not just admin_token)
+    console.warn('Admin token expired, logging out user completely');
 
     if (typeof window !== 'undefined') {
+      // Call logout API to clear all cookies (access_token, session_token, admin_token)
+      // This ensures admin doesn't remain logged in as regular user
+      try {
+        const { apiClient } = await import('@/lib/api');
+        await apiClient.logout().catch(() => {
+          // Ignore logout API errors - we'll still redirect
+        });
+      } catch (error) {
+        // Ignore errors - we'll still redirect
+        console.error('Logout API error (continuing with redirect):', error);
+      }
+
       // Clear localStorage (preserve cookie consent)
       const cookieConsentData = localStorage.getItem('cookie_consent_data');
       localStorage.clear();
@@ -56,8 +68,13 @@ export async function adminApiRequest(
         localStorage.setItem('cookie_consent_data', cookieConsentData);
       }
 
-      // Redirect to home page (AuthContext will detect logout)
-      window.location.href = '/';
+      // Use replace() instead of href to prevent back button issues
+      // This immediately redirects and prevents any further code execution
+      window.location.replace('/');
+      
+      // Return a rejected promise that will be caught, but redirect already happened
+      // This prevents any error handling from showing notifications
+      return Promise.reject(new Error('Admin session expired'));
     }
 
     throw new Error('Admin session expired. Logging out...');

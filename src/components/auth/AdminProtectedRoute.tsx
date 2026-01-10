@@ -20,6 +20,16 @@ const AdminProtectedRoute: React.FC<AdminProtectedRouteProps> = ({ children }) =
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
+    // Set a timeout to prevent infinite loading (e.g., if admin token expired)
+    const timeoutId = setTimeout(() => {
+      if (isLoading) {
+        console.warn('AdminProtectedRoute: Timeout waiting for admin auth, redirecting...')
+        setIsLoading(false)
+        setIsAuthenticated(false)
+        window.location.href = '/'
+      }
+    }, 5000) // 5 second timeout
+
     const checkAdminAuth = async () => {
       // Wait for auth context to finish loading
       if (authLoading) {
@@ -31,9 +41,35 @@ const AdminProtectedRoute: React.FC<AdminProtectedRouteProps> = ({ children }) =
       if (user?.role === 'admin') {
         // User is admin - admin token is in HTTP cookie (set by backend)
         // Cookies are sent automatically with API requests, no need to check localStorage
-        setIsAuthenticated(true)
-        setIsLoading(false)
-        return
+        // But verify admin token is still valid by making a test API call
+        try {
+          const { adminApiRequest } = await import('@/utils/adminApi')
+          // Make a lightweight test call to verify admin token is valid
+          const testResponse = await Promise.race([
+            adminApiRequest('/.netlify/functions/admin-get-stats?period=week', { method: 'GET' }),
+            new Promise<Response>((_, reject) => 
+              setTimeout(() => reject(new Error('Timeout')), 3000)
+            )
+          ])
+          
+          if (testResponse.status === 401) {
+            // Admin token expired - will be handled by adminApiRequest redirect
+            clearTimeout(timeoutId)
+            return
+          }
+          
+          // Admin token is valid
+          clearTimeout(timeoutId)
+          setIsAuthenticated(true)
+          setIsLoading(false)
+          return
+        } catch (error) {
+          // API call failed (401 or timeout) - admin token likely expired
+          // adminApiRequest will handle redirect, but clear timeout and exit
+          clearTimeout(timeoutId)
+          console.warn('AdminProtectedRoute: Admin token verification failed', error)
+          return
+        }
       }
 
       // Check 3: Fetch user from API if not in context
@@ -52,15 +88,42 @@ const AdminProtectedRoute: React.FC<AdminProtectedRouteProps> = ({ children }) =
           }
         } catch (error) {
           console.error('AdminProtectedRoute: Failed to check user', error)
+          // If API call fails, don't keep loading forever
+          clearTimeout(timeoutId)
+          setIsLoading(false)
+          setIsAuthenticated(false)
+          // Redirect after a short delay to allow any pending redirects to complete
+          setTimeout(() => {
+            if (window.location.pathname.startsWith('/admin')) {
+              window.location.href = '/'
+            }
+          }, 100)
+          return
         }
       }
 
       // Check 4: User is loaded and confirmed NOT admin
       if (user && user.role && user.role !== 'admin') {
         // User is confirmed not admin - redirect to home
+        clearTimeout(timeoutId)
         setIsAuthenticated(false)
         setIsLoading(false)
         window.location.href = '/'
+        return
+      }
+
+      // Check 5: If we've been loading for too long (e.g., admin token expired), redirect
+      // This prevents infinite loading state
+      if (!user && !authLoading) {
+        // No user and auth finished loading - likely not authenticated
+        clearTimeout(timeoutId)
+        setIsAuthenticated(false)
+        setIsLoading(false)
+        setTimeout(() => {
+          if (window.location.pathname.startsWith('/admin')) {
+            window.location.href = '/'
+          }
+        }, 100)
         return
       }
 
@@ -69,6 +132,10 @@ const AdminProtectedRoute: React.FC<AdminProtectedRouteProps> = ({ children }) =
     }
 
     checkAdminAuth()
+    
+    return () => {
+      clearTimeout(timeoutId)
+    }
   }, [user, authLoading])
 
   // Show loading state
@@ -93,3 +160,4 @@ const AdminProtectedRoute: React.FC<AdminProtectedRouteProps> = ({ children }) =
 }
 
 export default AdminProtectedRoute
+
