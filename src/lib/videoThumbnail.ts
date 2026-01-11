@@ -20,17 +20,33 @@ export async function generateVideoThumbnail(
     video.playsInline = true
     
     let objectUrl: string | null = null
+    let resolved = false
     
     const cleanup = () => {
       if (objectUrl) {
         URL.revokeObjectURL(objectUrl)
+        objectUrl = null
       }
       video.src = ''
       video.load()
+      // Remove all event listeners to prevent further callbacks
+      video.onloadedmetadata = null
+      video.onseeked = null
+      video.onerror = null
+    }
+    
+    const resolveOnce = (value: string | null) => {
+      if (!resolved) {
+        resolved = true
+        cleanup()
+        resolve(value)
+      }
     }
     
     video.onloadedmetadata = () => {
-      if (video.duration && !isNaN(video.duration)) {
+      if (resolved) return
+      
+      if (video.duration && !isNaN(video.duration) && video.duration > 0) {
         // Seek to the middle (or specified percentage) of the video
         const targetTime = Math.max(0, Math.min(video.duration * (timePercent / 100), video.duration - 0.1))
         video.currentTime = targetTime
@@ -41,9 +57,13 @@ export async function generateVideoThumbnail(
     }
 
     video.onseeked = () => {
+      if (resolved) return
+      
       try {
         // Wait a bit to ensure frame is rendered
         setTimeout(() => {
+          if (resolved) return
+          
           try {
             const canvas = document.createElement('canvas')
             canvas.width = video.videoWidth || 1920
@@ -51,8 +71,7 @@ export async function generateVideoThumbnail(
             
             const ctx = canvas.getContext('2d')
             if (!ctx || video.videoWidth === 0 || video.videoHeight === 0) {
-              cleanup()
-              resolve(null)
+              resolveOnce(null)
               return
             }
             
@@ -75,32 +94,27 @@ export async function generateVideoThumbnail(
               if (resizedCtx) {
                 resizedCtx.drawImage(canvas, 0, 0, finalWidth, finalHeight)
                 const dataUrl = resizedCanvas.toDataURL('image/jpeg', 0.8)
-                cleanup()
-                resolve(dataUrl)
+                resolveOnce(dataUrl)
                 return
               }
             }
             
             const dataUrl = canvas.toDataURL('image/jpeg', 0.8)
-            cleanup()
-            resolve(dataUrl)
+            resolveOnce(dataUrl)
           } catch (e) {
-            console.warn('Failed to generate thumbnail from canvas:', e)
-            cleanup()
-            resolve(null)
+            // Silently fail
+            resolveOnce(null)
           }
         }, 100)
       } catch (e) {
-        console.warn('Failed to generate thumbnail:', e)
-        cleanup()
-        resolve(null)
+        // Silently fail
+        resolveOnce(null)
       }
     }
 
-    video.onerror = (e) => {
-      console.warn('Video error during thumbnail generation:', e)
-      cleanup()
-      resolve(null)
+    video.onerror = () => {
+      // Silently handle errors - don't log to prevent console spam
+      resolveOnce(null)
     }
 
     // Set video source
@@ -110,6 +124,13 @@ export async function generateVideoThumbnail(
     } else {
       video.src = videoSource
     }
+    
+    // Timeout after 10 seconds to prevent hanging
+    setTimeout(() => {
+      if (!resolved) {
+        resolveOnce(null)
+      }
+    }, 10000)
   })
 }
 

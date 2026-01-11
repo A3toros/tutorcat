@@ -32,6 +32,7 @@ export default function VideoPlayer({
   onError,
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
+  const thumbnailAttemptedRef = useRef(false)
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
@@ -94,6 +95,9 @@ export default function VideoPlayer({
 
   // Generate thumbnail from middle of video if not provided
   useEffect(() => {
+    // Reset attempt flag when src changes
+    thumbnailAttemptedRef.current = false
+    
     if (poster) {
       setThumbnailUrl(poster)
       return
@@ -106,23 +110,34 @@ export default function VideoPlayer({
     if (cloudinaryThumb) {
       // Test if the thumbnail URL works
       const img = new Image()
+      let imgLoaded = false
+      
       img.onload = () => {
+        imgLoaded = true
         if (isMounted) {
           setThumbnailUrl(cloudinaryThumb)
         }
       }
       img.onerror = () => {
-        // Cloudinary thumbnail failed, try client-side generation
-        generateThumbnailFromVideo()
+        // Cloudinary thumbnail failed, try client-side generation only once
+        if (!thumbnailAttemptedRef.current && isMounted && !imgLoaded) {
+          thumbnailAttemptedRef.current = true
+          generateThumbnailFromVideo()
+        }
       }
       img.src = cloudinaryThumb
       return
     }
 
-    // Fallback to client-side generation
-    generateThumbnailFromVideo()
+    // Fallback to client-side generation (only once)
+    if (!thumbnailAttemptedRef.current) {
+      thumbnailAttemptedRef.current = true
+      generateThumbnailFromVideo()
+    }
 
     async function generateThumbnailFromVideo() {
+      if (!isMounted || thumbnailAttemptedRef.current === false) return
+      
       try {
         // Wait for video to be loaded first
         const { fetchAndCacheVideo } = await import('@/lib/videoCache')
@@ -136,7 +151,8 @@ export default function VideoPlayer({
           setThumbnailUrl(thumb)
         }
       } catch (e) {
-        console.warn('Failed to generate thumbnail:', e)
+        // Silently fail - don't log repeatedly
+        // Leave thumbnailUrl as null if generation fails
       }
     }
 

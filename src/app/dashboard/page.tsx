@@ -880,7 +880,7 @@ function DashboardContent() {
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.5, delay: 0.2 }}
             >
-              <Card className="bg-gradient-to-br from-white to-orange-50 border-orange-200 shadow-lg hover:shadow-xl transition-all duration-300">
+              <Card className="bg-gradient-to-br from-white to-purple-50 border-purple-200 shadow-lg hover:shadow-xl transition-all duration-300">
                 <Card.Header>
                   <h3 className="text-lg font-bold text-slate-800 flex items-center">
                     <span className="text-2xl mr-2">🔥</span>
@@ -889,7 +889,7 @@ function DashboardContent() {
                 </Card.Header>
                 <Card.Body>
                   <div className="text-center mb-4">
-                    <div className="text-5xl font-bold text-orange-600 mb-2">
+                    <div className="text-5xl font-bold text-purple-600 mb-2">
                       {currentStreak}
                     </div>
                     <div className="text-sm text-slate-600 mb-4">
@@ -901,14 +901,14 @@ function DashboardContent() {
                           key={i}
                           className={`w-4 h-4 rounded-full transition-all duration-300 ${
                             i < currentStreak
-                              ? 'bg-orange-500 shadow-lg scale-110'
+                              ? 'bg-purple-500 shadow-lg scale-110'
                               : 'bg-slate-200'
                           }`}
                         />
                       ))}
                     </div>
                   </div>
-                  <div className="space-y-3 pt-4 border-t border-orange-200">
+                  <div className="space-y-3 pt-4 border-t border-purple-200">
                     <div>
                       <div className="flex justify-between text-sm mb-1">
                         <span className="text-slate-700">{t('dashboard.dailyGoal', 'Daily Goal')}</span>
@@ -968,12 +968,12 @@ function DashboardContent() {
                   {userProgress?.lastEarnedAchievements && userProgress.lastEarnedAchievements.length > 0 ? (
                     <div className="grid grid-cols-2 gap-3">
                       {userProgress.lastEarnedAchievements.map((achievement: any, index: number) => (
-                        <div key={achievement.code || index} className="p-3 rounded-lg border-2 border-yellow-300 bg-yellow-50">
+                        <div key={achievement.code || index} className="p-3 rounded-lg border-2 border-purple-300 bg-purple-50">
                           <div className="flex flex-col items-center text-center gap-2">
                             <div className="text-3xl">{achievement.icon}</div>
                             <div className="flex-1 w-full">
                               {index === 0 && (
-                                <div className="text-xs text-yellow-700 font-semibold mb-1">{t('dashboard.lastEarned', 'Last Earned')}</div>
+                                <div className="text-xs text-purple-700 font-semibold mb-1">{t('dashboard.lastEarned', 'Last Earned')}</div>
                               )}
                               <div className="text-xs font-bold text-slate-800">
                                 {achievement.name}
