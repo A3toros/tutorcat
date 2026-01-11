@@ -145,3 +145,9 @@ temp/
 
 # Cloudflare
 .wrangler
+
+# Playwright
+/test-results/
+/playwright-report/
+/playwright/.cache/
+tests/screenshots/

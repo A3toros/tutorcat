@@ -7,6 +7,7 @@ import { getCloudinaryThumbnailUrl, generateVideoThumbnail } from '@/lib/videoTh
 interface VideoPlayerProps {
   src: string
   className?: string
+  style?: React.CSSProperties
   autoPlay?: boolean
   loop?: boolean
   muted?: boolean
@@ -16,11 +17,13 @@ interface VideoPlayerProps {
   onLoadStart?: () => void
   onLoadedData?: () => void
   onError?: (error: Error) => void
+  onVideoRef?: (video: HTMLVideoElement | null) => void
 }
 
 export default function VideoPlayer({
   src,
   className = '',
+  style,
   autoPlay = false,
   loop = false,
   muted = true,
@@ -30,6 +33,7 @@ export default function VideoPlayer({
   onLoadStart,
   onLoadedData,
   onError,
+  onVideoRef,
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const thumbnailAttemptedRef = useRef(false)
@@ -187,9 +191,13 @@ export default function VideoPlayer({
       
       {videoUrl && (
         <video
-          ref={videoRef}
+          ref={(el) => {
+            videoRef.current = el
+            onVideoRef?.(el)
+          }}
           src={videoUrl}
-          className="w-full h-full rounded-lg object-contain"
+          className="w-full h-full object-contain"
+          style={{ background: 'transparent', ...style }}
           autoPlay={autoPlay}
           loop={loop}
           muted={muted}

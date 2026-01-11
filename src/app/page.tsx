@@ -232,6 +232,18 @@ function HomeContent() {
               />
             </div>
           </div>
+          
+          {/* Presentation Button */}
+          <div className="mt-8 text-center">
+            <Button
+              onClick={() => router.push('/presentation')}
+              variant="primary"
+              size="lg"
+              className="!px-8 !py-3"
+            >
+              {t('auth.presentation', 'Presentation')}
+            </Button>
+          </div>
         </div>
       </div>
 

@@ -19,6 +19,10 @@
     "db:fix-admin": "node scripts/update-admin-level.js",
     "db:migrate-lesson-schema": "node scripts/run-migration-improve-lesson-schema.js",
     "test:api": "node scripts/test-api.js",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:report": "playwright show-report",
     "verify": "node scripts/verify-deployment.js",
     "setup": "npm install && npm run db:init",
     "deploy:check": "npm run verify"
@@ -58,6 +62,7 @@
     "@cloudflare/workers-types": "^4.20251223.0",
     "@netlify/functions": "^5.1.2",
     "@netlify/types": "^2.3.0",
+    "@playwright/test": "^1.57.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.1",
     "@testing-library/user-event": "^14.6.1",
