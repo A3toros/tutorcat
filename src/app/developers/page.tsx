@@ -33,22 +33,8 @@ export default function DevelopersPage() {
       descriptionKey: 'meetTeam.descriptions.mattcha',
       photo: '/Mattcha-Srirojwong.webp',
       isCurator: false,
-      contributions: [
-        'Built 36 Netlify serverless functions for API endpoints',
-        'Implemented JWT authentication system with secure HTTP-only cookies',
-        'Created PostgreSQL database schema with Neon DB integration',
-        'Developed AI integration endpoints (OpenAI GPT-4, AssemblyAI speech-to-text)',
-        'Built authentication flows: login, signup, OTP verification, password reset',
-        'Created admin API endpoints for user management and statistics',
-        'Implemented lesson and activity submission endpoints',
-        'Built evaluation test system with scoring algorithms',
-        'Developed achievement system with XP calculation and leveling',
-        'Created email service integration using Resend for OTP delivery',
-        'Implemented secure password hashing with bcrypt',
-        'Built dashboard data aggregation endpoints',
-        'Created session management and cleanup functions'
-      ],
-      technologies: ['Node.js', 'TypeScript', 'Netlify Functions', 'PostgreSQL', 'Neon DB', 'JWT', 'bcrypt', 'OpenAI API', 'AssemblyAI', 'Resend']
+      contributions: Array.from({ length: 13 }, (_, i) => `meetTeam.contributions.mattcha.${i + 1}`),
+      technologies: Array.from({ length: 10 }, (_, i) => `meetTeam.technologies.mattcha.${i + 1}`)
     },
     {
       id: 'dev2',
@@ -57,17 +43,8 @@ export default function DevelopersPage() {
       descriptionKey: 'meetTeam.descriptions.jindaporn',
       photo: '/developer.png',
       isCurator: false,
-      contributions: [
-        'Designed the complete visual identity of TutorCat',
-        'Created color schemes and typography system',
-        'Designed responsive layouts for all pages',
-        'Styled UI components with Tailwind CSS',
-        'Ensured design consistency across desktop, tablet, and mobile',
-        'Created component styling system',
-        'Designed visual hierarchy and spacing',
-        'Created engaging and professional appearance for learners'
-      ],
-      technologies: ['Tailwind CSS', 'CSS', 'Design Systems', 'Responsive Design', 'Typography', 'Color Theory']
+      contributions: Array.from({ length: 8 }, (_, i) => `meetTeam.contributions.jindaporn.${i + 1}`),
+      technologies: Array.from({ length: 6 }, (_, i) => `meetTeam.technologies.jindaporn.${i + 1}`)
     },
     {
       id: 'dev3',
@@ -76,24 +53,8 @@ export default function DevelopersPage() {
       descriptionKey: 'meetTeam.descriptions.nichapath',
       photo: '/Nichapath-Chunlawithet.webp',
       isCurator: false,
-      contributions: [
-        'Built lesson flow and activity components (vocabulary, grammar, speaking, reading)',
-        'Created drag-and-drop vocabulary matching with Konva.js',
-        'Implemented sentence construction exercises with interactive word dragging',
-        'Built speaking practice component with audio recording and AI feedback',
-        'Developed reading improvement activity with similarity checking',
-        'Created dashboard UI with progress tracking and statistics',
-        'Built achievement system UI with modal displays',
-        'Implemented Framer Motion animations for smooth transitions',
-        'Created Lottie animations for mascot interactions',
-        'Built responsive layouts using Tailwind CSS',
-        'Developed evaluation test components (vocabulary, grammar, speaking, writing)',
-        'Created admin panel UI components',
-        'Implemented video player with caching system',
-        'Built authentication modals and protected routes',
-        'Developed i18n integration for multi-language support'
-      ],
-      technologies: ['React', 'Next.js', 'TypeScript', 'Tailwind CSS', 'Framer Motion', 'Konva.js', 'React Konva', 'Lottie React', 'IndexedDB', 'Web APIs']
+      contributions: Array.from({ length: 15 }, (_, i) => `meetTeam.contributions.nichapath.${i + 1}`),
+      technologies: Array.from({ length: 10 }, (_, i) => `meetTeam.technologies.nichapath.${i + 1}`)
     },
     {
       id: 'curator',
@@ -286,14 +247,16 @@ export default function DevelopersPage() {
               {/* Contributions */}
               {selectedDeveloper.contributions && selectedDeveloper.contributions.length > 0 && (
                 <div className="mb-6">
-                  <h4 className="text-lg font-semibold text-neutral-800 mb-3">
-                    Key Contributions
+                  <h4 className="text-lg font-semibold text-neutral-800 mb-3" suppressHydrationWarning>
+                    {isClient ? t('meetTeam.contributions.keyContributions', 'Key Contributions') : 'Key Contributions'}
                   </h4>
                   <ul className="space-y-2">
-                    {selectedDeveloper.contributions.map((contribution, index) => (
+                    {selectedDeveloper.contributions.map((contributionKey, index) => (
                       <li key={index} className="flex items-start gap-2 text-neutral-700">
                         <span className="text-primary-500 mt-1">•</span>
-                        <span className="flex-1">{contribution}</span>
+                        <span className="flex-1" suppressHydrationWarning>
+                          {isClient ? t(contributionKey, `Contribution ${index + 1}`) : `Contribution ${index + 1}`}
+                        </span>
                       </li>
                     ))}
                   </ul>
@@ -303,16 +266,17 @@ export default function DevelopersPage() {
               {/* Technologies */}
               {selectedDeveloper.technologies && selectedDeveloper.technologies.length > 0 && (
                 <div>
-                  <h4 className="text-lg font-semibold text-neutral-800 mb-3">
-                    Technologies Used
+                  <h4 className="text-lg font-semibold text-neutral-800 mb-3" suppressHydrationWarning>
+                    {isClient ? t('meetTeam.contributions.technologiesUsed', 'Technologies Used') : 'Technologies Used'}
                   </h4>
                   <div className="flex flex-wrap gap-2">
-                    {selectedDeveloper.technologies.map((tech, index) => (
+                    {selectedDeveloper.technologies.map((techKey, index) => (
                       <span
                         key={index}
                         className="px-3 py-1 bg-primary-100 text-primary-700 rounded-full text-sm font-medium"
+                        suppressHydrationWarning
                       >
-                        {tech}
+                        {isClient ? t(techKey, `Tech ${index + 1}`) : `Tech ${index + 1}`}
                       </span>
                     ))}
                   </div>

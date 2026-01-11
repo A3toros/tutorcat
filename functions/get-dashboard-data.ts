@@ -55,23 +55,37 @@ const handler: Handler = async (event, context) => {
     `;
     const evalTestResult = userData.length > 0 ? userData[0].eval_test_result : null;
 
-    // Get user progress data using the database view
-    const progressData = await sql`
-      SELECT * FROM user_lesson_progress
-      WHERE user_id = ${userId}
-      ORDER BY level, lesson_number
-    `;
+    // OPTIMIZED: Direct query filtered by user's level only
+    // Get user progress data for lessons in the user's current level only
+    const currentLevel = auth.user.level;
+    
+    const progressData = currentLevel && currentLevel !== 'Not Assessed'
+      ? await sql`
+        SELECT 
+          l.id as lesson_id,
+          l.level,
+          l.topic,
+          l.lesson_number,
+          ${userId}::UUID as user_id,
+          COALESCE(up.score, 0) as score,
+          COALESCE(up.completed, FALSE) as completed,
+          up.completed_at,
+          COALESCE(up.attempts, 0) as attempts
+        FROM lessons l
+        LEFT JOIN user_progress up ON up.lesson_id = l.id AND up.user_id = ${userId}
+        WHERE l.level = ${currentLevel}
+        ORDER BY l.lesson_number
+      `
+      : []; // Return empty array if no level assigned
 
     // Calculate overall statistics
     const totalLessons = progressData.length;
     const completedLessons = progressData.filter((p: any) => p.completed).length;
     const totalStars = completedLessons; // 1 star per completed lesson
 
-    // Get current level and progress
-    const currentLevel = auth.user.level;
-    const levelLessons = currentLevel ? progressData.filter((p: any) => p.level === currentLevel) : [];
-    const levelCompleted = levelLessons.filter((p: any) => p.completed).length;
-    const levelTotal = levelLessons.length;
+    // Calculate level progress (progressData is already filtered by level)
+    const levelCompleted = progressData.filter((p: any) => p.completed).length;
+    const levelTotal = progressData.length;
     const levelProgress = levelTotal > 0 ? Math.round((levelCompleted / levelTotal) * 100) : 0;
 
     // Get overall completion percentage

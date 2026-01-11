@@ -21,6 +21,7 @@ function DashboardContent() {
   const [userProgress, setUserProgress] = useState<any>(null)
   const [availableLessons, setAvailableLessons] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingLessons, setLoadingLessons] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [expandedLessons, setExpandedLessons] = useState<Set<string>>(new Set())
   const [isAchievementModalOpen, setIsAchievementModalOpen] = useState(false)
@@ -80,9 +81,14 @@ function DashboardContent() {
   }, [user, router])
 
   useEffect(() => {
+    let isMounted = true
+    let lessonsAbortController: AbortController | null = null
+
     const fetchDashboardData = async () => {
       try {
         const response = await apiClient.getDashboardData()
+
+        if (!isMounted) return
 
         if (response.success && response.data) {
           // The API client wraps the backend response, so we need response.data.data
@@ -93,6 +99,9 @@ function DashboardContent() {
             dashboardData: dashboardData 
           })
           setUserProgress(dashboardData)
+          
+          // Set loading to false immediately after dashboard data loads
+          setLoading(false)
           
           // Determine effective current level (prefer the higher of user.level and progress.currentLevel)
           const levelOrder = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']
@@ -107,10 +116,20 @@ function DashboardContent() {
           }
           const currentLevel = pickHigherLevel(backendLevel, progressLevel) || 'A1'
           setEffectiveLevel(currentLevel)
+          
           // Only fetch if level is valid (not "Not Assessed")
           if (currentLevel && currentLevel !== 'Not Assessed') {
+            // Set loading state for lessons separately
+            setLoadingLessons(true)
+            
+            // Create abort controller for lessons request
+            lessonsAbortController = new AbortController()
+            
             try {
               const lessonsResponse = await apiClient.getLessonsByLevel(currentLevel)
+              
+              if (!isMounted) return
+              
               if (lessonsResponse.success && lessonsResponse.data) {
                 // Handle both wrapped and unwrapped responses
                 const lessonsData = lessonsResponse.data.data || lessonsResponse.data
@@ -119,24 +138,41 @@ function DashboardContent() {
                 }
               }
             } catch (lessonsError) {
-              console.error('Failed to load available lessons:', lessonsError)
+              if (!isMounted) return
+              // Only log if not aborted
+              if (lessonsError instanceof Error && !lessonsError.message.includes('aborted')) {
+                console.error('Failed to load available lessons:', lessonsError)
+              }
               // Don't set error, just log - dashboard can still work without lessons
+            } finally {
+              if (isMounted) {
+                setLoadingLessons(false)
+              }
             }
           }
         } else {
           console.error('Failed to load dashboard data:', response.error)
           setError('Failed to load dashboard data')
+          setLoading(false)
         }
       } catch (error) {
+        if (!isMounted) return
         console.error('Dashboard data fetch error:', error)
         setError('Failed to load dashboard data')
-      } finally {
         setLoading(false)
       }
     }
 
     if (user) {
       fetchDashboardData()
+    }
+
+    // Cleanup function to prevent state updates if component unmounts
+    return () => {
+      isMounted = false
+      if (lessonsAbortController) {
+        lessonsAbortController.abort()
+      }
     }
   }, [user, refreshTick])
 

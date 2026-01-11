@@ -670,6 +670,86 @@
       "aleksandr": "Lead educator and platform curator with extensive experience in language teaching and educational technology. Oversees curriculum development and ensures the platform meets educational standards. Coordinates the development team and provides guidance on pedagogical features.",
       "math": "Passionate about building robust and scalable backend systems. Loves coding because it enables creating powerful server-side solutions that power seamless user experiences. Built the API infrastructure, database schemas, and serverless functions using Node.js, TypeScript, and Netlify Functions. Implemented authentication systems, AI integration endpoints, and data processing pipelines. Ensured secure data handling, optimized database queries, and created efficient API endpoints for the learning platform."
     },
+    "contributions": {
+      "keyContributions": "Key Contributions",
+      "technologiesUsed": "Technologies Used",
+      "mattcha": {
+        "1": "Built 36 Netlify serverless functions for API endpoints",
+        "2": "Implemented JWT authentication system with secure HTTP-only cookies",
+        "3": "Created PostgreSQL database schema with Neon DB integration",
+        "4": "Developed AI integration endpoints (OpenAI GPT-4, AssemblyAI speech-to-text)",
+        "5": "Built authentication flows: login, signup, OTP verification, password reset",
+        "6": "Created admin API endpoints for user management and statistics",
+        "7": "Implemented lesson and activity submission endpoints",
+        "8": "Built evaluation test system with scoring algorithms",
+        "9": "Developed achievement system with XP calculation and leveling",
+        "10": "Created email service integration using Resend for OTP delivery",
+        "11": "Implemented secure password hashing with bcrypt",
+        "12": "Built dashboard data aggregation endpoints",
+        "13": "Created session management and cleanup functions"
+      },
+      "jindaporn": {
+        "1": "Designed the complete visual identity of TutorCat",
+        "2": "Created color schemes and typography system",
+        "3": "Designed responsive layouts for all pages",
+        "4": "Styled UI components with Tailwind CSS",
+        "5": "Ensured design consistency across desktop, tablet, and mobile",
+        "6": "Created component styling system",
+        "7": "Designed visual hierarchy and spacing",
+        "8": "Created engaging and professional appearance for learners"
+      },
+      "nichapath": {
+        "1": "Built lesson flow and activity components (vocabulary, grammar, speaking, reading)",
+        "2": "Created drag-and-drop vocabulary matching with Konva.js",
+        "3": "Implemented sentence construction exercises with interactive word dragging",
+        "4": "Built speaking practice component with audio recording and AI feedback",
+        "5": "Developed reading improvement activity with similarity checking",
+        "6": "Created dashboard UI with progress tracking and statistics",
+        "7": "Built achievement system UI with modal displays",
+        "8": "Implemented Framer Motion animations for smooth transitions",
+        "9": "Created Lottie animations for mascot interactions",
+        "10": "Built responsive layouts using Tailwind CSS",
+        "11": "Developed evaluation test components (vocabulary, grammar, speaking, writing)",
+        "12": "Created admin panel UI components",
+        "13": "Implemented video player with caching system",
+        "14": "Built authentication modals and protected routes",
+        "15": "Developed i18n integration for multi-language support"
+      }
+    },
+    "technologies": {
+      "mattcha": {
+        "1": "Node.js",
+        "2": "TypeScript",
+        "3": "Netlify Functions",
+        "4": "PostgreSQL",
+        "5": "Neon DB",
+        "6": "JWT",
+        "7": "bcrypt",
+        "8": "OpenAI API",
+        "9": "AssemblyAI",
+        "10": "Resend"
+      },
+      "jindaporn": {
+        "1": "Tailwind CSS",
+        "2": "CSS",
+        "3": "Design Systems",
+        "4": "Responsive Design",
+        "5": "Typography",
+        "6": "Color Theory"
+      },
+      "nichapath": {
+        "1": "React",
+        "2": "Next.js",
+        "3": "TypeScript",
+        "4": "Tailwind CSS",
+        "5": "Framer Motion",
+        "6": "Konva.js",
+        "7": "React Konva",
+        "8": "Lottie React",
+        "9": "IndexedDB",
+        "10": "Web APIs"
+      }
+    },
     "evaluation": {
       "title": "English Level Evaluation",
       "description": "This comprehensive evaluation will assess your English skills across vocabulary, grammar, and speaking to determine your CEFR level.",

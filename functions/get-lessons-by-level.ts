@@ -60,90 +60,89 @@ const handler: Handler = async (event, context) => {
       } as any;
     }
 
-    // Get all lessons for this level
-    const lessonsResult = await sql`
-      SELECT * FROM lessons
-      WHERE level = ${level}
-      ORDER BY lesson_number
-    `;
-
-    // Get user progress for all lessons if userId provided
-    let userProgress: any[] = [];
-    if (userId) {
-      const lessonIds = lessonsResult.map((lesson: any) => lesson.id);
-      if (lessonIds.length > 0) {
-        const progressResult = await sql`
-          SELECT * FROM user_progress
-          WHERE user_id = ${userId} AND lesson_id = ANY(${lessonIds})
-        `;
-        userProgress = progressResult;
-      }
-    }
-
-    // Get total activity count per lesson and completed activity count
-    let activityCountsByLesson: Record<string, { total: number; completed: number }> = {};
-    if (userId) {
-      const lessonIds = lessonsResult.map((lesson: any) => lesson.id);
-      if (lessonIds.length > 0) {
-        // Get total activities per lesson
-        const totalActivities = await sql`
+    // OPTIMIZED: Single query with JOINs instead of 4 separate queries
+    // This reduces database round trips from 4 to 1, significantly improving performance
+    const lessonsWithProgress = userId 
+      ? await sql`
+        WITH lesson_activity_counts AS (
           SELECT 
-            lesson_id,
-            COUNT(*) as total_count
-          FROM lesson_activities
-          WHERE lesson_id = ANY(${lessonIds})
-          GROUP BY lesson_id
-        `;
-        
-        // Get completed activities per lesson (distinct activity_order)
-        const completedActivities = await sql`
+            la.lesson_id,
+            COUNT(DISTINCT la.id) FILTER (WHERE la.active = TRUE) as total
+          FROM lesson_activities la
+          WHERE la.active = TRUE
+          GROUP BY la.lesson_id
+        ),
+        user_completed_counts AS (
           SELECT 
-            lesson_id,
-            COUNT(DISTINCT activity_order) as completed_count
-          FROM lesson_activity_results
-          WHERE user_id = ${userId} AND lesson_id = ANY(${lessonIds})
-          GROUP BY lesson_id
-        `;
-        
-        // Build map of total activities
-        totalActivities.forEach((row: any) => {
-          activityCountsByLesson[row.lesson_id] = {
-            total: Number(row.total_count) || 0,
-            completed: 0
-          };
-        });
-        
-        // Update with completed counts
-        completedActivities.forEach((row: any) => {
-          if (activityCountsByLesson[row.lesson_id]) {
-            activityCountsByLesson[row.lesson_id].completed = Number(row.completed_count) || 0;
-          }
-        });
-      }
-    }
+            lar.lesson_id,
+            COUNT(DISTINCT lar.activity_order) as completed
+          FROM lesson_activity_results lar
+          WHERE lar.user_id = ${userId}
+          GROUP BY lar.lesson_id
+        ),
+        user_progress_data AS (
+          SELECT 
+            up.*
+          FROM user_progress up
+          WHERE up.user_id = ${userId}
+        )
+        SELECT 
+          l.*,
+          COALESCE(lac.total, 0)::INTEGER as total_activities,
+          COALESCE(ucc.completed, 0)::INTEGER as completed_activities,
+          CASE 
+            WHEN COALESCE(lac.total, 0) > 0 THEN
+              LEAST(100, ROUND((COALESCE(ucc.completed, 0)::NUMERIC / lac.total::NUMERIC) * 100))
+            WHEN up.completed = TRUE THEN 100
+            ELSE 0
+          END::INTEGER as progress_percentage,
+          CASE 
+            WHEN up.id IS NOT NULL THEN
+              jsonb_build_object(
+                'id', up.id,
+                'user_id', up.user_id,
+                'lesson_id', up.lesson_id,
+                'score', LEAST(100, ROUND((COALESCE(ucc.completed, 0)::NUMERIC / NULLIF(lac.total, 0)::NUMERIC) * 100)),
+                'completed', up.completed,
+                'completed_at', up.completed_at,
+                'attempts', up.attempts
+              )
+            ELSE NULL
+          END as user_progress
+        FROM lessons l
+        LEFT JOIN lesson_activity_counts lac ON l.id = lac.lesson_id
+        LEFT JOIN user_completed_counts ucc ON l.id = ucc.lesson_id
+        LEFT JOIN user_progress_data up ON l.id = up.lesson_id
+        WHERE l.level = ${level}
+        ORDER BY l.lesson_number
+      `
+      : await sql`
+        WITH lesson_activity_counts AS (
+          SELECT 
+            la.lesson_id,
+            COUNT(DISTINCT la.id) FILTER (WHERE la.active = TRUE) as total
+          FROM lesson_activities la
+          WHERE la.active = TRUE
+          GROUP BY la.lesson_id
+        )
+        SELECT 
+          l.*,
+          COALESCE(lac.total, 0)::INTEGER as total_activities,
+          0::INTEGER as completed_activities,
+          0::INTEGER as progress_percentage,
+          NULL::jsonb as user_progress
+        FROM lessons l
+        LEFT JOIN lesson_activity_counts lac ON l.id = lac.lesson_id
+        WHERE l.level = ${level}
+        ORDER BY l.lesson_number
+      `;
 
-    // Combine lessons with progress data
-    const lessonsWithProgress = lessonsResult.map((lesson: any) => {
-      const progress = userProgress.find((p: any) => p.lesson_id === lesson.id);
-      const activityCounts = activityCountsByLesson[lesson.id];
-      
-      // Calculate actual progress percentage based on completed activities / total activities
-      let progressPercentage = 0;
-      if (activityCounts && activityCounts.total > 0) {
-        progressPercentage = Math.round((activityCounts.completed / activityCounts.total) * 100);
-        // Cap at 100%
-        progressPercentage = Math.min(100, progressPercentage);
-      } else if (progress?.completed) {
-        // If lesson is completed but no activity data, use 100%
-        progressPercentage = 100;
-      }
-      
+    // Transform the result to match expected format
+    const formattedLessons = lessonsWithProgress.map((row: any) => {
+      const { total_activities, completed_activities, progress_percentage, user_progress, ...lesson } = row;
       return {
         ...lesson,
-        userProgress: progress ? {
-          ...progress,
-          score: progressPercentage // Replace cumulative score with actual percentage
-        } : null
+        userProgress: user_progress || null
       };
     });
 
@@ -153,8 +152,8 @@ const handler: Handler = async (event, context) => {
       body: JSON.stringify({
         success: true,
         level,
-        lessons: lessonsWithProgress,
-        totalLessons: lessonsWithProgress.length
+        lessons: formattedLessons,
+        totalLessons: formattedLessons.length
       })
     } as any;
 
