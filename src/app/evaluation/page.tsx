@@ -714,14 +714,37 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
     }
   };
 
-  // Get supported audio format
+  // Get supported audio format (platform-specific)
   const getSupportedMimeType = () => {
+    const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+    if (isIOSDevice) {
+      // iOS Safari only supports MP4 formats
+      const iosTypes = ['audio/mp4', 'audio/mp4;codecs=mp4a.40.2'];
+      const supportedType = iosTypes.find(type => MediaRecorder.isTypeSupported(type));
+      if (supportedType) {
+        console.log(`✅ iOS: Using audio format: ${supportedType}`);
+        return supportedType;
+      }
+      // Fallback for iOS if detection fails
+      return 'audio/mp4';
+    }
+
+    // Android/Desktop: Prioritize WebM/Opus (better quality)
     const preferredTypes = [
-      "audio/mp4;codecs=mp4a.40.2",
-      "audio/mp4",
-      "audio/webm;codecs=opus"
+      'audio/webm;codecs=opus',      // Best quality for speech
+      'audio/webm',                   // WebM fallback
+      'audio/mp4;codecs=mp4a.40.2',  // MP4 AAC fallback
+      'audio/mp4'                     // Generic MP4 last resort
     ];
-    return preferredTypes.find(type => MediaRecorder.isTypeSupported(type)) || 'audio/webm';
+    const supportedType = preferredTypes.find(type => MediaRecorder.isTypeSupported(type));
+    if (supportedType) {
+      console.log(`✅ Non-iOS: Using audio format: ${supportedType}`);
+      return supportedType;
+    }
+    // Fallback
+    return 'audio/webm';
   };
 
   // Convert blob to base64
@@ -742,12 +765,26 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
     if (isRecording || disabled) return;
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Platform-specific audio constraints
+      const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      
+      const audioConstraints = isIOSDevice
+        ? { audio: { echoCancellation: true } } // iOS: minimal constraints
+        : { audio: true }; // Others: default constraints
+
+      const stream = await navigator.mediaDevices.getUserMedia(audioConstraints);
       streamRef.current = stream;
       chunksRef.current = [];
 
       const mimeType = getSupportedMimeType();
-      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+      
+      // Platform-specific MediaRecorder options
+      const recorderOptions = isIOSDevice
+        ? { mimeType } // iOS: no audioBitsPerSecond (not supported)
+        : { mimeType }; // Others: default options
+
+      const mediaRecorder = new MediaRecorder(stream, recorderOptions);
       mediaRecorderRef.current = mediaRecorder;
 
       mediaRecorder.ondataavailable = (e) => {

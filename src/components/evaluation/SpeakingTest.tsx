@@ -583,10 +583,26 @@ const SpeakingTest: React.FC<SpeakingTestProps> = ({ onComplete }) => {
 
   // CRITICAL: Feature Detection for Audio Formats
   const getSupportedMimeType = useCallback(() => {
+    const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+    if (isIOSDevice) {
+      // iOS Safari only supports MP4 formats
+      const iosTypes = ['audio/mp4', 'audio/mp4;codecs=mp4a.40.2'];
+      const supportedType = iosTypes.find(type => MediaRecorder.isTypeSupported(type));
+      if (supportedType) {
+        console.log(`✅ iOS: Using audio format: ${supportedType}`);
+        return supportedType;
+      }
+      throw new Error('MediaRecorder is not fully supported on this iOS version. Please update iOS or use a different browser.');
+    }
+
+    // Android/Desktop: Prioritize WebM/Opus (better quality)
     const preferredTypes = [
-      "audio/mp4;codecs=mp4a.40.2", // AAC (best for speech)
-      "audio/mp4",                   // Generic MP4
-      "audio/webm;codecs=opus"      // WebM fallback
+      'audio/webm;codecs=opus',      // Best quality for speech
+      'audio/webm',                   // WebM fallback
+      'audio/mp4;codecs=mp4a.40.2',  // MP4 AAC fallback
+      'audio/mp4'                     // Generic MP4 last resort
     ];
 
     const supportedType = preferredTypes.find(type =>
@@ -597,6 +613,7 @@ const SpeakingTest: React.FC<SpeakingTestProps> = ({ onComplete }) => {
       throw new Error("No supported audio format found. Please update your browser.");
     }
 
+    console.log(`✅ Non-iOS: Using audio format: ${supportedType}`);
     return supportedType;
   }, []);
 
@@ -610,22 +627,26 @@ const SpeakingTest: React.FC<SpeakingTestProps> = ({ onComplete }) => {
 
       console.log(`🎬 Starting optimized audio recording for prompt: ${currentPrompt.id} (${currentPromptIndex + 1}/${speakingPrompts.length}) - "${currentPrompt.prompt.substring(0, 50)}..."`);
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        }
-      });
+      // Platform-specific audio constraints
+      const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      
+      const audioConstraints = isIOSDevice
+        ? { audio: { echoCancellation: true } } // iOS: minimal constraints
+        : { audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }; // Others: full constraints
+
+      const stream = await navigator.mediaDevices.getUserMedia(audioConstraints);
 
       // CRITICAL: Feature detection - find supported format
       const mimeType = getSupportedMimeType();
-      console.log(`🎵 Using audio format: ${mimeType}`);
+      console.log(`🎵 ${isIOSDevice ? 'iOS' : 'Non-iOS'}: Using audio format: ${mimeType}`);
 
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType,
-        audioBitsPerSecond: 64000 // 64kbps - optimal for speech
-      });
+      // Platform-specific MediaRecorder options
+      const recorderOptions = isIOSDevice
+        ? { mimeType } // iOS: no audioBitsPerSecond (not supported)
+        : { mimeType, audioBitsPerSecond: 64000 }; // Others: optimal bitrate for speech
+
+      const mediaRecorder = new MediaRecorder(stream, recorderOptions);
 
       // Store reference for stopping
       mediaRecorderRef.current = mediaRecorder;
