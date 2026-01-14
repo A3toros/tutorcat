@@ -26,36 +26,33 @@ interface PresentationProps {
 const slides: Slide[] = [
   {
     id: 1,
-    type: 'image',
-    src: '/slides/landing-page.webp',
+    type: 'content',
     title: 'Project Overview',
     content: (
       <div className="text-center space-y-4">
-        <h2 className="text-3xl font-bold text-slate-800">TutorCat</h2>
-        <p className="text-lg text-slate-600">AI powered language learning web app</p>
+        <h2 className="font-bold text-slate-800" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)' }}>TutorCat</h2>
+        <p className="text-slate-600" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>AI powered language learning web app</p>
       </div>
     )
   },
   {
     id: 2,
-    type: 'video',
-    src: '/slides/2 Book-to-dashboard-anim.mp4',
+    type: 'image',
+    src: '/slides/2 Book-to-dashboard-anim.gif',
     title: 'Problem We Address',
-    autoPlay: true,
-    loop: false,
     content: (
-      <div className="space-y-3 text-center">
-        <ul className="list-none space-y-2 text-slate-700 inline-block">
-          <li className="flex items-center justify-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-primary-500"></span>
+      <div className="space-y-3">
+        <ul className="list-none space-y-2 text-slate-700">
+          <li className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0"></span>
             Low engagement in traditional ESL
           </li>
-          <li className="flex items-center justify-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-primary-500"></span>
+          <li className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0"></span>
             Limited feedback outside class
           </li>
-          <li className="flex items-center justify-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-primary-500"></span>
+          <li className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0"></span>
             One-size-fits-all materials
           </li>
         </ul>
@@ -68,28 +65,20 @@ const slides: Slide[] = [
     title: 'Our Objectives',
     content: (
       <div className="space-y-4 text-center">
-        <ol className="list-none space-y-3 text-slate-700 inline-block text-left">
+        <ul className="list-none space-y-3 text-slate-700 inline-block text-left" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
           <li className="flex items-start gap-3">
-            <span className="w-6 h-6 rounded-full bg-gradient-to-br from-primary-500 to-secondary-500 text-white flex items-center justify-center font-bold flex-shrink-0">1</span>
-            <span>Develop an interactive English language learning platform with AI-powered feedback</span>
+            <span className="w-2 h-2 rounded-full bg-primary-500 mt-2 flex-shrink-0"></span>
+            <span>Build an interactive English learning platform with AI feedback for speaking practice outside class</span>
           </li>
           <li className="flex items-start gap-3">
-            <span className="w-6 h-6 rounded-full bg-gradient-to-br from-primary-500 to-secondary-500 text-white flex items-center justify-center font-bold flex-shrink-0">2</span>
-            <span>Implement gamification elements to increase student engagement</span>
+            <span className="w-2 h-2 rounded-full bg-secondary-500 mt-2 flex-shrink-0"></span>
+            <span>Use gamification to increase motivation and engagement</span>
           </li>
           <li className="flex items-start gap-3">
-            <span className="w-6 h-6 rounded-full bg-gradient-to-br from-primary-500 to-secondary-500 text-white flex items-center justify-center font-bold flex-shrink-0">3</span>
-            <span>Create a scalable web application using modern development technologies</span>
+            <span className="w-2 h-2 rounded-full bg-primary-500 mt-2 flex-shrink-0"></span>
+            <span>Apply security and data protection to keep student data safe</span>
           </li>
-          <li className="flex items-start gap-3">
-            <span className="w-6 h-6 rounded-full bg-gradient-to-br from-primary-500 to-secondary-500 text-white flex items-center justify-center font-bold flex-shrink-0">4</span>
-            <span>Integrate multiple external APIs for enhanced functionality</span>
-          </li>
-          <li className="flex items-start gap-3">
-            <span className="w-6 h-6 rounded-full bg-gradient-to-br from-primary-500 to-secondary-500 text-white flex items-center justify-center font-bold flex-shrink-0">5</span>
-            <span>Implement security measures and data protection</span>
-          </li>
-        </ol>
+        </ul>
       </div>
     )
   },
@@ -99,9 +88,9 @@ const slides: Slide[] = [
     title: 'Scope and Limitations',
     content: (
       <div className="space-y-3 text-center text-slate-700">
-        <p className="max-w-2xl mx-auto">Free-tier hosting limits deployment to school level and restricts concurrent users</p>
-        <p className="max-w-2xl mx-auto">Reliance on external AI APIs with no ability to train or modify models using student data</p>
-        <p className="max-w-2xl mx-auto">Risk of AI hallucinations in feedback despite prompt optimization</p>
+        <p className="max-w-2xl mx-auto" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>Free-tier hosting limits deployment to school level and restricts concurrent users</p>
+        <p className="max-w-2xl mx-auto" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>Reliance on external AI APIs with no ability to train or modify models using student data</p>
+        <p className="max-w-2xl mx-auto" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>Risk of AI hallucinations in feedback despite prompt optimization</p>
       </div>
     )
   },
@@ -171,14 +160,13 @@ const slides: Slide[] = [
   },
   {
     id: 7,
-    type: 'image',
-    src: '/slides/Frontend.webp',
+    type: 'content',
     title: 'Frontend',
     content: (
       <div className="space-y-4 text-center text-slate-700">
         <div>
-          <p className="font-semibold mb-3 text-primary-600">Tech Stack:</p>
-          <ul className="list-none space-y-2 text-sm inline-block">
+          <p className="font-semibold mb-3 text-primary-600 text-xl">Tech Stack:</p>
+          <ul className="list-none space-y-2 text-lg inline-block">
             <li>React - UI library</li>
             <li>TypeScript - Type safety</li>
             <li>Tailwind CSS - Styling</li>
@@ -187,8 +175,8 @@ const slides: Slide[] = [
           </ul>
         </div>
         <div>
-          <p className="font-semibold mt-4 mb-3 text-secondary-600">Features:</p>
-          <ul className="list-none space-y-2 text-sm inline-block">
+          <p className="font-semibold mt-4 mb-3 text-secondary-600 text-xl">Features:</p>
+          <ul className="list-none space-y-2 text-lg inline-block">
             <li>Clean, simple UI design</li>
             <li>Responsive layouts</li>
             <li>Interactive components</li>
@@ -199,23 +187,22 @@ const slides: Slide[] = [
   },
   {
     id: 8,
-    type: 'image',
-    src: '/slides/Backend.webp',
+    type: 'content',
     title: 'Backend',
     content: (
       <div className="space-y-4 text-center text-slate-700">
         <div>
-          <p className="font-semibold mb-3 text-primary-600">Tech Stack:</p>
-          <ul className="list-none space-y-2 text-sm inline-block">
+          <p className="font-semibold mb-3 text-primary-600 text-xl">Tech Stack:</p>
+          <ul className="list-none space-y-2 text-lg inline-block">
             <li>Next.js - React framework</li>
             <li>Netlify Functions - Serverless API</li>
             <li>PostgreSQL (Neon) - Database</li>
-            <li>36 API endpoints</li>
+
           </ul>
         </div>
         <div>
-          <p className="font-semibold mt-4 mb-3 text-secondary-600">API Response Times:</p>
-          <ul className="list-none space-y-2 text-sm inline-block">
+          <p className="font-semibold mt-4 mb-3 text-secondary-600 text-xl">API Response Times:</p>
+          <ul className="list-none space-y-2 text-lg inline-block">
             <li>Authentification: 1100ms – high latency</li>
             <li>Fetch functions: 200-400ms – low latency</li>
             <li>Write functions: 300-600ms – low latency</li>
@@ -246,48 +233,48 @@ const slides: Slide[] = [
     type: 'content',
     title: 'Web Design',
     content: (
-      <div className="space-y-4">
-        <p className="text-slate-700 mb-4 text-center">Simple colors, to everyone's taste</p>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="space-y-1 md:space-y-2 w-full">
+        <p className="text-slate-700 mb-1 md:mb-2 text-center" style={{ fontSize: 'clamp(0.875rem, 1.75vw, 1.25rem)' }}>Simple colors, to everyone's taste</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-3 lg:gap-4">
           <div>
-            <h3 className="font-semibold mb-3 text-slate-800">Primary Colors (Blue)</h3>
-            <div className="space-y-2 text-xs md:text-sm">
+            <h3 className="font-semibold mb-1 md:mb-2 text-slate-800" style={{ fontSize: 'clamp(1.5rem, 3vw, 2.25rem)' }}>Primary Colors (Purple)</h3>
+            <div className="space-y-0.5 md:space-y-1" style={{ fontSize: 'clamp(0.75rem, 1.5vw, 1rem)' }}>
               {[
-                { name: 'Primary-50', color: '#f0f4ff' },
-                { name: 'Primary-200', color: '#c7d4ff' },
-                { name: 'Primary-300', color: '#a5b9ff' },
-                { name: 'Primary-400', color: '#8399ff' },
-                { name: 'Primary-500', color: '#6175ff' },
-                { name: 'Primary-600', color: '#4a5fff' },
-                { name: 'Primary-700', color: '#3d4eff' },
-                { name: 'Primary-800', color: '#2f3fff' },
-                { name: 'Primary-900', color: '#1a2aff' },
+                { name: 'Primary-50', color: '#fdf4ff' },
+                { name: 'Primary-100', color: '#fae8ff' },
+                { name: 'Primary-200', color: '#f5d0ff' },
+                { name: 'Primary-300', color: '#f0abff' },
+                { name: 'Primary-400', color: '#e879ff' },
+                { name: 'Primary-500', color: '#d946ff' },
+                { name: 'Primary-600', color: '#c026d3' },
+                { name: 'Primary-700', color: '#a21caf' },
+                { name: 'Primary-800', color: '#86198f' },
+                { name: 'Primary-900', color: '#701a75' },
               ].map(({ name, color }) => (
-                <div key={name} className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded border-2 border-slate-300 flex-shrink-0" style={{ backgroundColor: color }}></div>
-                  <span className="text-slate-700">{name}: {color}</span>
+                <div key={name} className="flex items-center gap-1.5 md:gap-2">
+                  <div className="rounded border border-slate-300 flex-shrink-0" style={{ width: 'clamp(1rem, 2vw, 1.5rem)', height: 'clamp(1rem, 2vw, 1.5rem)', backgroundColor: color }}></div>
+                  <span className="text-slate-700 truncate">{name}: {color}</span>
                 </div>
               ))}
             </div>
           </div>
           <div>
-            <h3 className="font-semibold mb-3 text-slate-800">Secondary Colors (Purple)</h3>
-            <div className="space-y-2 text-xs md:text-sm">
+            <h3 className="font-semibold mb-1 md:mb-2 text-slate-800" style={{ fontSize: 'clamp(1.5rem, 3vw, 2.25rem)' }}>Secondary Colors (Blue)</h3>
+            <div className="space-y-0.5 md:space-y-1" style={{ fontSize: 'clamp(0.75rem, 1.5vw, 1rem)' }}>
               {[
-                { name: 'Secondary-50', color: '#fdf4ff' },
-                { name: 'Secondary-100', color: '#fae8ff' },
-                { name: 'Secondary-200', color: '#f5d0ff' },
-                { name: 'Secondary-300', color: '#f0abff' },
-                { name: 'Secondary-400', color: '#e879ff' },
-                { name: 'Secondary-500', color: '#d946ff' },
-                { name: 'Secondary-600', color: '#c026d3' },
-                { name: 'Secondary-700', color: '#a21caf' },
-                { name: 'Secondary-800', color: '#86198f' },
-                { name: 'Secondary-900', color: '#701a75' },
+                { name: 'Secondary-50', color: '#f0f4ff' },
+                { name: 'Secondary-200', color: '#c7d4ff' },
+                { name: 'Secondary-300', color: '#a5b9ff' },
+                { name: 'Secondary-400', color: '#8399ff' },
+                { name: 'Secondary-500', color: '#6175ff' },
+                { name: 'Secondary-600', color: '#4a5fff' },
+                { name: 'Secondary-700', color: '#3d4eff' },
+                { name: 'Secondary-800', color: '#2f3fff' },
+                { name: 'Secondary-900', color: '#1a2aff' },
               ].map(({ name, color }) => (
-                <div key={name} className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded border-2 border-slate-300 flex-shrink-0" style={{ backgroundColor: color }}></div>
-                  <span className="text-slate-700">{name}: {color}</span>
+                <div key={name} className="flex items-center gap-1.5 md:gap-2">
+                  <div className="rounded border border-slate-300 flex-shrink-0" style={{ width: 'clamp(1rem, 2vw, 1.5rem)', height: 'clamp(1rem, 2vw, 1.5rem)', backgroundColor: color }}></div>
+                  <span className="text-slate-700 truncate">{name}: {color}</span>
                 </div>
               ))}
             </div>
@@ -298,11 +285,9 @@ const slides: Slide[] = [
   },
   {
     id: 11,
-    type: 'video',
-    src: '/slides/Mobile-scroll.mp4',
+    type: 'image',
+    src: '/slides/Mobile-scroll.gif',
     title: 'Lesson Structure',
-    autoPlay: true,
-    loop: false,
     content: (
       <div className="space-y-3 text-center text-slate-700">
         <ol className="list-none space-y-2 inline-block text-left">
@@ -565,22 +550,22 @@ const slides: Slide[] = [
     src: '/slides/Admin.webp',
     title: 'Conclusion',
     content: (
-      <div className="space-y-4 text-center text-slate-700">
-        <div className="space-y-2">
-          <p className="text-lg font-semibold text-primary-600">174 Active Students</p>
-          <p className="text-sm">All students from our school are using TutorCat to enhance their English learning journey</p>
-        </div>
-        <div className="space-y-2">
-          <p className="text-lg font-semibold text-secondary-600">Proven Results</p>
-          <p className="text-sm">Research shows an average improvement of +6 points (12% of maximum score) in language proficiency after just one month</p>
-        </div>
-        <div className="space-y-2">
-          <p className="text-lg font-semibold text-primary-600">Continuous Engagement</p>
-          <p className="text-sm">Students actively complete lessons, earn achievements, and track their progress daily</p>
-        </div>
-        <div className="pt-4 border-t border-slate-200">
-          <p className="text-base font-bold text-slate-800">TutorCat: Empowering students to learn English effectively, anytime, anywhere</p>
-        </div>
+      <div className="space-y-4 text-slate-700">
+        <p className="text-lg font-semibold mb-4">TutorCat successfully meets all of our project objectives</p>
+        <ul className="list-none space-y-3">
+          <li className="flex items-start gap-3">
+            <span className="w-2 h-2 rounded-full bg-primary-500 mt-2 flex-shrink-0"></span>
+            <span>Built an interactive English learning platform with AI feedback for independent speaking practice</span>
+          </li>
+          <li className="flex items-start gap-3">
+            <span className="w-2 h-2 rounded-full bg-secondary-500 mt-2 flex-shrink-0"></span>
+            <span>Implemented gamification features (XP points, achievements, daily streaks) to increase engagement</span>
+          </li>
+          <li className="flex items-start gap-3">
+            <span className="w-2 h-2 rounded-full bg-primary-500 mt-2 flex-shrink-0"></span>
+            <span>Applied security measures (authentication and password protection) to keep student data safe</span>
+          </li>
+        </ul>
       </div>
     )
   }
@@ -780,70 +765,106 @@ export default function Presentation({ isOpen, onClose }: PresentationProps) {
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 overflow-auto min-h-0 pt-14 md:pt-16">
-          <div className="flex items-center justify-center p-4 md:p-8 pb-24 md:pb-28 min-h-full">
+        <div className="flex-1 overflow-hidden min-h-0 flex items-center justify-center">
+          <div className="flex items-center justify-center w-full h-full p-2 md:p-4">
             {isLoading ? (
               <div className="text-center text-slate-700">
                 <div className="animate-spin w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full mx-auto mb-4"></div>
                 <p>Loading presentation...</p>
               </div>
             ) : (
-              <div className="w-full max-w-7xl mx-auto mt-0">
-              <div className="bg-white rounded-lg shadow-2xl overflow-hidden mt-2 md:mt-4">
+              <div className="w-full max-w-7xl mx-auto h-full flex items-center justify-center">
+              <div className="bg-white rounded-lg shadow-2xl overflow-hidden w-full h-full flex flex-col">
                 {/* Slide Content */}
-                <div className={`relative min-h-[60vh] flex flex-col pt-4 md:pt-6 ${currentSlide === 10 ? 'bg-transparent' : 'bg-slate-100'}`}>
-                  {/* Media (Image or Video) */}
-                  {(currentSlideData.type === 'video' || currentSlideData.type === 'image') && currentSlideData.src && (
-                    <div className="relative w-full flex items-center justify-center p-4 md:p-6 pt-2 md:pt-4 bg-transparent">
-                      {currentSlideData.type === 'video' && (
-                        <div className="flex items-center justify-center bg-transparent" style={currentSlide === 10 ? { maxWidth: '200px', maxHeight: '300px' } : { maxWidth: '100%', maxHeight: '60vh' }}>
-                          <VideoPlayer
-                            src={currentSlideData.src}
-                            autoPlay={currentSlideData.autoPlay}
-                            loop={currentSlideData.loop}
-                            className="w-full h-full object-contain bg-transparent"
-                            style={currentSlide === 10 ? { maxWidth: '200px', maxHeight: '300px', background: 'transparent' } : { maxWidth: '100%', maxHeight: '60vh', background: 'transparent' }}
-                            onVideoRef={(video) => {
-                              videoRefs.current[currentSlide] = video
-                            }}
-                          />
-                        </div>
-                      )}
-                      {currentSlideData.type === 'image' && (
-                        <div className="w-full max-w-4xl flex items-center justify-center">
+                <div className={`relative flex-1 flex flex-col justify-center p-2 md:p-4 lg:p-6 ${currentSlide === 10 ? 'bg-transparent' : 'bg-slate-100'}`} style={{ maxHeight: '100%', overflow: 'hidden' }}>
+                  {/* Special layout for slide 2, 11, 12 & 19: media on left, text on right */}
+                  {((currentSlideData.id === 2 && currentSlideData.type === 'image') || (currentSlideData.id === 11 && currentSlideData.type === 'image') || (currentSlideData.id === 12 && currentSlideData.type === 'image') || (currentSlideData.id === 19 && currentSlideData.type === 'image')) && currentSlideData.src && currentSlideData.content ? (
+                    <div className="flex flex-col md:flex-row items-center justify-center gap-2 md:gap-4 lg:gap-6 w-full h-full" style={{ maxHeight: '100%' }}>
+                      {/* Media on left */}
+                      <div className="flex-1 flex items-center justify-center max-w-full md:max-w-[50%] h-full" style={{ maxHeight: '100%' }}>
+                        <div className="w-full flex items-center justify-center" style={{ maxHeight: '100%' }}>
                           <CachedImage
                             src={currentSlideData.src}
                             alt={currentSlideData.title || 'Slide image'}
-                            className="max-w-full max-h-[45vh] object-contain cursor-pointer hover:opacity-90 transition-opacity"
+                            className="object-contain cursor-pointer hover:opacity-90 transition-opacity"
+                            style={
+                              currentSlideData.id === 2 
+                                ? { maxWidth: 'min(480px, 40vw)', width: '100%', maxHeight: '100%' }
+                                : currentSlideData.id === 11
+                                ? { maxWidth: 'min(300px, 25vw)', width: '100%', maxHeight: '100%' }
+                                : { maxWidth: '100%', maxHeight: '100%' }
+                            }
                             onClick={() => setExpandedImage(currentSlideData.src!)}
                           />
                         </div>
-                      )}
-                    </div>
-                  )}
-                  
-                  {/* Content Section - Show below media if both exist */}
-                  {currentSlideData.content && (currentSlideData.type === 'video' || currentSlideData.type === 'image') && (
-                    <div className="w-full p-6 md:p-8 bg-gradient-to-b from-white to-primary-50/30 border-t border-primary-200">
-                      <div className="max-w-4xl mx-auto">
-                        <h2 className="text-2xl md:text-3xl font-bold text-center mb-4 md:mb-6 bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">
+                      </div>
+                      {/* Text on right */}
+                      <div className="flex-1 flex flex-col justify-center max-w-full md:max-w-[50%] h-full overflow-hidden">
+                        <h2 className="font-bold mb-2 md:mb-3 lg:mb-4 bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent text-left" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)' }}>
                           {currentSlideData.title}
                         </h2>
-                        <div className="text-base md:text-lg lg:text-xl text-center text-slate-700">
+                        <div className="text-slate-700 text-left overflow-y-auto" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)', maxHeight: 'calc(100% - 4rem)' }}>
                           {currentSlideData.content}
                         </div>
                       </div>
                     </div>
+                  ) : (
+                    <>
+                      {/* Media (Image or Video) */}
+                      {(currentSlideData.type === 'video' || currentSlideData.type === 'image') && currentSlideData.src && (
+                        <div className="relative w-full flex items-center justify-center flex-1 p-2 md:p-4 bg-transparent" style={{ maxHeight: currentSlideData.content ? '60%' : '100%', minHeight: 0 }}>
+                          {currentSlideData.type === 'video' && (
+                            <div className="flex items-center justify-center bg-transparent w-full h-full" style={currentSlide === 10 ? { maxWidth: 'min(200px, 15vw)', maxHeight: 'min(300px, 40vh)' } : { maxWidth: '100%', maxHeight: '100%' }}>
+                              <VideoPlayer
+                                src={currentSlideData.src}
+                                autoPlay={currentSlideData.autoPlay}
+                                loop={currentSlideData.loop}
+                                className="w-full h-full object-contain bg-transparent"
+                                style={currentSlide === 10 ? { maxWidth: 'min(200px, 15vw)', maxHeight: 'min(300px, 40vh)', background: 'transparent' } : { maxWidth: '100%', maxHeight: '100%', background: 'transparent' }}
+                                onVideoRef={(video) => {
+                                  videoRefs.current[currentSlide] = video
+                                }}
+                              />
+                            </div>
+                          )}
+                          {currentSlideData.type === 'image' && (
+                            <div className="w-full flex items-center justify-center h-full">
+                              <CachedImage
+                                src={currentSlideData.src}
+                                alt={currentSlideData.title || 'Slide image'}
+                                className="max-w-full object-contain cursor-pointer hover:opacity-90 transition-opacity"
+                                style={{ maxHeight: '100%', maxWidth: '100%' }}
+                                onClick={() => setExpandedImage(currentSlideData.src!)}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      
+                      {/* Content Section - Show below media if both exist */}
+                      {currentSlideData.content && (currentSlideData.type === 'video' || currentSlideData.type === 'image') && (
+                        <div className="w-full flex-shrink-0 p-2 md:p-4 lg:p-6 bg-gradient-to-b from-white to-primary-50/30 border-t border-primary-200" style={{ maxHeight: '40%', overflow: 'hidden' }}>
+                          <div className="max-w-4xl mx-auto h-full flex flex-col justify-center">
+                            <h2 className="font-bold text-center mb-2 md:mb-3 lg:mb-4 bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)' }}>
+                              {currentSlideData.title}
+                            </h2>
+                            <div className="text-center text-slate-700 overflow-y-auto" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
+                              {currentSlideData.content}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
                   
                   {/* Content-only slides */}
                   {currentSlideData.type === 'content' && !currentSlideData.src && (
-                    <div className="w-full flex-1 flex items-center justify-center p-4 md:p-8 overflow-y-auto max-h-full bg-gradient-to-br from-white via-primary-50/20 to-secondary-50/20">
-                      <div className="max-w-4xl w-full">
-                        <h2 className="text-2xl md:text-4xl font-bold text-center mb-6 md:mb-8 bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">
+                    <div className="w-full flex-1 flex items-center justify-center p-1 md:p-2 lg:p-3 overflow-hidden max-h-full bg-gradient-to-br from-white via-primary-50/20 to-secondary-50/20">
+                      <div className="max-w-4xl w-full h-full flex flex-col justify-center overflow-hidden" style={currentSlideData.id === 10 ? { transform: 'scale(0.9)', transformOrigin: 'center' } : {}}>
+                        <h2 className="font-bold text-center mb-1 md:mb-2 lg:mb-3 bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent flex-shrink-0" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)' }}>
                           {currentSlideData.title}
                         </h2>
-                        <div className="text-sm md:text-lg text-center text-slate-700">
+                        <div className="text-center text-slate-700 overflow-hidden flex-1 flex items-center justify-center min-h-0" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
                           {currentSlideData.content}
                         </div>
                       </div>
@@ -931,14 +952,17 @@ export default function Presentation({ isOpen, onClose }: PresentationProps) {
             className="fixed inset-0 z-[10000] bg-black/90 flex items-center justify-center p-4"
             onClick={() => setExpandedImage(null)}
           >
-            <div className="relative max-w-full max-h-full">
+            <div className="relative max-w-full max-h-full" onClick={(e) => e.stopPropagation()}>
               <CachedImage
                 src={expandedImage}
                 alt="Expanded image"
                 className="max-w-[100vw] max-h-[100vh] object-contain"
               />
               <button
-                onClick={() => setExpandedImage(null)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setExpandedImage(null)
+                }}
                 className="absolute top-4 right-4 text-white hover:text-primary-400 transition-colors p-2 bg-black/50 rounded-full"
                 aria-label="Close expanded image"
               >

@@ -2,6 +2,7 @@ import { Handler } from '@netlify/functions';
 import { neon } from '@neondatabase/serverless';
 import crypto from 'crypto';
 import { sendRegistrationConfirmation, sendLoginVerification, sendPasswordResetVerification } from './email-service';
+import { checkRateLimit, createRateLimitResponse } from './rate-limit';
 
 // Environment variables interface
 interface Env {
@@ -113,13 +114,47 @@ async function sendOTP(email: string, type: string): Promise<{ success: boolean;
 }
 
 const handler: Handler = async (event, context) => {
+  // CORS headers
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Credentials': 'true'
+  };
+
+  // Handle preflight requests
+  if (event.httpMethod === 'OPTIONS') {
+    return {
+      statusCode: 200,
+      headers: corsHeaders,
+      body: ''
+    };
+  }
+
   // Only allow POST requests
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       body: JSON.stringify({ success: false, error: 'Method not allowed' })
     };
+  }
+
+  // Check rate limit (10 attempts per hour)
+  const rateLimitResult = await checkRateLimit(event, {
+    maxAttempts: 10,
+    windowMs: 3600000 // 1 hour
+  });
+
+  if (!rateLimitResult.allowed) {
+    console.log(`Auth-send-otp: Rate limit exceeded`);
+    return {
+      ...createRateLimitResponse(rateLimitResult),
+      headers: {
+        ...corsHeaders,
+        ...createRateLimitResponse(rateLimitResult).headers
+      }
+    } as any;
   }
 
   try {

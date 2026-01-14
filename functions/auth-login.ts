@@ -2,6 +2,7 @@ import { Handler } from '@netlify/functions';
 import { neon } from '@neondatabase/serverless';
 import bcrypt from 'bcryptjs';
 import * as jwt from 'jsonwebtoken';
+import { checkRateLimit, createRateLimitResponse } from './rate-limit';
 
 // CORS headers
 const headers = {
@@ -10,6 +11,15 @@ const headers = {
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Credentials': 'true'
 };
+
+// Helper to get client identifier (duplicated from rate-limit for use in logging)
+function getClientIdentifier(event: any): string {
+  const forwarded = event.headers?.['x-forwarded-for'] || event.headers?.['X-Forwarded-For'];
+  if (forwarded) {
+    return forwarded.split(',')[0].trim();
+  }
+  return event.headers?.['x-real-ip'] || event.headers?.['X-Real-Ip'] || event.clientContext?.identity?.sourceIp || 'unknown';
+}
 
 const handler: Handler = async (event, context) => {
   // Only log in development
@@ -37,6 +47,23 @@ const handler: Handler = async (event, context) => {
       },
       body: JSON.stringify({ success: false, error: 'Method not allowed' })
     };
+  }
+
+  // Check rate limit (10 attempts per hour)
+  const rateLimitResult = await checkRateLimit(event, {
+    maxAttempts: 10,
+    windowMs: 3600000 // 1 hour
+  });
+
+  if (!rateLimitResult.allowed) {
+    console.log(`Auth-login: Rate limit exceeded for ${getClientIdentifier(event)}`);
+    return {
+      ...createRateLimitResponse(rateLimitResult),
+      headers: {
+        ...headers,
+        ...createRateLimitResponse(rateLimitResult).headers
+      }
+    } as any;
   }
 
   try {

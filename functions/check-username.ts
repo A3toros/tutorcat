@@ -79,8 +79,9 @@ const handler: Handler = async (event, context) => {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        available,
-        username: safeUsername
+        available
+        // Don't return username in response to prevent XSS via reflection
+        // Client already knows what username it sent
       })
     } as any;
 

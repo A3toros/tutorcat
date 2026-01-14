@@ -23,6 +23,10 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",
     "test:e2e:report": "playwright show-report",
+    "test:security": "node scripts/penetration-test.js",
+    "test:security:advanced": "node scripts/penetration-test-advanced.js",
+    "test:security:all": "node scripts/penetration-test.js && node scripts/penetration-test-advanced.js",
+    "test:upstash": "node scripts/test-upstash-connection.js",
     "verify": "node scripts/verify-deployment.js",
     "setup": "npm install && npm run db:init",
     "deploy:check": "npm run verify"
@@ -35,6 +39,7 @@
     "@types/react-dom": "^19.0.1",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
+    "@upstash/redis": "^1.36.1",
     "autoprefixer": "^10.4.0",
     "bcryptjs": "^2.4.3",
     "eslint": "^8.0.0",

@@ -54,10 +54,24 @@ const SignupPage: React.FC = () => {
     setUsernameStatus({ checking: true, available: null, message: '', showChecking: false });
 
     try {
-      const response = await fetch(`/api/check-username?username=${encodeURIComponent(username)}`);
+      // Sanitize username before sending to API
+      const sanitizedUsername = username.replace(/[<>\"'&]/g, '').trim();
+      if (!sanitizedUsername || sanitizedUsername !== username) {
+        // Username contains invalid characters
+        setUsernameStatus({
+          checking: false,
+          available: null,
+          message: 'Invalid username format',
+          showChecking: false
+        });
+        return false;
+      }
+
+      const response = await fetch(`/api/check-username?username=${encodeURIComponent(sanitizedUsername)}`);
       const data = await response.json();
 
       if (response.ok) {
+        // Only use the 'available' field from response - ignore any other fields
         const available = !!data.available;
         setUsernameStatus({
           checking: false,
@@ -67,10 +81,12 @@ const SignupPage: React.FC = () => {
         });
         return available;
       } else {
+        // Sanitize error message if present
+        const errorMessage = data.error ? String(data.error).replace(/[<>\"'&]/g, '') : 'Could not verify username';
         setUsernameStatus({
           checking: false,
           available: null,
-          message: 'Could not verify username',
+          message: errorMessage,
           showChecking: false
         });
         return false;
@@ -283,6 +299,7 @@ const SignupPage: React.FC = () => {
                           <p className={`text-xs transition-all duration-300 ease-in-out ${
                             usernameStatus.available ? 'text-green-600 translate-y-0 opacity-100' : 'text-red-500 translate-y-0 opacity-100'
                           }`}>
+                            {/* React automatically escapes JSX content - message is already sanitized in checkUsernameAvailability */}
                             {usernameStatus.message}
                           </p>
                         )}
