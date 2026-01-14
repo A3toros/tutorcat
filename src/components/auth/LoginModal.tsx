@@ -66,8 +66,14 @@ const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
           onSuccess()
         }
       } else {
-        // Always use translation for login errors, ignore API error message
-        setError(t('auth.loginError', 'Incorrect email or password'))
+        // Check if this is a rate limit error
+        if (response.rateLimited || response.error?.toLowerCase().includes('too many')) {
+          // Show the rate limit message from the API
+          setError(response.error || 'Too many failed login attempts. Please wait before trying again.')
+        } else {
+          // For other errors, show generic message
+          setError(t('auth.loginError', 'Incorrect email or password'))
+        }
       }
     } catch (error) {
       setError(t('auth.loginError', 'Login failed'))

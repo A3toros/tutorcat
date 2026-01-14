@@ -15,6 +15,8 @@ interface ApiResponse<T = any> {
   data?: T
   error?: string
   message?: string
+  rateLimited?: boolean
+  retryAfter?: number
 }
 
 class ApiClient {
@@ -54,6 +56,16 @@ class ApiClient {
         console.error('API: Failed to parse response JSON:', parseError)
         console.error('API: Raw response was:', responseText)
         data = { error: 'Invalid response format' }
+      }
+
+      // Check for 429 (rate limited) - show specific rate limit message
+      if (response.status === 429) {
+        return {
+          success: false,
+          error: data.error || 'Too many attempts. Please wait before trying again.',
+          rateLimited: true,
+          retryAfter: data.retryAfter,
+        }
       }
 
       // Check for 401 (unauthorized) - token expired for admin requests

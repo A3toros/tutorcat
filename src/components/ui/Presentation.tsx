@@ -31,24 +31,27 @@ const slides: Slide[] = [
     content: (
       <div className="text-center space-y-4">
         <p className="text-slate-600 mb-6" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>AI Powered Language Learning Web App</p>
-        <ul className="list-none space-y-3 text-slate-700 inline-block" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
-          <li className="flex items-center justify-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0"></span>
-            <span>Mattcha Srirojwong</span>
-          </li>
-          <li className="flex items-center justify-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-secondary-500 flex-shrink-0"></span>
-            <span>Jindaporn Tikomporn</span>
-          </li>
-          <li className="flex items-center justify-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0"></span>
-            <span>Nichapath Chunlawithet</span>
-          </li>
-          <li className="flex items-center justify-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-secondary-500 flex-shrink-0"></span>
-            <span>Curator: Aleksandr Petrov</span>
-          </li>
-        </ul>
+        <div className="space-y-3">
+          <p className="text-slate-700 font-semibold" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>Developers:</p>
+          <ul className="list-none space-y-3 text-slate-700 inline-block" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
+            <li className="flex items-center justify-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0"></span>
+              <span>Mattcha Srirojwong</span>
+            </li>
+            <li className="flex items-center justify-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-secondary-500 flex-shrink-0"></span>
+              <span>Jindaporn Tikomporn</span>
+            </li>
+            <li className="flex items-center justify-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0"></span>
+              <span>Nichapath Chunlawithet</span>
+            </li>
+            <li className="flex items-center justify-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-secondary-500 flex-shrink-0"></span>
+              <span>Curator: Aleksandr Petrov</span>
+            </li>
+          </ul>
+        </div>
       </div>
     )
   },
@@ -146,19 +149,23 @@ const slides: Slide[] = [
     type: 'content',
     title: 'Development Process',
     content: (
-      <div className="space-y-3 text-center">
-        <ul className="list-none space-y-3 text-slate-700 inline-flex flex-col items-center">
-          <li>
-            <span className="font-semibold" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>Planning</span>
+      <div className="space-y-3 text-center text-slate-700 flex flex-col items-center">
+        <ul className="list-none space-y-3" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
+          <li className="flex items-center justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0"></span>
+            <span>Planning</span>
           </li>
-          <li>
-            <span className="font-semibold" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>Design</span>
+          <li className="flex items-center justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-secondary-500 flex-shrink-0"></span>
+            <span>Design</span>
           </li>
-          <li>
-            <span className="font-semibold" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>Development</span>
+          <li className="flex items-center justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0"></span>
+            <span>Development</span>
           </li>
-          <li>
-            <span className="font-semibold" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>Testing</span>
+          <li className="flex items-center justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-secondary-500 flex-shrink-0"></span>
+            <span>Testing</span>
           </li>
         </ul>
       </div>
@@ -363,7 +370,7 @@ const slides: Slide[] = [
   {
     id: 12,
     type: 'image',
-    src: '/slides/Achievements2.webp',
+    src: '/slides/Achievements2.png',
     title: 'Gamification',
     content: (
       <div className="space-y-3 text-center text-slate-700 flex flex-col items-center">
@@ -598,7 +605,7 @@ const slides: Slide[] = [
   {
     id: 19,
     type: 'image',
-    src: '/slides/Admin2.webp',
+    src: '/slides/Admin2.png',
     title: 'Conclusion',
     content: (
       <div className="space-y-3 text-center text-slate-700 flex flex-col items-center">
@@ -815,24 +822,24 @@ export default function Presentation({ isOpen, onClose }: PresentationProps) {
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 overflow-hidden min-h-0 flex items-center justify-center">
-          <div className="flex items-center justify-center w-full h-full p-2 md:p-4">
+        <div className="flex-1 overflow-y-auto min-h-0">
+          <div className="flex items-center justify-center w-full p-2 md:p-4 py-4 md:py-6 min-h-full">
             {isLoading ? (
               <div className="text-center text-slate-700">
                 <div className="animate-spin w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full mx-auto mb-4"></div>
                 <p>Loading presentation...</p>
               </div>
             ) : (
-              <div className="w-full max-w-7xl mx-auto h-full flex items-center justify-center">
-              <div className="bg-white rounded-lg shadow-2xl overflow-hidden w-full h-full flex flex-col">
+              <div className="w-full max-w-7xl mx-auto flex items-center justify-center">
+              <div className="bg-white rounded-lg shadow-2xl w-full flex flex-col">
                 {/* Slide Content */}
-                <div className={`relative flex-1 flex flex-col justify-center p-2 md:p-4 lg:p-6 ${currentSlide === 10 ? 'bg-transparent' : 'bg-slate-100'}`} style={{ maxHeight: '100%', overflow: 'hidden' }}>
+                <div className={`relative flex flex-col justify-center p-2 md:p-4 lg:p-6 ${currentSlide === 10 ? 'bg-transparent' : 'bg-slate-100'}`}>
                   {/* Special layout for slide 2, 11, 12 & 19: media on left, text on right */}
                   {((currentSlideData.id === 2 && currentSlideData.type === 'image') || (currentSlideData.id === 11 && currentSlideData.type === 'image') || (currentSlideData.id === 12 && currentSlideData.type === 'image') || (currentSlideData.id === 19 && currentSlideData.type === 'image')) && currentSlideData.src && currentSlideData.content ? (
-                    <div className="flex flex-col md:flex-row items-center justify-center gap-2 md:gap-4 lg:gap-6 w-full h-full" style={{ maxHeight: '100%' }}>
+                    <div className="flex flex-col md:flex-row items-center justify-center gap-2 md:gap-4 lg:gap-6 w-full">
                       {/* Media on left */}
-                      <div className="flex-1 flex items-center justify-center max-w-full md:max-w-[50%] h-full" style={{ maxHeight: '100%' }}>
-                        <div className="w-full flex items-center justify-center" style={{ maxHeight: '100%' }}>
+                      <div className="flex-1 flex items-center justify-center max-w-full md:max-w-[50%]">
+                        <div className="w-full flex items-center justify-center">
                           <CachedImage
                             src={currentSlideData.src}
                             alt={currentSlideData.title || 'Slide image'}
@@ -851,11 +858,11 @@ export default function Presentation({ isOpen, onClose }: PresentationProps) {
                         </div>
                       </div>
                       {/* Text on right */}
-                      <div className={`flex-1 flex flex-col justify-center max-w-full md:max-w-[50%] h-full overflow-hidden ${(currentSlideData.id === 12 || currentSlideData.id === 19) ? 'items-center' : ''}`}>
+                      <div className={`flex-1 flex flex-col justify-center max-w-full md:max-w-[50%] ${(currentSlideData.id === 12 || currentSlideData.id === 19) ? 'items-center' : ''}`}>
                         <h2 className={`font-bold mb-2 md:mb-3 lg:mb-4 text-primary-600 ${(currentSlideData.id === 12 || currentSlideData.id === 19) ? 'text-center' : 'text-left'}`} style={{ fontSize: 'clamp(2rem, 4vw, 3rem)' }}>
                           {currentSlideData.title}
                         </h2>
-                        <div className={`text-slate-700 overflow-y-auto ${(currentSlideData.id === 12 || currentSlideData.id === 19) ? 'text-center flex flex-col items-center' : 'text-left'}`} style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)', maxHeight: 'calc(100% - 4rem)' }}>
+                        <div className={`text-slate-700 ${(currentSlideData.id === 12 || currentSlideData.id === 19) ? 'text-center flex flex-col items-center' : 'text-left'}`} style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
                           {currentSlideData.content}
                         </div>
                       </div>
@@ -895,12 +902,12 @@ export default function Presentation({ isOpen, onClose }: PresentationProps) {
                       
                       {/* Content Section - Show below media if both exist */}
                       {currentSlideData.content && (currentSlideData.type === 'video' || currentSlideData.type === 'image') && (
-                        <div className="w-full flex-shrink-0 p-2 md:p-4 lg:p-6 bg-gradient-to-b from-white to-primary-50/30 border-t border-primary-200" style={{ maxHeight: '40%', overflow: 'auto' }}>
-                          <div className="max-w-4xl mx-auto h-full flex flex-col justify-center">
+                        <div className="w-full flex-shrink-0 p-2 md:p-4 lg:p-6 bg-gradient-to-b from-white to-primary-50/30 border-t border-primary-200">
+                          <div className="max-w-4xl mx-auto flex flex-col justify-center">
                             <h2 className="font-bold text-center mb-2 md:mb-3 lg:mb-4 text-primary-600" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)' }}>
                               {currentSlideData.title}
                             </h2>
-                            <div className="text-center text-slate-700 overflow-y-auto" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
+                            <div className="text-center text-slate-700" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
                               {currentSlideData.content}
                             </div>
                           </div>
@@ -911,12 +918,12 @@ export default function Presentation({ isOpen, onClose }: PresentationProps) {
                   
                   {/* Content-only slides */}
                   {currentSlideData.type === 'content' && !currentSlideData.src && (
-                    <div className="w-full flex-1 flex items-center justify-center p-1 md:p-2 lg:p-3 overflow-hidden max-h-full bg-gradient-to-br from-white via-primary-50/20 to-secondary-50/20">
-                      <div className="max-w-4xl w-full h-full flex flex-col justify-center overflow-hidden" style={currentSlideData.id === 10 ? { transform: 'scale(0.9)', transformOrigin: 'center' } : {}}>
+                    <div className="w-full flex-1 flex items-center justify-center p-1 md:p-2 lg:p-3 bg-gradient-to-br from-white via-primary-50/20 to-secondary-50/20">
+                      <div className="max-w-4xl w-full flex flex-col justify-center" style={currentSlideData.id === 10 ? { transform: 'scale(0.9)', transformOrigin: 'center' } : {}}>
                         <h2 className="font-bold text-center mb-1 md:mb-2 lg:mb-3 text-primary-600 flex-shrink-0" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)' }}>
                           {currentSlideData.title}
                         </h2>
-                        <div className="text-center text-slate-700 overflow-y-auto flex-1 flex items-center justify-center min-h-0" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
+                        <div className="text-center text-slate-700 flex-1 flex items-center justify-center" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
                           {currentSlideData.content}
                         </div>
                       </div>

@@ -340,14 +340,32 @@ export function createRateLimitResponse(result: RateLimitResult): any {
     headers['Retry-After'] = result.retryAfter.toString();
   }
 
+  // Calculate minutes until retry
+  const minutesUntilRetry = result.retryAfter ? Math.ceil(result.retryAfter / 60) : 15;
+  
+  // Create a simple, user-friendly error message
+  let errorMessage;
+  if (minutesUntilRetry > 1) {
+    errorMessage = `Too many failed login attempts. Please try again in ${minutesUntilRetry} minutes.`;
+  } else if (result.retryAfter && result.retryAfter < 60) {
+    errorMessage = `Too many failed login attempts. Please try again in ${result.retryAfter} seconds.`;
+  } else {
+    errorMessage = `Too many failed login attempts. Please try again in ${minutesUntilRetry} minute.`;
+  }
+  
   return {
     statusCode: 429,
     headers,
     body: JSON.stringify({
       success: false,
-      error: 'Too many failed login attempts. Please try again later.',
+      error: errorMessage,
       retryAfter: result.retryAfter,
-      resetTime: new Date(result.resetTime).toISOString()
+      resetTime: new Date(result.resetTime).toISOString(),
+      rateLimited: true,
+      maxAttempts: 10,
+      windowMinutes: 15,
+      remainingAttempts: result.remaining,
+      retryAfterSeconds: result.retryAfter
     })
   };
 }
