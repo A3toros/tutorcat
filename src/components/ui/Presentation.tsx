@@ -27,11 +27,28 @@ const slides: Slide[] = [
   {
     id: 1,
     type: 'content',
-    title: 'Project Overview',
+    title: 'TutorCat',
     content: (
       <div className="text-center space-y-4">
-        <h2 className="font-bold text-slate-800" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)' }}>TutorCat</h2>
-        <p className="text-slate-600" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>AI powered language learning web app</p>
+        <p className="text-slate-600 mb-6" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>AI Powered Language Learning Web App</p>
+        <ul className="list-none space-y-3 text-slate-700 inline-block" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
+          <li className="flex items-center justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0"></span>
+            <span>Mattcha Srirojwong</span>
+          </li>
+          <li className="flex items-center justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-secondary-500 flex-shrink-0"></span>
+            <span>Jindaporn Tikomporn</span>
+          </li>
+          <li className="flex items-center justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0"></span>
+            <span>Nichapath Chunlawithet</span>
+          </li>
+          <li className="flex items-center justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-secondary-500 flex-shrink-0"></span>
+            <span>Curator: Aleksandr Petrov</span>
+          </li>
+        </ul>
       </div>
     )
   },
@@ -42,13 +59,13 @@ const slides: Slide[] = [
     title: 'Problem We Address',
     content: (
       <div className="space-y-3">
-        <ul className="list-none space-y-2 text-slate-700">
+        <ul className="list-none space-y-2 text-slate-700" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
           <li className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0"></span>
             Low engagement in traditional ESL
           </li>
           <li className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0"></span>
+            <span className="w-2 h-2 rounded-full bg-secondary-500 flex-shrink-0"></span>
             Limited feedback outside class
           </li>
           <li className="flex items-center gap-2">
@@ -62,7 +79,7 @@ const slides: Slide[] = [
   {
     id: 3,
     type: 'content',
-    title: 'Our Objectives',
+    title: 'Objectives of the Project',
     content: (
       <div className="space-y-4 text-center">
         <ul className="list-none space-y-3 text-slate-700 inline-block text-left" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
@@ -88,9 +105,20 @@ const slides: Slide[] = [
     title: 'Scope and Limitations',
     content: (
       <div className="space-y-3 text-center text-slate-700">
-        <p className="max-w-2xl mx-auto" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>Free-tier hosting limits deployment to school level and restricts concurrent users</p>
-        <p className="max-w-2xl mx-auto" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>Reliance on external AI APIs with no ability to train or modify models using student data</p>
-        <p className="max-w-2xl mx-auto" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>Risk of AI hallucinations in feedback despite prompt optimization</p>
+        <ul className="list-none space-y-3 inline-block" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 mt-2 flex-shrink-0"></span>
+            <span>Free-tier hosting limits deployment to school level and restricts concurrent users</span>
+          </li>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-secondary-500 mt-2 flex-shrink-0"></span>
+            <span>Reliance on external AI APIs with no ability to train or modify models using student data</span>
+          </li>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 mt-2 flex-shrink-0"></span>
+            <span>Risk of AI hallucinations in feedback despite prompt optimization</span>
+          </li>
+        </ul>
       </div>
     )
   },
@@ -99,39 +127,17 @@ const slides: Slide[] = [
     type: 'content',
     title: 'Target Users',
     content: (
-      <div className="text-center space-y-6 max-w-4xl mx-auto">
-        <div className="bg-gradient-to-br from-primary-50 to-primary-100 rounded-xl p-6 md:p-8 border-2 border-primary-200 shadow-lg hover:shadow-xl transition-all">
-          <div className="flex flex-col md:flex-row items-center justify-center gap-4 md:gap-6">
-            <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white flex items-center justify-center font-bold text-3xl md:text-4xl shadow-lg flex-shrink-0">🎓</div>
-            <div className="text-center md:text-left flex-1">
-              <h3 className="text-2xl md:text-3xl font-bold text-slate-800 mb-2 bg-gradient-to-r from-primary-600 to-primary-800 bg-clip-text text-transparent">
-                Junior High & Senior High School Students
-              </h3>
-              <p className="text-base md:text-lg text-slate-700 leading-relaxed">
-                Our primary target audience - students learning English as part of their curriculum. 
-                TutorCat provides interactive, AI-powered lessons that complement classroom learning, 
-                offering personalized feedback and gamified progress tracking to keep students engaged 
-                and motivated throughout their English learning journey.
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-gradient-to-br from-secondary-50 to-secondary-100 rounded-xl p-6 md:p-8 border-2 border-secondary-200 shadow-lg hover:shadow-xl transition-all">
-          <div className="flex flex-col md:flex-row items-center justify-center gap-4 md:gap-6">
-            <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-gradient-to-br from-secondary-500 to-secondary-700 text-white flex items-center justify-center font-bold text-3xl md:text-4xl shadow-lg flex-shrink-0">👤</div>
-            <div className="text-center md:text-left flex-1">
-              <h3 className="text-2xl md:text-3xl font-bold text-slate-800 mb-2 bg-gradient-to-r from-secondary-600 to-secondary-800 bg-clip-text text-transparent">
-                Adult Learners & Self-Study Enthusiasts
-              </h3>
-              <p className="text-base md:text-lg text-slate-700 leading-relaxed">
-                Perfect for self-learners and adult learners seeking to improve their English proficiency 
-                at their own pace. Whether preparing for exams, advancing careers, or personal growth, 
-                TutorCat offers flexible, anytime-anywhere learning with comprehensive AI feedback 
-                and progress tracking tailored to individual learning goals.
-              </p>
-            </div>
-          </div>
-        </div>
+      <div className="text-center space-y-4 text-slate-700">
+        <ul className="list-none space-y-3 inline-block" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 mt-2 flex-shrink-0"></span>
+            <span>Junior High & Senior High School Students - Our primary target audience learning English as part of their curriculum with interactive AI-powered lessons</span>
+          </li>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-secondary-500 mt-2 flex-shrink-0"></span>
+            <span>Adult Learners & Self-Study Enthusiasts - Self-learners seeking to improve English proficiency at their own pace with flexible learning options</span>
+          </li>
+        </ul>
       </div>
     )
   },
@@ -143,16 +149,16 @@ const slides: Slide[] = [
       <div className="space-y-3 text-center">
         <ul className="list-none space-y-3 text-slate-700 inline-flex flex-col items-center">
           <li>
-            <span className="text-lg font-semibold">Planning</span>
+            <span className="font-semibold" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>Planning</span>
           </li>
           <li>
-            <span className="text-lg font-semibold">Design</span>
+            <span className="font-semibold" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>Design</span>
           </li>
           <li>
-            <span className="text-lg font-semibold">Development</span>
+            <span className="font-semibold" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>Development</span>
           </li>
           <li>
-            <span className="text-lg font-semibold">Testing</span>
+            <span className="font-semibold" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>Testing</span>
           </li>
         </ul>
       </div>
@@ -164,24 +170,40 @@ const slides: Slide[] = [
     title: 'Frontend',
     content: (
       <div className="space-y-4 text-center text-slate-700">
-        <div>
-          <p className="font-semibold mb-3 text-primary-600 text-xl">Tech Stack:</p>
-          <ul className="list-none space-y-2 text-lg inline-block">
-            <li>React - UI library</li>
-            <li>TypeScript - Type safety</li>
-            <li>Tailwind CSS - Styling</li>
-            <li>Framer Motion - Animations</li>
-            <li>Konva.js - Drag-and-drop interactions</li>
-          </ul>
-        </div>
-        <div>
-          <p className="font-semibold mt-4 mb-3 text-secondary-600 text-xl">Features:</p>
-          <ul className="list-none space-y-2 text-lg inline-block">
-            <li>Clean, simple UI design</li>
-            <li>Responsive layouts</li>
-            <li>Interactive components</li>
-          </ul>
-        </div>
+        <ul className="list-none space-y-3 inline-block" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 mt-2 flex-shrink-0"></span>
+            <span>React - UI library</span>
+          </li>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-secondary-500 mt-2 flex-shrink-0"></span>
+            <span>TypeScript - Type safety</span>
+          </li>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 mt-2 flex-shrink-0"></span>
+            <span>Tailwind CSS - Styling</span>
+          </li>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-secondary-500 mt-2 flex-shrink-0"></span>
+            <span>Framer Motion - Animations</span>
+          </li>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 mt-2 flex-shrink-0"></span>
+            <span>Konva.js - Drag-and-drop interactions</span>
+          </li>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-secondary-500 mt-2 flex-shrink-0"></span>
+            <span>Clean, simple UI design</span>
+          </li>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 mt-2 flex-shrink-0"></span>
+            <span>Responsive layouts</span>
+          </li>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-secondary-500 mt-2 flex-shrink-0"></span>
+            <span>Interactive components</span>
+          </li>
+        </ul>
       </div>
     )
   },
@@ -191,23 +213,32 @@ const slides: Slide[] = [
     title: 'Backend',
     content: (
       <div className="space-y-4 text-center text-slate-700">
-        <div>
-          <p className="font-semibold mb-3 text-primary-600 text-xl">Tech Stack:</p>
-          <ul className="list-none space-y-2 text-lg inline-block">
-            <li>Next.js - React framework</li>
-            <li>Netlify Functions - Serverless API</li>
-            <li>PostgreSQL (Neon) - Database</li>
-
-          </ul>
-        </div>
-        <div>
-          <p className="font-semibold mt-4 mb-3 text-secondary-600 text-xl">API Response Times:</p>
-          <ul className="list-none space-y-2 text-lg inline-block">
-            <li>Authentification: 1100ms – high latency</li>
-            <li>Fetch functions: 200-400ms – low latency</li>
-            <li>Write functions: 300-600ms – low latency</li>
-          </ul>
-        </div>
+        <ul className="list-none space-y-3 inline-block" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 mt-2 flex-shrink-0"></span>
+            <span>Next.js - React framework</span>
+          </li>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-secondary-500 mt-2 flex-shrink-0"></span>
+            <span>Netlify Functions - Serverless API</span>
+          </li>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 mt-2 flex-shrink-0"></span>
+            <span>PostgreSQL (Neon) - Database</span>
+          </li>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-secondary-500 mt-2 flex-shrink-0"></span>
+            <span>Authentification: 1100ms – high latency</span>
+          </li>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 mt-2 flex-shrink-0"></span>
+            <span>Fetch functions: 200-400ms – low latency</span>
+          </li>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-secondary-500 mt-2 flex-shrink-0"></span>
+            <span>Write functions: 300-600ms – low latency</span>
+          </li>
+        </ul>
       </div>
     )
   },
@@ -216,15 +247,21 @@ const slides: Slide[] = [
     type: 'content',
     title: 'Security',
     content: (
-      <div className="space-y-5 text-center text-slate-700">
-        <div>
-          <h3 className="font-semibold mb-3 text-primary-600">Tech Stack:</h3>
-          <ul className="list-none space-y-2 inline-block">
-            <li>JWT (jsonwebtoken) - Token-based authentication</li>
-            <li>HTTP-only cookies - Enhanced security</li>
-            <li>Bcrypt.js - Password hashing</li>
-          </ul>
-        </div>
+      <div className="space-y-4 text-center text-slate-700">
+        <ul className="list-none space-y-3 inline-block" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 mt-2 flex-shrink-0"></span>
+            <span>JWT (jsonwebtoken) - Token-based authentication</span>
+          </li>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-secondary-500 mt-2 flex-shrink-0"></span>
+            <span>HTTP-only cookies - Enhanced security</span>
+          </li>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 mt-2 flex-shrink-0"></span>
+            <span>Bcrypt.js - Password hashing</span>
+          </li>
+        </ul>
       </div>
     )
   },
@@ -234,10 +271,10 @@ const slides: Slide[] = [
     title: 'Web Design',
     content: (
       <div className="space-y-1 md:space-y-2 w-full">
-        <p className="text-slate-700 mb-1 md:mb-2 text-center" style={{ fontSize: 'clamp(0.875rem, 1.75vw, 1.25rem)' }}>Simple colors, to everyone's taste</p>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-3 lg:gap-4">
           <div>
-            <h3 className="font-semibold mb-1 md:mb-2 text-slate-800" style={{ fontSize: 'clamp(1.5rem, 3vw, 2.25rem)' }}>Primary Colors (Purple)</h3>
+            <h3 className="font-semibold mb-1 md:mb-2 text-slate-800" style={{ fontSize: 'clamp(1.5rem, 3vw, 2.25rem)' }}>Primary Colors</h3>
             <div className="space-y-0.5 md:space-y-1" style={{ fontSize: 'clamp(0.75rem, 1.5vw, 1rem)' }}>
               {[
                 { name: 'Primary-50', color: '#fdf4ff' },
@@ -259,7 +296,7 @@ const slides: Slide[] = [
             </div>
           </div>
           <div>
-            <h3 className="font-semibold mb-1 md:mb-2 text-slate-800" style={{ fontSize: 'clamp(1.5rem, 3vw, 2.25rem)' }}>Secondary Colors (Blue)</h3>
+            <h3 className="font-semibold mb-1 md:mb-2 text-slate-800" style={{ fontSize: 'clamp(1.5rem, 3vw, 2.25rem)' }}>Secondary Colors</h3>
             <div className="space-y-0.5 md:space-y-1" style={{ fontSize: 'clamp(0.75rem, 1.5vw, 1rem)' }}>
               {[
                 { name: 'Secondary-50', color: '#f0f4ff' },
@@ -290,65 +327,65 @@ const slides: Slide[] = [
     title: 'Lesson Structure',
     content: (
       <div className="space-y-3 text-center text-slate-700">
-        <ol className="list-none space-y-2 inline-block text-left">
-          <li className="flex items-center gap-3">
-            <span className="w-6 h-6 rounded-full bg-gradient-to-br from-primary-400 to-primary-600 text-white flex items-center justify-center font-bold flex-shrink-0">1</span>
+        <ul className="list-none space-y-2 inline-block" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
+          <li className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0"></span>
             <span>Warm up - Speaking practice</span>
           </li>
-          <li className="flex items-center gap-3">
-            <span className="w-6 h-6 rounded-full bg-gradient-to-br from-secondary-400 to-secondary-600 text-white flex items-center justify-center font-bold flex-shrink-0">2</span>
+          <li className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-secondary-500 flex-shrink-0"></span>
             <span>Vocabulary - Learn new words</span>
           </li>
-          <li className="flex items-center gap-3">
-            <span className="w-6 h-6 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white flex items-center justify-center font-bold flex-shrink-0">3</span>
+          <li className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0"></span>
             <span>Grammar introduction - Learn rules</span>
           </li>
-          <li className="flex items-center gap-3">
-            <span className="w-6 h-6 rounded-full bg-gradient-to-br from-secondary-500 to-secondary-700 text-white flex items-center justify-center font-bold flex-shrink-0">4</span>
+          <li className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-secondary-500 flex-shrink-0"></span>
             <span>Grammar practice - Apply knowledge</span>
           </li>
-          <li className="flex items-center gap-3">
-            <span className="w-6 h-6 rounded-full bg-gradient-to-br from-primary-600 to-secondary-600 text-white flex items-center justify-center font-bold flex-shrink-0">5</span>
-            <span>Speaking - 4-5 prompts with AI feedback</span>
+          <li className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0"></span>
+            <span>Speaking - prompts with AI feedback</span>
           </li>
-          <li className="flex items-center gap-3">
-            <span className="w-6 h-6 rounded-full bg-gradient-to-br from-primary-500 to-secondary-500 text-white flex items-center justify-center font-bold flex-shrink-0">6</span>
+          <li className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-secondary-500 flex-shrink-0"></span>
             <span>Improved transcript by AI - Repeat practice</span>
           </li>
-          <li className="flex items-center gap-3">
-            <span className="w-6 h-6 rounded-full bg-gradient-to-br from-primary-700 to-secondary-700 text-white flex items-center justify-center font-bold flex-shrink-0">7</span>
+          <li className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0"></span>
             <span>Pronunciation score - Get feedback</span>
           </li>
-        </ol>
+        </ul>
       </div>
     )
   },
   {
     id: 12,
     type: 'image',
-    src: '/slides/Achievements.webp',
+    src: '/slides/Achievements2.webp',
     title: 'Gamification',
     content: (
-      <div className="space-y-3 text-center text-slate-700">
-        <ul className="list-none space-y-3 inline-block">
-          <li className="flex items-center justify-center gap-3">
-            <span className="w-2 h-2 rounded-full bg-primary-500"></span>
+      <div className="space-y-3 text-center text-slate-700 flex flex-col items-center">
+        <ul className="list-none space-y-3" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
+          <li className="flex items-center justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0"></span>
             <span>XP (Experience Points) - Earn points for completing activities</span>
           </li>
-          <li className="flex items-center justify-center gap-3">
-            <span className="w-2 h-2 rounded-full bg-secondary-500"></span>
+          <li className="flex items-center justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-secondary-500 flex-shrink-0"></span>
             <span>Titles - Unlock titles from "Tiny Whisker" to "TutorCat"</span>
           </li>
-          <li className="flex items-center justify-center gap-3">
-            <span className="w-2 h-2 rounded-full bg-primary-500"></span>
-            <span>Achievements - 100+ achievements to unlock</span>
+          <li className="flex items-center justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0"></span>
+            <span>Achievements - achievements to unlock</span>
           </li>
-          <li className="flex items-center justify-center gap-3">
-            <span className="w-2 h-2 rounded-full bg-secondary-500"></span>
+          <li className="flex items-center justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-secondary-500 flex-shrink-0"></span>
             <span>Daily streaks - Build learning habits</span>
           </li>
-          <li className="flex items-center justify-center gap-3">
-            <span className="w-2 h-2 rounded-full bg-primary-500"></span>
+          <li className="flex items-center justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0"></span>
             <span>Level progression - Advance through CEFR levels</span>
           </li>
         </ul>
@@ -361,24 +398,24 @@ const slides: Slide[] = [
     title: 'AI Feedback',
     content: (
       <div className="space-y-4 text-center text-slate-700">
-        <div className="space-y-3">
-          <div>
-            <p className="font-semibold text-center"><span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-sm font-bold mr-2">1</span> User records speech</p>
-            <p className="text-sm text-slate-600 text-center">Student speaks in response to prompts</p>
-          </div>
-          <div>
-            <p className="font-semibold text-center"><span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-br from-secondary-500 to-secondary-700 text-white text-sm font-bold mr-2">2</span> Speech-to-text transcription</p>
-            <p className="text-sm text-slate-600 text-center">AssemblyAI converts audio to text</p>
-          </div>
-          <div>
-            <p className="font-semibold text-center"><span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-br from-primary-600 to-secondary-600 text-white text-sm font-bold mr-2">3</span> AI analysis (GPT-4o-mini)</p>
-            <p className="text-sm text-slate-600 text-center">Analyzes grammar, vocabulary, pronunciation, and topic relevance</p>
-          </div>
-          <div>
-            <p className="font-semibold text-center"><span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-br from-primary-500 to-secondary-500 text-white text-sm font-bold mr-2">4</span> Personalized feedback</p>
-            <p className="text-sm text-slate-600 text-center">Score, corrections, improved transcript, and CEFR level assessment</p>
-          </div>
-        </div>
+        <ul className="list-none space-y-3 inline-block" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 mt-2 flex-shrink-0"></span>
+            <span>User records speech - Student speaks in response to prompts</span>
+          </li>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-secondary-500 mt-2 flex-shrink-0"></span>
+            <span>Speech-to-text transcription - AssemblyAI converts audio to text</span>
+          </li>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 mt-2 flex-shrink-0"></span>
+            <span>AI analysis (GPT-4o-mini) - Analyzes grammar, vocabulary, pronunciation, and topic relevance</span>
+          </li>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-secondary-500 mt-2 flex-shrink-0"></span>
+            <span>Personalized feedback - Score, corrections, improved transcript, and CEFR level assessment</span>
+          </li>
+        </ul>
       </div>
     )
   },
@@ -388,26 +425,28 @@ const slides: Slide[] = [
     title: 'Testing',
     content: (
       <div className="space-y-4 text-center text-slate-700">
-        <div>
-          <h3 className="font-semibold mb-2 text-primary-600">Functional Testing</h3>
-          <p className="text-sm text-slate-600 max-w-2xl mx-auto">Verified all features work correctly: lesson activities, authentication flows, database operations, and achievement system</p>
-        </div>
-        <div>
-          <h3 className="font-semibold mb-2 text-secondary-600">UI Testing</h3>
-          <p className="text-sm text-slate-600 max-w-2xl mx-auto">Tested user interface components, interactions, and visual elements for consistency and usability</p>
-        </div>
-        <div>
-          <h3 className="font-semibold mb-2 text-primary-600">API Testing</h3>
-          <p className="text-sm text-slate-600 max-w-2xl mx-auto">Validated all 36 serverless function endpoints, response times, error handling, and data integrity</p>
-        </div>
-        <div>
-          <h3 className="font-semibold mb-2 text-secondary-600">Cross Device Compatibility - Playwright</h3>
-          <p className="text-sm text-slate-600 max-w-2xl mx-auto">Automated end-to-end testing across Chromium, Firefox, and Safari browsers with mobile emulation</p>
-        </div>
-        <div>
-          <h3 className="font-semibold mb-2 text-primary-600">Mobile Optimizations</h3>
-          <p className="text-sm text-slate-600 max-w-2xl mx-auto">Responsive design testing, touch interactions, mobile-specific UI adjustments, and performance optimization</p>
-        </div>
+        <ul className="list-none space-y-3 inline-block" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 mt-2 flex-shrink-0"></span>
+            <span>Functional Testing - Verified all features work correctly: lesson activities, authentication flows, database operations, and achievement system</span>
+          </li>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-secondary-500 mt-2 flex-shrink-0"></span>
+            <span>UI Testing - Tested user interface components, interactions, and visual elements for consistency and usability</span>
+          </li>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 mt-2 flex-shrink-0"></span>
+            <span>API Testing - Validated all serverless function endpoints, response times, error handling, and data integrity</span>
+          </li>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-secondary-500 mt-2 flex-shrink-0"></span>
+            <span>Cross Device Compatibility - Playwright - Automated end-to-end testing across Chromium, Firefox, and Safari browsers with mobile emulation</span>
+          </li>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 mt-2 flex-shrink-0"></span>
+            <span>Mobile Optimizations - Responsive design testing, touch interactions, mobile-specific UI adjustments, and performance optimization</span>
+          </li>
+        </ul>
       </div>
     )
   },
@@ -417,24 +456,24 @@ const slides: Slide[] = [
     title: 'Research',
     content: (
       <div className="space-y-4 text-center text-slate-700">
-        <div>
-          <h3 className="font-semibold mb-2 text-primary-600">Research Methodology</h3>
-          <p className="text-sm text-slate-600 max-w-2xl mx-auto">Conducted a comprehensive study with Grade 7 students to measure the effectiveness of TutorCat</p>
-        </div>
-        <div className="space-y-3">
-          <div>
-            <p className="font-semibold text-center"><span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-sm font-bold mr-2">1</span> Pre-test Assessment</p>
-            <p className="text-sm text-slate-600 text-center">Students took an initial English language proficiency test to establish baseline scores</p>
-          </div>
-          <div>
-            <p className="font-semibold text-center"><span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-br from-secondary-500 to-secondary-700 text-white text-sm font-bold mr-2">2</span> One month</p>
-            <p className="text-sm text-slate-600 text-center">Students used TutorCat platform for one month, completing lessons and activities at their own pace</p>
-          </div>
-          <div>
-            <p className="font-semibold text-center"><span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-br from-primary-600 to-secondary-600 text-white text-sm font-bold mr-2">3</span> Post-test Assessment</p>
-            <p className="text-sm text-slate-600 text-center">Students retook the same proficiency test to measure improvement after using the platform</p>
-          </div>
-        </div>
+        <ul className="list-none space-y-3 inline-block" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 mt-2 flex-shrink-0"></span>
+            <span>Research Methodology - Conducted a comprehensive study with Grade 7 students to measure the effectiveness of TutorCat</span>
+          </li>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-secondary-500 mt-2 flex-shrink-0"></span>
+            <span>Pre-test Assessment - Students took an initial English language proficiency test to establish baseline scores</span>
+          </li>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 mt-2 flex-shrink-0"></span>
+            <span>One Month - Students used TutorCat platform for one month, completing lessons and activities at their own pace</span>
+          </li>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-secondary-500 mt-2 flex-shrink-0"></span>
+            <span>Post-test Assessment - Students retook the same proficiency test to measure improvement after using the platform</span>
+          </li>
+        </ul>
       </div>
     )
   },
@@ -445,11 +484,19 @@ const slides: Slide[] = [
     content: (
       <div className="space-y-4">
         <div className="bg-primary-50 rounded-lg p-4 border border-primary-200 mb-4">
-          <h3 className="font-semibold text-slate-800 mb-2">How This Proves Efficiency:</h3>
-          <ul className="list-disc list-inside space-y-2 text-sm text-slate-700">
-            <li><strong>Substantial improvement:</strong> Average score increased from 25 to 31 points</li>
-            <li><strong>Consistent gains:</strong> All 22 students showed improvement (ranging from +5 to +7 points)</li>
-            <li><strong>Significant progress:</strong> +6 point gain demonstrates measurable learning outcomes</li>
+          <ul className="list-none space-y-2 text-slate-700" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
+            <li className="flex items-start gap-2">
+              <span className="w-2 h-2 rounded-full bg-primary-500 mt-2 flex-shrink-0"></span>
+              <span>Substantial improvement: Average score increased from 25 to 31 points</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="w-2 h-2 rounded-full bg-secondary-500 mt-2 flex-shrink-0"></span>
+              <span>Consistent gains: All students showed improvement</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="w-2 h-2 rounded-full bg-primary-500 mt-2 flex-shrink-0"></span>
+              <span>Significant progress: Point gain demonstrates measurable learning outcomes</span>
+            </li>
           </ul>
         </div>
         <div className="bg-white rounded-lg p-3 md:p-4 border border-slate-200 max-h-[40vh] overflow-y-auto">
@@ -485,10 +532,10 @@ const slides: Slide[] = [
               </tbody>
             </table>
           </div>
-          <div className="mt-4 space-y-1 text-sm text-center">
-            <p><strong>Pre-test Mean:</strong> 25.0</p>
-            <p><strong>Post-test Mean:</strong> 31.0</p>
-            <p className="text-green-600 font-semibold text-lg"><strong>Mean Gain:</strong> +6.0 points (12% of maximum score)</p>
+          <div className="mt-4 space-y-1 text-center" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
+            <p><strong>Pre-test Mean:</strong> Baseline scores</p>
+            <p><strong>Post-test Mean:</strong> Improved scores</p>
+            <p className="text-green-600 font-semibold"><strong>Mean Gain:</strong> Significant point gain demonstrates measurable learning outcomes</p>
           </div>
         </div>
       </div>
@@ -500,18 +547,20 @@ const slides: Slide[] = [
     title: 'Benefits',
     content: (
       <div className="space-y-4 text-center text-slate-700">
-        <div>
-          <p className="font-semibold"><span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-sm font-bold mr-2">1</span> Learn Any Time Anywhere</p>
-          <p className="text-sm text-slate-600">24/7 access from any device - desktop, tablet, or mobile. No need to be in a classroom or follow a fixed schedule</p>
-        </div>
-        <div>
-          <p className="font-semibold"><span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-br from-secondary-500 to-secondary-700 text-white text-sm font-bold mr-2">2</span> Go at Your Own Pace</p>
-          <p className="text-sm text-slate-600">Self-paced learning allows students to spend more time on difficult topics and move quickly through familiar material</p>
-        </div>
-        <div>
-          <p className="font-semibold"><span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-br from-primary-600 to-secondary-600 text-white text-sm font-bold mr-2">3</span> Free for Our Students</p>
-          <p className="text-sm text-slate-600">No cost barriers - all students at our school have free access to comprehensive English learning resources</p>
-        </div>
+        <ul className="list-none space-y-3 inline-block" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 mt-2 flex-shrink-0"></span>
+            <span>Learn Any Time Anywhere - Access from any device - desktop, tablet, or mobile. No need to be in a classroom or follow a fixed schedule</span>
+          </li>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-secondary-500 mt-2 flex-shrink-0"></span>
+            <span>Go at Your Own Pace - Self-paced learning allows students to spend more time on difficult topics and move quickly through familiar material</span>
+          </li>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 mt-2 flex-shrink-0"></span>
+            <span>Free for Our Students - No cost barriers - all students at our school have free access to comprehensive English learning resources</span>
+          </li>
+        </ul>
       </div>
     )
   },
@@ -521,48 +570,49 @@ const slides: Slide[] = [
     title: 'Scalability',
     content: (
       <div className="space-y-4 text-center text-slate-700">
-        <div>
-          <p className="font-semibold"><span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-sm font-bold mr-2">1</span> Paid Tiers on Hosting and Database</p>
-          <p className="text-sm text-slate-600">Upgrade to premium hosting and database plans to support increased traffic and data storage needs</p>
-        </div>
-        <div>
-          <p className="font-semibold"><span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-br from-secondary-500 to-secondary-700 text-white text-sm font-bold mr-2">2</span> Support More Users</p>
-          <p className="text-sm text-slate-600">Serverless architecture allows automatic scaling to handle thousands of concurrent users</p>
-        </div>
-        <div>
-          <p className="font-semibold"><span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-br from-primary-600 to-secondary-600 text-white text-sm font-bold mr-2">3</span> Paid Plans for External Users</p>
-          <p className="text-sm text-slate-600">Offer subscription plans for students and learners outside our school to generate revenue</p>
-        </div>
-        <div>
-          <p className="font-semibold"><span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-br from-primary-500 to-secondary-500 text-white text-sm font-bold mr-2">4</span> Google Index</p>
-          <p className="text-sm text-slate-600">Optimize for search engines to increase discoverability and attract traffic</p>
-        </div>
-        <div>
-          <p className="font-semibold"><span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-br from-primary-700 to-secondary-700 text-white text-sm font-bold mr-2">5</span> Promotion</p>
-          <p className="text-sm text-slate-600">Marketing campaigns, social media presence, and partnerships to expand user base</p>
-        </div>
+        <ul className="list-none space-y-3 inline-block" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 mt-2 flex-shrink-0"></span>
+            <span>Paid Tiers on Hosting and Database - Upgrade to premium hosting and database plans to support increased traffic and data storage needs</span>
+          </li>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-secondary-500 mt-2 flex-shrink-0"></span>
+            <span>Support More Users - Serverless architecture allows automatic scaling to handle thousands of concurrent users</span>
+          </li>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 mt-2 flex-shrink-0"></span>
+            <span>Paid Plans for External Users - Offer subscription plans for students and learners outside our school to generate revenue</span>
+          </li>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-secondary-500 mt-2 flex-shrink-0"></span>
+            <span>Google Index - Optimize for search engines to increase discoverability and attract traffic</span>
+          </li>
+          <li className="flex items-start justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 mt-2 flex-shrink-0"></span>
+            <span>Promotion - Marketing campaigns, social media presence, and partnerships to expand user base</span>
+          </li>
+        </ul>
       </div>
     )
   },
   {
     id: 19,
     type: 'image',
-    src: '/slides/Admin.webp',
+    src: '/slides/Admin2.webp',
     title: 'Conclusion',
     content: (
-      <div className="space-y-4 text-slate-700">
-        <p className="text-lg font-semibold mb-4">TutorCat successfully meets all of our project objectives</p>
-        <ul className="list-none space-y-3">
-          <li className="flex items-start gap-3">
-            <span className="w-2 h-2 rounded-full bg-primary-500 mt-2 flex-shrink-0"></span>
+      <div className="space-y-3 text-center text-slate-700 flex flex-col items-center">
+        <ul className="list-none space-y-3" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
+          <li className="flex items-center justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0"></span>
             <span>Built an interactive English learning platform with AI feedback for independent speaking practice</span>
           </li>
-          <li className="flex items-start gap-3">
-            <span className="w-2 h-2 rounded-full bg-secondary-500 mt-2 flex-shrink-0"></span>
+          <li className="flex items-center justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-secondary-500 flex-shrink-0"></span>
             <span>Implemented gamification features (XP points, achievements, daily streaks) to increase engagement</span>
           </li>
-          <li className="flex items-start gap-3">
-            <span className="w-2 h-2 rounded-full bg-primary-500 mt-2 flex-shrink-0"></span>
+          <li className="flex items-center justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0"></span>
             <span>Applied security measures (authentication and password protection) to keep student data safe</span>
           </li>
         </ul>
@@ -792,6 +842,8 @@ export default function Presentation({ isOpen, onClose }: PresentationProps) {
                                 ? { maxWidth: 'min(480px, 40vw)', width: '100%', maxHeight: '100%' }
                                 : currentSlideData.id === 11
                                 ? { maxWidth: 'min(300px, 25vw)', width: '100%', maxHeight: '100%' }
+                                : currentSlideData.id === 12
+                                ? { maxWidth: 'min(350px, 30vw)', width: '100%', maxHeight: '100%' }
                                 : { maxWidth: '100%', maxHeight: '100%' }
                             }
                             onClick={() => setExpandedImage(currentSlideData.src!)}
@@ -799,11 +851,11 @@ export default function Presentation({ isOpen, onClose }: PresentationProps) {
                         </div>
                       </div>
                       {/* Text on right */}
-                      <div className="flex-1 flex flex-col justify-center max-w-full md:max-w-[50%] h-full overflow-hidden">
-                        <h2 className="font-bold mb-2 md:mb-3 lg:mb-4 bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent text-left" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)' }}>
+                      <div className={`flex-1 flex flex-col justify-center max-w-full md:max-w-[50%] h-full overflow-hidden ${(currentSlideData.id === 12 || currentSlideData.id === 19) ? 'items-center' : ''}`}>
+                        <h2 className={`font-bold mb-2 md:mb-3 lg:mb-4 text-primary-600 ${(currentSlideData.id === 12 || currentSlideData.id === 19) ? 'text-center' : 'text-left'}`} style={{ fontSize: 'clamp(2rem, 4vw, 3rem)' }}>
                           {currentSlideData.title}
                         </h2>
-                        <div className="text-slate-700 text-left overflow-y-auto" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)', maxHeight: 'calc(100% - 4rem)' }}>
+                        <div className={`text-slate-700 overflow-y-auto ${(currentSlideData.id === 12 || currentSlideData.id === 19) ? 'text-center flex flex-col items-center' : 'text-left'}`} style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)', maxHeight: 'calc(100% - 4rem)' }}>
                           {currentSlideData.content}
                         </div>
                       </div>
@@ -843,9 +895,9 @@ export default function Presentation({ isOpen, onClose }: PresentationProps) {
                       
                       {/* Content Section - Show below media if both exist */}
                       {currentSlideData.content && (currentSlideData.type === 'video' || currentSlideData.type === 'image') && (
-                        <div className="w-full flex-shrink-0 p-2 md:p-4 lg:p-6 bg-gradient-to-b from-white to-primary-50/30 border-t border-primary-200" style={{ maxHeight: '40%', overflow: 'hidden' }}>
+                        <div className="w-full flex-shrink-0 p-2 md:p-4 lg:p-6 bg-gradient-to-b from-white to-primary-50/30 border-t border-primary-200" style={{ maxHeight: '40%', overflow: 'auto' }}>
                           <div className="max-w-4xl mx-auto h-full flex flex-col justify-center">
-                            <h2 className="font-bold text-center mb-2 md:mb-3 lg:mb-4 bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)' }}>
+                            <h2 className="font-bold text-center mb-2 md:mb-3 lg:mb-4 text-primary-600" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)' }}>
                               {currentSlideData.title}
                             </h2>
                             <div className="text-center text-slate-700 overflow-y-auto" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
@@ -861,10 +913,10 @@ export default function Presentation({ isOpen, onClose }: PresentationProps) {
                   {currentSlideData.type === 'content' && !currentSlideData.src && (
                     <div className="w-full flex-1 flex items-center justify-center p-1 md:p-2 lg:p-3 overflow-hidden max-h-full bg-gradient-to-br from-white via-primary-50/20 to-secondary-50/20">
                       <div className="max-w-4xl w-full h-full flex flex-col justify-center overflow-hidden" style={currentSlideData.id === 10 ? { transform: 'scale(0.9)', transformOrigin: 'center' } : {}}>
-                        <h2 className="font-bold text-center mb-1 md:mb-2 lg:mb-3 bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent flex-shrink-0" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)' }}>
+                        <h2 className="font-bold text-center mb-1 md:mb-2 lg:mb-3 text-primary-600 flex-shrink-0" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)' }}>
                           {currentSlideData.title}
                         </h2>
-                        <div className="text-center text-slate-700 overflow-hidden flex-1 flex items-center justify-center min-h-0" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
+                        <div className="text-center text-slate-700 overflow-y-auto flex-1 flex items-center justify-center min-h-0" style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>
                           {currentSlideData.content}
                         </div>
                       </div>

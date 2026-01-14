@@ -3,6 +3,7 @@ import { neon } from '@neondatabase/serverless';
 import crypto from 'crypto';
 import { sendRegistrationConfirmation, sendLoginVerification, sendPasswordResetVerification } from './email-service';
 import { checkRateLimit, createRateLimitResponse } from './rate-limit';
+import { getHeaders } from './cors-headers';
 
 // Environment variables interface
 interface Env {
@@ -114,19 +115,14 @@ async function sendOTP(email: string, type: string): Promise<{ success: boolean;
 }
 
 const handler: Handler = async (event, context) => {
-  // CORS headers
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Credentials': 'true'
-  };
+  // Get secure headers (CORS + Security headers)
+  const headers = getHeaders(event, true); // Allow credentials for auth endpoints
 
   // Handle preflight requests
   if (event.httpMethod === 'OPTIONS') {
     return {
       statusCode: 200,
-      headers: corsHeaders,
+      headers,
       body: ''
     };
   }
@@ -135,7 +131,7 @@ const handler: Handler = async (event, context) => {
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify({ success: false, error: 'Method not allowed' })
     };
   }
@@ -151,7 +147,7 @@ const handler: Handler = async (event, context) => {
     return {
       ...createRateLimitResponse(rateLimitResult),
       headers: {
-        ...corsHeaders,
+        ...headers,
         ...createRateLimitResponse(rateLimitResult).headers
       }
     } as any;

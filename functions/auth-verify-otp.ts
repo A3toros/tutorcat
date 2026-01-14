@@ -4,6 +4,7 @@ import { neon } from '@neondatabase/serverless'
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { checkRateLimit, createRateLimitResponse } from './rate-limit';
+import { getHeaders } from './cors-headers';
 
 interface Env {
   NEON_DATABASE_URL: string
@@ -55,19 +56,14 @@ interface RequestBody {
 }
 
 const handler: Handler = async (event, context) => {
-  // CORS headers
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Credentials': 'true'
-  };
+  // Get secure headers (CORS + Security headers)
+  const headers = getHeaders(event, true); // Allow credentials for auth endpoints
 
   // Handle preflight requests
   if (event.httpMethod === 'OPTIONS') {
     return {
       statusCode: 200,
-      headers: corsHeaders,
+      headers,
       body: ''
     };
   }
@@ -76,7 +72,7 @@ const handler: Handler = async (event, context) => {
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify({ success: false, error: 'Method not allowed' })
     } as any;
   }
@@ -92,7 +88,7 @@ const handler: Handler = async (event, context) => {
     return {
       ...createRateLimitResponse(rateLimitResult),
       headers: {
-        ...corsHeaders,
+        ...headers,
         ...createRateLimitResponse(rateLimitResult).headers
       }
     } as any;
@@ -446,10 +442,7 @@ const handler: Handler = async (event, context) => {
     return {
       statusCode: 200,
       headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Credentials': 'true',
+        ...headers,
         'Content-Type': 'application/json'
       },
       multiValueHeaders: {

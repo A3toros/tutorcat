@@ -191,6 +191,141 @@ function getClientIdentifier(event: any): string | null {
 }
 
 /**
+ * Record a failed login attempt (for rate limiting failed attempts only)
+ * This should be called when a login attempt fails
+ */
+export async function recordFailedAttempt(
+  event: any,
+  options: RateLimitOptions = {}
+): Promise<void> {
+  const {
+    maxAttempts = 10,
+    windowMs = 900000, // 15 minutes for failed attempts (more restrictive)
+    identifier
+  } = options;
+
+  const clientId = identifier || getClientIdentifier(event);
+  
+  if (!clientId) {
+    return; // Can't track without identifier
+  }
+
+  const redis = getRedisClient();
+  if (!redis) {
+    return; // Can't track without Redis
+  }
+
+  try {
+    // Use a separate key for failed attempts
+    const key = `rate_limit:failed:${clientId}`;
+    const now = Date.now();
+    const windowStart = now - windowMs;
+
+    // Remove old entries (outside the window)
+    await redis.zremrangebyscore(key, 0, windowStart);
+
+    // Add current failed attempt
+    await redis.zadd(key, { score: now, member: `${now}-${Math.random()}` });
+    
+    // Set expiration on the key
+    await redis.expire(key, Math.ceil((windowMs * 2) / 1000));
+  } catch (error) {
+    console.error('Failed to record failed attempt:', error);
+    // Don't throw - this is non-critical
+  }
+}
+
+/**
+ * Check rate limit for failed login attempts
+ * This should be checked BEFORE processing login to prevent brute force
+ */
+export async function checkFailedAttemptsRateLimit(
+  event: any,
+  options: RateLimitOptions = {}
+): Promise<RateLimitResult> {
+  const {
+    maxAttempts = 10,
+    windowMs = 900000, // 15 minutes for failed attempts
+    identifier
+  } = options;
+
+  const clientId = identifier || getClientIdentifier(event);
+  
+  if (!clientId) {
+    // If we can't identify the client, allow the request but log it
+    return {
+      allowed: true,
+      remaining: maxAttempts,
+      resetTime: Date.now() + windowMs
+    };
+  }
+
+  const redis = getRedisClient();
+  
+  if (!redis) {
+    // If Redis is not configured, allow the request but log it
+    return {
+      allowed: true,
+      remaining: maxAttempts,
+      resetTime: Date.now() + windowMs
+    };
+  }
+
+  try {
+    // Use a separate key for failed attempts
+    const key = `rate_limit:failed:${clientId}`;
+    const now = Date.now();
+    const windowStart = now - windowMs;
+
+    // Remove old entries (outside the window)
+    await redis.zremrangebyscore(key, 0, windowStart);
+
+    // Count current failed attempts in the window
+    const currentCount = await redis.zcard(key) || 0;
+    
+    // Check if we should allow this request
+    const allowed = currentCount < maxAttempts;
+    
+    // Calculate remaining
+    const remaining = Math.max(0, maxAttempts - currentCount);
+
+    // Calculate reset time
+    let resetTime = now + windowMs;
+    if (!allowed && currentCount > 0) {
+      // Get the oldest entry in the window to calculate when it expires
+      const oldest = await redis.zrange(key, 0, 0, { withScores: true });
+      if (oldest && Array.isArray(oldest) && oldest.length > 0) {
+        const firstEntry = oldest[0];
+        if (firstEntry && typeof firstEntry === 'object' && 'score' in firstEntry) {
+          const oldestScore = firstEntry.score as number;
+          if (oldestScore) {
+            resetTime = oldestScore + windowMs;
+          }
+        }
+      }
+    }
+
+    const retryAfter = allowed ? undefined : Math.ceil((resetTime - now) / 1000);
+
+    return {
+      allowed,
+      remaining,
+      resetTime,
+      retryAfter
+    };
+
+  } catch (error) {
+    console.error('Rate limit check failed:', error);
+    // On error, allow the request but log it
+    return {
+      allowed: true,
+      remaining: maxAttempts,
+      resetTime: Date.now() + windowMs
+    };
+  }
+}
+
+/**
  * Create rate limit response
  */
 export function createRateLimitResponse(result: RateLimitResult): any {
@@ -210,7 +345,7 @@ export function createRateLimitResponse(result: RateLimitResult): any {
     headers,
     body: JSON.stringify({
       success: false,
-      error: 'Too many requests. Please try again later.',
+      error: 'Too many failed login attempts. Please try again later.',
       retryAfter: result.retryAfter,
       resetTime: new Date(result.resetTime).toISOString()
     })

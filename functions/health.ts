@@ -1,12 +1,19 @@
 import { Handler } from '@netlify/functions';
 import { neon } from '@neondatabase/serverless';
+import { getHeaders, getSecurityHeaders } from './cors-headers';
 
 const handler: Handler = async (event, context) => {
+  // Get security headers (health endpoint doesn't need CORS with credentials)
+  const headers = {
+    ...getSecurityHeaders(),
+    'Content-Type': 'application/json'
+  };
+
   // Only allow GET requests
   if (event.httpMethod !== 'GET') {
     return {
       statusCode: 405,
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ success: false, error: 'Method not allowed' })
     } as any;
   }
@@ -46,7 +53,7 @@ const handler: Handler = async (event, context) => {
 
     return {
       statusCode,
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         success: true,
         ...healthCheck
@@ -57,7 +64,7 @@ const handler: Handler = async (event, context) => {
     console.error('Health check error:', error);
     return {
       statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         success: false,
         status: 'unhealthy',

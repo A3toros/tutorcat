@@ -2,15 +2,8 @@ import { Handler } from '@netlify/functions';
 import { neon } from '@neondatabase/serverless';
 import bcrypt from 'bcryptjs';
 import * as jwt from 'jsonwebtoken';
-import { checkRateLimit, createRateLimitResponse } from './rate-limit';
-
-// CORS headers
-const headers = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Credentials': 'true'
-};
+import { checkFailedAttemptsRateLimit, createRateLimitResponse, recordFailedAttempt } from './rate-limit';
+import { getHeaders } from './cors-headers';
 
 // Helper to get client identifier (duplicated from rate-limit for use in logging)
 function getClientIdentifier(event: any): string {
@@ -26,6 +19,10 @@ const handler: Handler = async (event, context) => {
   if (process.env.NODE_ENV === 'development') {
     console.log('Auth-login: Function called with method:', event.httpMethod)
   }
+
+  // Get secure headers (CORS + Security headers)
+  // Allow credentials for auth endpoints, but only with specific origins
+  const headers = getHeaders(event, true);
 
   // Handle preflight requests
   if (event.httpMethod === 'OPTIONS') {
@@ -49,14 +46,15 @@ const handler: Handler = async (event, context) => {
     };
   }
 
-  // Check rate limit (10 attempts per hour)
-  const rateLimitResult = await checkRateLimit(event, {
+  // Check rate limit for failed attempts (10 failed attempts per 15 minutes)
+  // This prevents brute force attacks while allowing unlimited successful logins
+  const rateLimitResult = await checkFailedAttemptsRateLimit(event, {
     maxAttempts: 10,
-    windowMs: 3600000 // 1 hour
+    windowMs: 900000 // 15 minutes for failed attempts
   });
 
   if (!rateLimitResult.allowed) {
-    console.log(`Auth-login: Rate limit exceeded for ${getClientIdentifier(event)}`);
+    console.log(`Auth-login: Rate limit exceeded for failed attempts from ${getClientIdentifier(event)}`);
     return {
       ...createRateLimitResponse(rateLimitResult),
       headers: {
@@ -91,7 +89,10 @@ const handler: Handler = async (event, context) => {
       console.error('[AUTH] Login failed: Database not configured');
       return {
         statusCode: 500,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({ success: false, error: 'Database configuration error' })
       } as any;
     }
@@ -126,6 +127,10 @@ const handler: Handler = async (event, context) => {
 
     if (!userResult || userResult.length === 0) {
       console.log('[AUTH] Login failed: User not found:', loginIdentifier);
+      // Record failed attempt (non-blocking)
+      recordFailedAttempt(event, { maxAttempts: 10, windowMs: 900000 }).catch(err => {
+        console.error('Failed to record failed attempt:', err);
+      });
       return {
         statusCode: 401,
         headers: {
@@ -148,6 +153,10 @@ const handler: Handler = async (event, context) => {
     }
     if (!isValidPassword) {
       console.log('[AUTH] Login failed: Invalid password for user:', user.id);
+      // Record failed attempt (non-blocking)
+      recordFailedAttempt(event, { maxAttempts: 10, windowMs: 900000 }).catch(err => {
+        console.error('Failed to record failed attempt:', err);
+      });
       return {
         statusCode: 401,
         headers: {
@@ -281,7 +290,7 @@ const handler: Handler = async (event, context) => {
     return {
       statusCode: 200,
       headers: {
-        ...headers, // Include CORS headers
+        ...headers,
         'Content-Type': 'application/json'
       },
       multiValueHeaders: {
