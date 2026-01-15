@@ -9,12 +9,21 @@ const handler: Handler = async (event, context) => {
     'Content-Type': 'application/json'
   };
 
-  // Only allow GET requests
-  if (event.httpMethod !== 'GET') {
+  // Only allow GET and OPTIONS requests
+  if (event.httpMethod !== 'GET' && event.httpMethod !== 'OPTIONS') {
     return {
       statusCode: 405,
       headers,
       body: JSON.stringify({ success: false, error: 'Method not allowed' })
+    } as any;
+  }
+
+  // Handle preflight requests
+  if (event.httpMethod === 'OPTIONS') {
+    return {
+      statusCode: 200,
+      headers,
+      body: ''
     } as any;
   }
 

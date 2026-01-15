@@ -1,14 +1,30 @@
 import { Handler } from '@netlify/functions';
 import * as jwt from 'jsonwebtoken'
 import { neon } from '@neondatabase/serverless'
+import { getHeaders } from './cors-headers';
 
 const handler: Handler = async (event, context) => {
-  // Only allow GET requests
-  if (event.httpMethod !== 'GET') {
+  // Get security headers (no credentials needed for GET endpoint)
+  const headers = getHeaders(event, false);
+
+  // Only allow GET and OPTIONS requests
+  if (event.httpMethod !== 'GET' && event.httpMethod !== 'OPTIONS') {
     return {
       statusCode: 405,
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        ...headers,
+        'Content-Type': 'application/json'
+      },
       body: JSON.stringify({ success: false, error: 'Method not allowed' })
+    } as any;
+  }
+
+  // Handle preflight requests
+  if (event.httpMethod === 'OPTIONS') {
+    return {
+      statusCode: 200,
+      headers,
+      body: ''
     } as any;
   }
 
@@ -20,7 +36,10 @@ const handler: Handler = async (event, context) => {
     if (!accessToken) {
       return {
         statusCode: 401,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({ success: false, error: 'No access token provided' })
       } as any;
     }
@@ -31,7 +50,10 @@ const handler: Handler = async (event, context) => {
       console.error('JWT_SECRET not configured');
       return {
         statusCode: 500,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({ success: false, error: 'JWT configuration error' })
       } as any;
     }
@@ -46,7 +68,10 @@ const handler: Handler = async (event, context) => {
         console.error('NEON_DATABASE_URL not configured');
         return {
           statusCode: 500,
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            ...headers,
+            'Content-Type': 'application/json'
+          },
           body: JSON.stringify({ success: false, error: 'Database configuration error' })
         } as any;
       }
@@ -61,18 +86,24 @@ const handler: Handler = async (event, context) => {
       `;
 
       if (!userResult || userResult.length === 0) {
-        return {
-          statusCode: 404,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ success: false, error: 'User not found' })
-        } as any;
+      return {
+        statusCode: 404,
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ success: false, error: 'User not found' })
+      } as any;
       }
 
       const user = userResult[0];
 
       return {
         statusCode: 200,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({
           success: true,
           user: {
@@ -97,7 +128,10 @@ const handler: Handler = async (event, context) => {
       console.error('JWT verification error:', jwtError);
       return {
         statusCode: 401,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({ success: false, error: 'Invalid or expired token' })
       } as any;
     }
@@ -106,7 +140,10 @@ const handler: Handler = async (event, context) => {
     console.error('Auth check error:', error);
     return {
       statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        ...headers,
+        'Content-Type': 'application/json'
+      },
       body: JSON.stringify({ success: false, error: 'Internal server error' })
     } as any;
   }

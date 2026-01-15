@@ -83,6 +83,29 @@ const handler: Handler = async (event, context) => {
       };
     }
 
+    // Validate input length to prevent DoS attacks
+    const MAX_INPUT_LENGTH = 1000; // Reasonable limit for username/email and password
+    if (loginIdentifier.length > MAX_INPUT_LENGTH) {
+      return {
+        statusCode: 400,
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ success: false, error: 'Username/email is too long' })
+      };
+    }
+    if (password.length > MAX_INPUT_LENGTH) {
+      return {
+        statusCode: 400,
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ success: false, error: 'Password is too long' })
+      };
+    }
+
     // Get database connection
     const databaseUrl = process.env.NEON_DATABASE_URL;
     if (!databaseUrl) {

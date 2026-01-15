@@ -2,7 +2,7 @@ import { Handler } from '@netlify/functions';
 import { neon } from '@neondatabase/serverless';
 import crypto from 'crypto';
 import { sendRegistrationConfirmation, sendLoginVerification, sendPasswordResetVerification } from './email-service';
-import { checkRateLimit, createRateLimitResponse } from './rate-limit';
+import { checkFailedAttemptsRateLimit, createRateLimitResponse, recordFailedAttempt } from './rate-limit';
 import { getHeaders } from './cors-headers';
 
 // Environment variables interface
@@ -136,10 +136,13 @@ const handler: Handler = async (event, context) => {
     };
   }
 
-  // Check rate limit (10 attempts per hour)
-  const rateLimitResult = await checkRateLimit(event, {
+  // Check rate limit for OTP sending (10 attempts per 15 minutes)
+  // This prevents OTP spam and abuse
+  // Note: We use checkFailedAttemptsRateLimit but treat all OTP send requests as "attempts"
+  // This is more restrictive than login (which only limits failed attempts)
+  const rateLimitResult = await checkFailedAttemptsRateLimit(event, {
     maxAttempts: 10,
-    windowMs: 3600000 // 1 hour
+    windowMs: 900000 // 15 minutes
   });
 
   if (!rateLimitResult.allowed) {
@@ -220,6 +223,11 @@ const handler: Handler = async (event, context) => {
     try {
       const result = await sendOTP(email, type);
 
+      // Record attempt (all OTP sends count against rate limit to prevent spam)
+      recordFailedAttempt(event, { maxAttempts: 10, windowMs: 900000 }).catch(err => {
+        console.error('Failed to record OTP send attempt:', err);
+      });
+
       return {
         statusCode: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -232,6 +240,12 @@ const handler: Handler = async (event, context) => {
         stack: otpError.stack,
         type: otpError.constructor.name
       });
+      
+      // Record failed attempt
+      recordFailedAttempt(event, { maxAttempts: 10, windowMs: 900000 }).catch(err => {
+        console.error('Failed to record failed OTP send attempt:', err);
+      });
+      
       const errorMessage = otpError.message || 'Failed to send verification code';
       return {
         statusCode: 400,

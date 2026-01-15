@@ -3,7 +3,7 @@ import * as jwt from 'jsonwebtoken'
 import { neon } from '@neondatabase/serverless'
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
-import { checkRateLimit, createRateLimitResponse } from './rate-limit';
+import { checkFailedAttemptsRateLimit, createRateLimitResponse, recordFailedAttempt } from './rate-limit';
 import { getHeaders } from './cors-headers';
 
 interface Env {
@@ -77,14 +77,15 @@ const handler: Handler = async (event, context) => {
     } as any;
   }
 
-  // Check rate limit (10 attempts per hour)
-  const rateLimitResult = await checkRateLimit(event, {
+  // Check rate limit for failed attempts (10 failed attempts per 15 minutes)
+  // This prevents brute force attacks on OTP codes
+  const rateLimitResult = await checkFailedAttemptsRateLimit(event, {
     maxAttempts: 10,
-    windowMs: 3600000 // 1 hour
+    windowMs: 900000 // 15 minutes for failed attempts
   });
 
   if (!rateLimitResult.allowed) {
-    console.log(`Auth-verify-otp: Rate limit exceeded`);
+    console.log(`Auth-verify-otp: Rate limit exceeded for failed attempts`);
     return {
       ...createRateLimitResponse(rateLimitResult),
       headers: {
@@ -201,6 +202,10 @@ const handler: Handler = async (event, context) => {
     // Check if OTP matches
     if (providedOtpHash !== otpRecord.otp_hash) {
       console.log('verify-otp: OTP hash mismatch');
+      // Record failed attempt (non-blocking)
+      recordFailedAttempt(event, { maxAttempts: 10, windowMs: 900000 }).catch(err => {
+        console.error('Failed to record failed OTP attempt:', err);
+      });
       const remainingAttempts = otpRecord.max_attempts - otpRecord.attempts - 1;
       return {
         statusCode: 400,
