@@ -15,6 +15,7 @@ export { default as CookieConsentBanner } from './CookieConsentBanner'
 export { default as ActivityListItem } from './ActivityListItem'
 export { default as VideoPlayer } from './VideoPlayer'
 export { default as Presentation } from './Presentation'
+export { PreviewCard } from './PreviewCard'
 
 // Modal Components
 export { default as Modal } from './Modal'
