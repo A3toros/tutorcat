@@ -19,6 +19,9 @@ const CACHE_EXPIRY = 30 * 24 * 60 * 60 * 1000 // 30 days
 
 let db: IDBDatabase | null = null
 
+// Request deduplication: track in-flight requests to prevent multiple simultaneous fetches
+const inFlightRequests = new Map<string, Promise<Blob>>()
+
 /**
  * Initialize IndexedDB
  */
@@ -37,7 +40,17 @@ function initDB(): Promise<IDBDatabase> {
     const request = indexedDB.open(DB_NAME, DB_VERSION)
 
     request.onerror = () => {
-      reject(new Error('Failed to open IndexedDB'))
+      const error = request.error || new Error('Failed to open IndexedDB')
+      console.error('❌ IndexedDB open failed:', {
+        error: error instanceof Error ? error.message : String(error),
+        name: error instanceof DOMException ? error.name : 'Unknown',
+        code: error instanceof DOMException ? error.code : undefined,
+      })
+      reject(error)
+    }
+    
+    request.onblocked = () => {
+      console.warn('⚠️ IndexedDB blocked - waiting for other connections to close')
     }
 
     request.onsuccess = () => {
@@ -91,11 +104,19 @@ export async function getCachedVideo(url: string): Promise<Blob | null> {
       }
 
       request.onerror = () => {
+        console.error('IndexedDB read error:', request.error)
         reject(request.error)
       }
     })
   } catch (e) {
-    console.warn('Failed to get cached video:', url, e)
+    // Log error with more details to diagnose cache failures
+    const error = e instanceof Error ? e : new Error(String(e))
+    console.error('❌ Video cache read failed:', {
+      url: url.substring(0, 50) + '...',
+      error: error.message,
+      name: error.name,
+      stack: error.stack?.substring(0, 200),
+    })
     return null
   }
 }
@@ -126,11 +147,32 @@ export async function cacheVideo(url: string, blob: Blob): Promise<void> {
       }
 
       request.onerror = () => {
-        reject(request.error)
+        const error = request.error
+        // Check for quota exceeded error
+        if (error && error.name === 'QuotaExceededError') {
+          console.error('❌ IndexedDB quota exceeded - cannot cache video:', {
+            url: url.substring(0, 50) + '...',
+            blobSize: `${(blob.size / 1024 / 1024).toFixed(2)} MB`,
+          })
+          // Try to clean old cache entries
+          cleanVideoCache().catch(() => {
+            console.error('Failed to clean cache after quota error')
+          })
+        } else {
+          console.error('❌ IndexedDB write error:', error)
+        }
+        reject(error)
       }
     })
   } catch (e) {
-    console.warn('Failed to cache video:', url, e)
+    const error = e instanceof Error ? e : new Error(String(e))
+    console.error('❌ Video cache write failed:', {
+      url: url.substring(0, 50) + '...',
+      blobSize: `${(blob.size / 1024 / 1024).toFixed(2)} MB`,
+      error: error.message,
+      name: error.name,
+    })
+    // Don't throw - allow video to play even if caching fails
   }
 }
 
@@ -162,28 +204,67 @@ export async function deleteCachedVideo(url: string): Promise<void> {
 
 /**
  * Fetch and cache video
+ * Includes request deduplication to prevent multiple simultaneous fetches of the same video
  */
 export async function fetchAndCacheVideo(url: string): Promise<Blob> {
   // Check cache first
   const cached = await getCachedVideo(url)
   if (cached) {
+    console.log('✅ Video loaded from cache:', url.substring(0, 50) + '...')
     return cached
   }
+  
+  console.log('⚠️ Video not in cache, fetching from Cloudinary:', url.substring(0, 50) + '...')
 
-  // Fetch video
-  const response = await fetch(url)
-  if (!response.ok) {
-    throw new Error(`Failed to fetch video: ${response.statusText}`)
+  // Check if there's already an in-flight request for this URL
+  const inFlight = inFlightRequests.get(url)
+  if (inFlight) {
+    return inFlight
   }
 
-  const blob = await response.blob()
+  // Create new fetch request
+  const fetchPromise = (async () => {
+    try {
+      // Fetch video with HTTP cache support
+      // Use 'default' cache mode to respect browser HTTP cache
+      // This allows Cloudinary's CDN cache to work
+      const response = await fetch(url, {
+        cache: 'default', // Respect HTTP cache headers from Cloudinary
+      })
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch video: ${response.statusText}`)
+      }
 
-  // Cache it (don't wait for caching to complete)
-  cacheVideo(url, blob).catch((e) => {
-    console.warn('Failed to cache video in background:', e)
-  })
+      const blob = await response.blob()
+      console.log('📥 Fetched video from Cloudinary:', {
+        url: url.substring(0, 50) + '...',
+        size: `${(blob.size / 1024 / 1024).toFixed(2)} MB`,
+      })
 
-  return blob
+      // Cache it (don't wait for caching to complete)
+      cacheVideo(url, blob)
+        .then(() => {
+          console.log('✅ Video cached successfully:', url.substring(0, 50) + '...')
+        })
+        .catch((e) => {
+          console.error('❌ Failed to cache video in background:', {
+            url: url.substring(0, 50) + '...',
+            error: e instanceof Error ? e.message : String(e),
+          })
+        })
+
+      return blob
+    } finally {
+      // Remove from in-flight requests when done
+      inFlightRequests.delete(url)
+    }
+  })()
+
+  // Store in-flight request
+  inFlightRequests.set(url, fetchPromise)
+
+  return fetchPromise
 }
 
 /**

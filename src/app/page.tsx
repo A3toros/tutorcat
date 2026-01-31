@@ -2,7 +2,7 @@
 
 import { useTranslation } from 'react-i18next'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { Button, Card, Mascot, VideoPlayer } from '@/components/ui'
 import { useNotification } from '@/contexts/NotificationContext'
 import { useModal } from '@/contexts/ModalContext'
@@ -17,16 +17,25 @@ function HomeContent() {
   const { isAuthenticated, isLoading, user } = useAuth()
   const [isMobile, setIsMobile] = useState(false)
 
-  // Detect mobile vs desktop
+  // Detect mobile vs desktop (only once on mount, not on resize)
+  // This prevents video from re-fetching when window is resized
   useEffect(() => {
+    // Only detect once on initial load, not on resize
+    // This prevents switching between mobile/desktop videos which causes re-downloads
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 1024) // lg breakpoint
     }
     
     checkMobile()
-    window.addEventListener('resize', checkMobile)
-    return () => window.removeEventListener('resize', checkMobile)
+    // Removed resize listener to prevent video re-fetching on window resize
   }, [])
+
+  // Memoize video src to prevent unnecessary re-renders and re-fetches
+  const videoSrc = useMemo(() => {
+    return isMobile 
+      ? "https://res.cloudinary.com/dnovxoaqi/video/upload/v1768026339/Sequence_01_1_a0e55g.mp4"
+      : "https://res.cloudinary.com/dnovxoaqi/video/upload/v1768027056/0001-0402_ycsdrv.mkv"
+  }, [isMobile])
 
   // Redirect authenticated users away from home page
   // This ONLY runs on the home page (/) to prevent loops
@@ -219,10 +228,7 @@ function HomeContent() {
           <div className="relative rounded-2xl overflow-hidden shadow-2xl flex items-center justify-center">
             <div className={`w-full mx-auto ${isMobile ? 'max-w-[540px]' : 'max-w-5xl'}`} style={isMobile ? { aspectRatio: '9/16' } : { aspectRatio: '16/9' }}>
               <VideoPlayer
-                src={isMobile 
-                  ? "https://res.cloudinary.com/dnovxoaqi/video/upload/v1768026339/Sequence_01_1_a0e55g.mp4"
-                  : "https://res.cloudinary.com/dnovxoaqi/video/upload/v1768027056/0001-0402_ycsdrv.mkv"
-                }
+                src={videoSrc}
                 className="w-full h-full"
                 controls={true}
                 autoPlay={false}

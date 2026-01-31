@@ -151,3 +151,6 @@ temp/
 /playwright-report/
 /playwright/.cache/
 tests/screenshots/
+
+# Video generation output
+video-output/

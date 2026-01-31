@@ -29,7 +29,11 @@
     "test:upstash": "node scripts/test-upstash-connection.js",
     "verify": "node scripts/verify-deployment.js",
     "setup": "npm install && npm run db:init",
-    "deploy:check": "npm run verify"
+    "deploy:check": "npm run verify",
+    "video:generate": "node scripts/generate-presentation-video.js",
+    "video:from-existing": "node scripts/generate-video-from-existing.js",
+    "qr:generate": "node scripts/generate-qr-with-logo.js",
+    "og:generate": "node scripts/generate-og-cover.js"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
@@ -75,11 +79,14 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node-fetch": "^2.6.11",
     "bcrypt": "^6.0.0",
+    "canvas": "^3.2.1",
     "jest": "^30.2.0",
     "jest-environment-jsdom": "^30.2.0",
     "netlify-cli": "^23.13.0",
     "node-fetch": "^2.7.0",
     "pg": "^8.16.3",
+    "qrcode": "^1.5.4",
+    "sharp": "^0.34.5",
     "wrangler": "^3.0.0"
   }
 }

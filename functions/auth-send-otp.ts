@@ -76,8 +76,8 @@ async function sendOTP(email: string, type: string): Promise<{ success: boolean;
       WHERE identifier = ${email} AND purpose = ${purpose} AND used = FALSE
     `;
 
-    // Generate 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    // Generate 6-digit OTP using cryptographically secure random number
+    const otp = crypto.randomInt(100000, 1000000).toString();
 
     // Generate salt and hash the OTP
     const salt = crypto.randomBytes(16).toString('hex');

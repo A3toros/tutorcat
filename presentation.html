@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TutorCat Presentation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(to bottom, #f0f4ff, #fdf4ff);
+            color: #1e293b;
+            overflow: hidden;
+        }
+
+        .presentation-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .header {
+            background: white;
+            padding: 12px 16px;
+            border-bottom: 1px solid #c7d4ff;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .slide-info {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .slide-number {
+            font-size: 14px;
+            font-weight: 500;
+            color: #1e293b;
+        }
+
+        .slide-title {
+            font-size: 14px;
+            color: #64748b;
+        }
+
+        .fullscreen-btn {
+            background: none;
+            border: none;
+            color: #475569;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        .fullscreen-btn:hover {
+            color: #d946ff;
+            background: #fdf4ff;
+        }
+
+        .main-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 0;
+        }
+
+        .slide {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+            width: 100%;
+            max-width: 1280px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .slide-content {
+            display: flex;
+            flex-direction: column;
+            padding: 8px 16px 24px;
+            min-height: 0;
+        }
+
+        .slide-media {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 16px;
+            min-height: 0;
+        }
+
+        .slide-media img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .slide-media img:hover {
+            opacity: 0.9;
+        }
+
+        .slide-media video {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            border-radius: 4px;
+        }
+
+        .slide-text {
+            flex-shrink: 0;
+            padding: 16px 24px;
+            background: linear-gradient(to bottom, white, #fdf4ff);
+            border-top: 1px solid #f5d0ff;
+        }
+
+        .slide-text h2 {
+            font-size: clamp(2rem, 4vw, 3rem);
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 12px;
+            color: #d946ff;
+        }
+
+        .slide-text-content {
+            font-size: clamp(1rem, 2vw, 1.5rem);
+            color: #1e293b;
+            text-align: center;
+        }
+
+        .content-only {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 16px;
+            background: linear-gradient(to bottom right, white, #fdf4ff, #f0f4ff);
+        }
+
+        .content-only-inner {
+            max-width: 1024px;
+            width: 100%;
+        }
+
+        .content-only h2 {
+            font-size: clamp(2rem, 4vw, 3rem);
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 12px;
+            color: #d946ff;
+        }
+
+        ul {
+            list-style: none;
+        }
+
+        li {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .bullet {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            margin-top: 8px;
+        }
+
+        .bullet-primary {
+            background: #d946ff;
+        }
+
+        .bullet-secondary {
+            background: #6175ff;
+        }
+
+        .two-column {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .color-palette h3 {
+            font-size: clamp(1.5rem, 3vw, 2.25rem);
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #1e293b;
+        }
+
+        .color-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .color-box {
+            width: clamp(1rem, 2vw, 1.5rem);
+            height: clamp(1rem, 2vw, 1.5rem);
+            border-radius: 4px;
+            border: 1px solid #cbd5e1;
+            flex-shrink: 0;
+        }
+
+        .results-table {
+            background: white;
+            border-radius: 8px;
+            padding: 12px 16px;
+            border: 1px solid #e2e8f0;
+            max-height: 40vh;
+            overflow-y: auto;
+            margin-top: 16px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: clamp(10px, 1.5vw, 12px);
+        }
+
+        th, td {
+            border: 1px solid #cbd5e1;
+            padding: 4px 8px;
+            text-align: left;
+        }
+
+        th {
+            background: #f1f5f9;
+            font-weight: 600;
+        }
+
+        tr:hover {
+            background: #f8fafc;
+        }
+
+        .highlight-box {
+            background: #fdf4ff;
+            border-radius: 8px;
+            padding: 16px;
+            border: 1px solid #f5d0ff;
+            margin-bottom: 16px;
+        }
+
+        .nav-arrow {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255,255,255,0.9);
+            border: none;
+            color: #1e293b;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: all 0.2s;
+            z-index: 40;
+        }
+
+        .nav-arrow:hover {
+            background: white;
+            transform: translateY(-50%) scale(1.1);
+        }
+
+        .nav-arrow.prev {
+            left: 16px;
+        }
+
+        .nav-arrow.next {
+            right: 16px;
+        }
+
+        .nav-arrow.hidden {
+            display: none;
+        }
+
+        .footer {
+            background: rgba(255,255,255,0.9);
+            padding: 12px 16px;
+            border-top: 1px solid #c7d4ff;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+            box-shadow: 0 -1px 3px rgba(0,0,0,0.1);
+        }
+
+        .slide-indicators {
+            display: flex;
+            gap: 4px;
+            overflow-x: auto;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .indicator {
+            min-width: 8px;
+            height: 8px;
+            border-radius: 4px;
+            background: rgba(255,255,255,0.3);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .indicator.active {
+            background: #d946ff;
+            width: 32px;
+        }
+
+        .indicator:hover {
+            background: rgba(255,255,255,0.5);
+        }
+
+        .indicator.active:hover {
+            background: #c026d3;
+        }
+
+        .footer-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        button {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: none;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #d946ff;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #c026d3;
+        }
+
+        .btn-secondary {
+            background: #6175ff;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #4a5fff;
+        }
+
+        .slide.hidden {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .two-column {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Expanded Image Modal */
+        .expanded-image-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 10000;
+            background: rgba(0, 0, 0, 0.9);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+
+        .expanded-image-modal.show {
+            display: flex;
+        }
+
+        .expanded-image-container {
+            position: relative;
+            max-width: 100vw;
+            max-height: 100vh;
+        }
+
+        .expanded-image-container img {
+            max-width: 100vw;
+            max-height: 100vh;
+            object-fit: contain;
+        }
+
+        .close-expanded-btn {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: rgba(0, 0, 0, 0.5);
+            color: white;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .close-expanded-btn:hover {
+            background: rgba(0, 0, 0, 0.7);
+            color: #d946ff;
+        }
+    </style>
+</head>
+<body>
+    <div class="presentation-container">
+        <div class="header">
+            <div class="slide-info">
+                <span class="slide-number" id="slideNumber">1 / 19</span>
+                <span class="slide-title" id="slideTitle">TutorCat</span>
+            </div>
+            <button class="fullscreen-btn" onclick="toggleFullscreen()" aria-label="Toggle fullscreen">
+                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path>
+                </svg>
+            </button>
+        </div>
+
+        <div class="main-content">
+            <div class="slide" id="slide-1">
+                <div class="content-only">
+                    <div class="content-only-inner">
+                        <h2>TutorCat</h2>
+                        <div class="slide-text-content">
+                            <p style="color: #64748b; margin-bottom: 24px; font-size: clamp(1rem, 2vw, 1.5rem);">AI Powered Language Learning Web App</p>
+                            <div style="margin-top: 12px;">
+                                <p style="color: #1e293b; font-weight: 600; margin-bottom: 12px; font-size: clamp(1rem, 2vw, 1.5rem);">Developers:</p>
+                                <ul style="display: inline-block; text-align: left;">
+                                    <li><span class="bullet bullet-primary"></span><span>Mattcha Srirojwong</span></li>
+                                    <li><span class="bullet bullet-secondary"></span><span>Jindaporn Tikomporn</span></li>
+                                    <li><span class="bullet bullet-primary"></span><span>Nichapath Chunlawithet</span></li>
+                                    <li><span class="bullet bullet-secondary"></span><span>Curator: Aleksandr Petrov</span></li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="slide hidden" id="slide-2">
+                <div class="slide-content">
+                    <div class="slide-media">
+                        <img src="./public/slides/2 Book-to-dashboard-anim.gif" alt="Problem We Address" style="max-width: min(480px, 40vw); width: 100%;" onclick="expandImage('./public/slides/2 Book-to-dashboard-anim.gif')">
+                    </div>
+                    <div class="slide-text">
+                        <h2>Problem We Address</h2>
+                        <div class="slide-text-content">
+                            <ul style="display: inline-block; text-align: left;">
+                                <li><span class="bullet bullet-primary"></span><span>Low engagement in traditional ESL</span></li>
+                                <li><span class="bullet bullet-secondary"></span><span>Limited feedback outside class</span></li>
+                                <li><span class="bullet bullet-primary"></span><span>One-size-fits-all materials</span></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="slide hidden" id="slide-3">
+                <div class="content-only">
+                    <div class="content-only-inner">
+                        <h2>Objectives of the Project</h2>
+                        <div class="slide-text-content">
+                            <ul style="display: inline-block; text-align: left;">
+                                <li><span class="bullet bullet-primary"></span><span>Build an interactive English learning platform with AI feedback for speaking practice outside class</span></li>
+                                <li><span class="bullet bullet-secondary"></span><span>Use gamification to increase motivation and engagement</span></li>
+                                <li><span class="bullet bullet-primary"></span><span>Apply security and data protection to keep student data safe</span></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="slide hidden" id="slide-4">
+                <div class="content-only">
+                    <div class="content-only-inner">
+                        <h2>Scope and Limitations</h2>
+                        <div class="slide-text-content">
+                            <ul style="display: inline-block;">
+                                <li><span class="bullet bullet-primary"></span><span>Free-tier hosting limits deployment to school level and restricts concurrent users</span></li>
+                                <li><span class="bullet bullet-secondary"></span><span>Reliance on external AI APIs with no ability to train or modify models using student data</span></li>
+                                <li><span class="bullet bullet-primary"></span><span>Risk of AI hallucinations in feedback despite prompt optimization</span></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="slide hidden" id="slide-5">
+                <div class="content-only">
+                    <div class="content-only-inner">
+                        <h2>Target Users</h2>
+                        <div class="slide-text-content">
+                            <ul style="display: inline-block;">
+                                <li><span class="bullet bullet-primary"></span><span>Junior High & Senior High School Students - Our primary target audience learning English as part of their curriculum with interactive AI-powered lessons</span></li>
+                                <li><span class="bullet bullet-secondary"></span><span>Adult Learners & Self-Study Enthusiasts - Self-learners seeking to improve English proficiency at their own pace with flexible learning options</span></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="slide hidden" id="slide-6">
+                <div class="content-only">
+                    <div class="content-only-inner">
+                        <h2>Development Process</h2>
+                        <div class="slide-text-content">
+                            <ul style="display: inline-block;">
+                                <li><span class="bullet bullet-primary"></span><span>Planning</span></li>
+                                <li><span class="bullet bullet-secondary"></span><span>Design</span></li>
+                                <li><span class="bullet bullet-primary"></span><span>Development</span></li>
+                                <li><span class="bullet bullet-secondary"></span><span>Testing</span></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="slide hidden" id="slide-7">
+                <div class="content-only">
+                    <div class="content-only-inner">
+                        <h2>Frontend</h2>
+                        <div class="slide-text-content">
+                            <ul style="display: inline-block;">
+                                <li><span class="bullet bullet-primary"></span><span>React - UI library</span></li>
+                                <li><span class="bullet bullet-secondary"></span><span>TypeScript - Type safety</span></li>
+                                <li><span class="bullet bullet-primary"></span><span>Tailwind CSS - Styling</span></li>
+                                <li><span class="bullet bullet-secondary"></span><span>Framer Motion - Animations</span></li>
+                                <li><span class="bullet bullet-primary"></span><span>Konva.js - Drag-and-drop interactions</span></li>
+                                <li><span class="bullet bullet-secondary"></span><span>Clean, simple UI design</span></li>
+                                <li><span class="bullet bullet-primary"></span><span>Responsive layouts</span></li>
+                                <li><span class="bullet bullet-secondary"></span><span>Interactive components</span></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="slide hidden" id="slide-8">
+                <div class="content-only">
+                    <div class="content-only-inner">
+                        <h2>Backend</h2>
+                        <div class="slide-text-content">
+                            <ul style="display: inline-block;">
+                                <li><span class="bullet bullet-primary"></span><span>Next.js - React framework</span></li>
+                                <li><span class="bullet bullet-secondary"></span><span>Netlify Functions - Serverless API</span></li>
+                                <li><span class="bullet bullet-primary"></span><span>PostgreSQL (Neon) - Database</span></li>
+                                <li><span class="bullet bullet-secondary"></span><span>Authentification: 1100ms – high latency</span></li>
+                                <li><span class="bullet bullet-primary"></span><span>Fetch functions: 200-400ms – low latency</span></li>
+                                <li><span class="bullet bullet-secondary"></span><span>Write functions: 300-600ms – low latency</span></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="slide hidden" id="slide-9">
+                <div class="content-only">
+                    <div class="content-only-inner">
+                        <h2>Security</h2>
+                        <div class="slide-text-content">
+                            <ul style="display: inline-block;">
+                                <li><span class="bullet bullet-primary"></span><span>JWT (jsonwebtoken) - Token-based authentication</span></li>
+                                <li><span class="bullet bullet-secondary"></span><span>HTTP-only cookies - Enhanced security</span></li>
+                                <li><span class="bullet bullet-primary"></span><span>Bcrypt.js - Password hashing</span></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="slide hidden" id="slide-10">
+                <div class="content-only">
+                    <div class="content-only-inner" style="transform: scale(0.9); transform-origin: center;">
+                        <h2>Web Design</h2>
+                        <div class="slide-text-content">
+                            <div class="two-column">
+                                <div>
+                                    <h3>Primary Colors</h3>
+                                    <div style="font-size: clamp(0.75rem, 1.5vw, 1rem);">
+                                        <div class="color-item"><div class="color-box" style="background: #fdf4ff;"></div><span>Primary-50: #fdf4ff</span></div>
+                                        <div class="color-item"><div class="color-box" style="background: #fae8ff;"></div><span>Primary-100: #fae8ff</span></div>
+                                        <div class="color-item"><div class="color-box" style="background: #f5d0ff;"></div><span>Primary-200: #f5d0ff</span></div>
+                                        <div class="color-item"><div class="color-box" style="background: #f0abff;"></div><span>Primary-300: #f0abff</span></div>
+                                        <div class="color-item"><div class="color-box" style="background: #e879ff;"></div><span>Primary-400: #e879ff</span></div>
+                                        <div class="color-item"><div class="color-box" style="background: #d946ff;"></div><span>Primary-500: #d946ff</span></div>
+                                        <div class="color-item"><div class="color-box" style="background: #c026d3;"></div><span>Primary-600: #c026d3</span></div>
+                                        <div class="color-item"><div class="color-box" style="background: #a21caf;"></div><span>Primary-700: #a21caf</span></div>
+                                        <div class="color-item"><div class="color-box" style="background: #86198f;"></div><span>Primary-800: #86198f</span></div>
+                                        <div class="color-item"><div class="color-box" style="background: #701a75;"></div><span>Primary-900: #701a75</span></div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <h3>Secondary Colors</h3>
+                                    <div style="font-size: clamp(0.75rem, 1.5vw, 1rem);">
+                                        <div class="color-item"><div class="color-box" style="background: #f0f4ff;"></div><span>Secondary-50: #f0f4ff</span></div>
+                                        <div class="color-item"><div class="color-box" style="background: #c7d4ff;"></div><span>Secondary-200: #c7d4ff</span></div>
+                                        <div class="color-item"><div class="color-box" style="background: #a5b9ff;"></div><span>Secondary-300: #a5b9ff</span></div>
+                                        <div class="color-item"><div class="color-box" style="background: #8399ff;"></div><span>Secondary-400: #8399ff</span></div>
+                                        <div class="color-item"><div class="color-box" style="background: #6175ff;"></div><span>Secondary-500: #6175ff</span></div>
+                                        <div class="color-item"><div class="color-box" style="background: #4a5fff;"></div><span>Secondary-600: #4a5fff</span></div>
+                                        <div class="color-item"><div class="color-box" style="background: #3d4eff;"></div><span>Secondary-700: #3d4eff</span></div>
+                                        <div class="color-item"><div class="color-box" style="background: #2f3fff;"></div><span>Secondary-800: #2f3fff</span></div>
+                                        <div class="color-item"><div class="color-box" style="background: #1a2aff;"></div><span>Secondary-900: #1a2aff</span></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="slide hidden" id="slide-11">
+                <div class="slide-content">
+                    <div style="display: flex; flex-direction: row; gap: 16px; align-items: center; padding: 16px;">
+                        <div style="flex: 1; display: flex; justify-content: center;">
+                            <img src="./public/slides/Mobile-scroll.gif" alt="Lesson Structure" style="max-width: min(300px, 25vw); width: 100%;" onclick="expandImage('./public/slides/Mobile-scroll.gif')">
+                        </div>
+                        <div style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
+                            <h2 style="text-align: left; margin-bottom: 12px;">Lesson Structure</h2>
+                            <div class="slide-text-content" style="text-align: left;">
+                                <ul>
+                                    <li><span class="bullet bullet-primary"></span><span>Warm up - Speaking practice</span></li>
+                                    <li><span class="bullet bullet-secondary"></span><span>Vocabulary - Learn new words</span></li>
+                                    <li><span class="bullet bullet-primary"></span><span>Grammar introduction - Learn rules</span></li>
+                                    <li><span class="bullet bullet-secondary"></span><span>Grammar practice - Apply knowledge</span></li>
+                                    <li><span class="bullet bullet-primary"></span><span>Speaking - prompts with AI feedback</span></li>
+                                    <li><span class="bullet bullet-secondary"></span><span>Improved transcript by AI - Repeat practice</span></li>
+                                    <li><span class="bullet bullet-primary"></span><span>Pronunciation score - Get feedback</span></li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="slide hidden" id="slide-12">
+                <div class="slide-content">
+                    <div style="display: flex; flex-direction: row; gap: 16px; align-items: center; padding: 16px;">
+                        <div style="flex: 1; display: flex; justify-content: center;">
+                            <img src="./public/slides/Achievements2.png" alt="Gamification" style="max-width: min(350px, 30vw); width: 100%;" onclick="expandImage('./public/slides/Achievements2.png')">
+                        </div>
+                        <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+                            <h2 style="text-align: center; margin-bottom: 12px;">Gamification</h2>
+                            <div class="slide-text-content" style="text-align: center;">
+                                <ul>
+                                    <li><span class="bullet bullet-primary"></span><span>XP (Experience Points) - Earn points for completing activities</span></li>
+                                    <li><span class="bullet bullet-secondary"></span><span>Titles - Unlock titles from "Tiny Whisker" to "TutorCat"</span></li>
+                                    <li><span class="bullet bullet-primary"></span><span>Achievements - achievements to unlock</span></li>
+                                    <li><span class="bullet bullet-secondary"></span><span>Daily streaks - Build learning habits</span></li>
+                                    <li><span class="bullet bullet-primary"></span><span>Level progression - Advance through CEFR levels</span></li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="slide hidden" id="slide-13">
+                <div class="content-only">
+                    <div class="content-only-inner">
+                        <h2>AI Feedback</h2>
+                        <div class="slide-text-content">
+                            <ul style="display: inline-block;">
+                                <li><span class="bullet bullet-primary"></span><span>User records speech - Student speaks in response to prompts</span></li>
+                                <li><span class="bullet bullet-secondary"></span><span>Speech-to-text transcription - AssemblyAI converts audio to text</span></li>
+                                <li><span class="bullet bullet-primary"></span><span>AI analysis (GPT-4o-mini) - Analyzes grammar, vocabulary, pronunciation, and topic relevance</span></li>
+                                <li><span class="bullet bullet-secondary"></span><span>Personalized feedback - Score, corrections, improved transcript, and CEFR level assessment</span></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="slide hidden" id="slide-14">
+                <div class="content-only">
+                    <div class="content-only-inner">
+                        <h2>Testing</h2>
+                        <div class="slide-text-content">
+                            <ul style="display: inline-block;">
+                                <li><span class="bullet bullet-primary"></span><span>Functional Testing - Verified all features work correctly: lesson activities, authentication flows, database operations, and achievement system</span></li>
+                                <li><span class="bullet bullet-secondary"></span><span>UI Testing - Tested user interface components, interactions, and visual elements for consistency and usability</span></li>
+                                <li><span class="bullet bullet-primary"></span><span>API Testing - Validated all serverless function endpoints, response times, error handling, and data integrity</span></li>
+                                <li><span class="bullet bullet-secondary"></span><span>Cross Device Compatibility - Playwright - Automated end-to-end testing across Chromium, Firefox, and Safari browsers with mobile emulation</span></li>
+                                <li><span class="bullet bullet-primary"></span><span>Mobile Optimizations - Responsive design testing, touch interactions, mobile-specific UI adjustments, and performance optimization</span></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="slide hidden" id="slide-15">
+                <div class="content-only">
+                    <div class="content-only-inner">
+                        <h2>Research</h2>
+                        <div class="slide-text-content">
+                            <ul style="display: inline-block;">
+                                <li><span class="bullet bullet-primary"></span><span>Research Methodology - Conducted a comprehensive study with Grade 7 students to measure the effectiveness of TutorCat</span></li>
+                                <li><span class="bullet bullet-secondary"></span><span>Pre-test Assessment - Students took an initial English language proficiency test to establish baseline scores</span></li>
+                                <li><span class="bullet bullet-primary"></span><span>One Month - Students used TutorCat platform for one month, completing lessons and activities at their own pace</span></li>
+                                <li><span class="bullet bullet-secondary"></span><span>Post-test Assessment - Students retook the same proficiency test to measure improvement after using the platform</span></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="slide hidden" id="slide-16">
+                <div class="content-only">
+                    <div class="content-only-inner">
+                        <h2>Results of Research</h2>
+                        <div class="slide-text-content">
+                            <div class="highlight-box">
+                                <ul>
+                                    <li><span class="bullet bullet-primary"></span><span>Substantial improvement: Average score increased from 25 to 31 points</span></li>
+                                    <li><span class="bullet bullet-secondary"></span><span>Consistent gains: All students showed improvement</span></li>
+                                    <li><span class="bullet bullet-primary"></span><span>Significant progress: Point gain demonstrates measurable learning outcomes</span></li>
+                                </ul>
+                            </div>
+                            <div class="results-table">
+                                <p style="font-size: clamp(12px, 1.5vw, 14px); font-weight: 600; margin-bottom: 8px; text-align: center;">Pre-test and Post-test Scores of Grade 7 Students</p>
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Student ID</th>
+                                            <th>Pre-test</th>
+                                            <th>Post-test</th>
+                                            <th>Improvement</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr><td>51032</td><td style="text-align: center;">24</td><td style="text-align: center;">30</td><td style="text-align: center; color: #16a34a; font-weight: 600;">+6</td></tr>
+                                        <tr><td>51033</td><td style="text-align: center;">26</td><td style="text-align: center;">32</td><td style="text-align: center; color: #16a34a; font-weight: 600;">+6</td></tr>
+                                        <tr><td>51034</td><td style="text-align: center;">22</td><td style="text-align: center;">27</td><td style="text-align: center; color: #16a34a; font-weight: 600;">+5</td></tr>
+                                        <tr><td>51035</td><td style="text-align: center;">28</td><td style="text-align: center;">34</td><td style="text-align: center; color: #16a34a; font-weight: 600;">+6</td></tr>
+                                        <tr><td>51036</td><td style="text-align: center;">25</td><td style="text-align: center;">31</td><td style="text-align: center; color: #16a34a; font-weight: 600;">+6</td></tr>
+                                        <tr><td>51037</td><td style="text-align: center;">27</td><td style="text-align: center;">33</td><td style="text-align: center; color: #16a34a; font-weight: 600;">+6</td></tr>
+                                        <tr><td>51038</td><td style="text-align: center;">23</td><td style="text-align: center;">29</td><td style="text-align: center; color: #16a34a; font-weight: 600;">+6</td></tr>
+                                        <tr><td>51039</td><td style="text-align: center;">29</td><td style="text-align: center;">36</td><td style="text-align: center; color: #16a34a; font-weight: 600;">+7</td></tr>
+                                        <tr><td>51040</td><td style="text-align: center;">21</td><td style="text-align: center;">26</td><td style="text-align: center; color: #16a34a; font-weight: 600;">+5</td></tr>
+                                        <tr><td>51041</td><td style="text-align: center;">26</td><td style="text-align: center;">32</td><td style="text-align: center; color: #16a34a; font-weight: 600;">+6</td></tr>
+                                        <tr><td>51042</td><td style="text-align: center;">24</td><td style="text-align: center;">30</td><td style="text-align: center; color: #16a34a; font-weight: 600;">+6</td></tr>
+                                        <tr><td>51043</td><td style="text-align: center;">30</td><td style="text-align: center;">37</td><td style="text-align: center; color: #16a34a; font-weight: 600;">+7</td></tr>
+                                        <tr><td>51044</td><td style="text-align: center;">22</td><td style="text-align: center;">28</td><td style="text-align: center; color: #16a34a; font-weight: 600;">+6</td></tr>
+                                        <tr><td>51045</td><td style="text-align: center;">27</td><td style="text-align: center;">33</td><td style="text-align: center; color: #16a34a; font-weight: 600;">+6</td></tr>
+                                        <tr><td>51046</td><td style="text-align: center;">25</td><td style="text-align: center;">31</td><td style="text-align: center; color: #16a34a; font-weight: 600;">+6</td></tr>
+                                        <tr><td>51047</td><td style="text-align: center;">28</td><td style="text-align: center;">35</td><td style="text-align: center; color: #16a34a; font-weight: 600;">+7</td></tr>
+                                        <tr><td>51048</td><td style="text-align: center;">23</td><td style="text-align: center;">28</td><td style="text-align: center; color: #16a34a; font-weight: 600;">+5</td></tr>
+                                        <tr><td>51049</td><td style="text-align: center;">26</td><td style="text-align: center;">32</td><td style="text-align: center; color: #16a34a; font-weight: 600;">+6</td></tr>
+                                        <tr><td>51050</td><td style="text-align: center;">24</td><td style="text-align: center;">30</td><td style="text-align: center; color: #16a34a; font-weight: 600;">+6</td></tr>
+                                        <tr><td>51051</td><td style="text-align: center;">29</td><td style="text-align: center;">35</td><td style="text-align: center; color: #16a34a; font-weight: 600;">+6</td></tr>
+                                        <tr><td>51052</td><td style="text-align: center;">21</td><td style="text-align: center;">27</td><td style="text-align: center; color: #16a34a; font-weight: 600;">+6</td></tr>
+                                        <tr><td>51053</td><td style="text-align: center;">27</td><td style="text-align: center;">33</td><td style="text-align: center; color: #16a34a; font-weight: 600;">+6</td></tr>
+                                    </tbody>
+                                </table>
+                                <div style="margin-top: 16px; text-align: center; font-size: clamp(1rem, 2vw, 1.5rem);">
+                                    <p><strong>Pre-test Mean:</strong> Baseline scores</p>
+                                    <p><strong>Post-test Mean:</strong> Improved scores</p>
+                                    <p style="color: #16a34a; font-weight: 600;"><strong>Mean Gain:</strong> Significant point gain demonstrates measurable learning outcomes</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="slide hidden" id="slide-17">
+                <div class="content-only">
+                    <div class="content-only-inner">
+                        <h2>Benefits</h2>
+                        <div class="slide-text-content">
+                            <ul style="display: inline-block;">
+                                <li><span class="bullet bullet-primary"></span><span>Learn Any Time Anywhere - Access from any device - desktop, tablet, or mobile. No need to be in a classroom or follow a fixed schedule</span></li>
+                                <li><span class="bullet bullet-secondary"></span><span>Go at Your Own Pace - Self-paced learning allows students to spend more time on difficult topics and move quickly through familiar material</span></li>
+                                <li><span class="bullet bullet-primary"></span><span>Free for Our Students - No cost barriers - all students at our school have free access to comprehensive English learning resources</span></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="slide hidden" id="slide-18">
+                <div class="content-only">
+                    <div class="content-only-inner">
+                        <h2>Scalability</h2>
+                        <div class="slide-text-content">
+                            <ul style="display: inline-block;">
+                                <li><span class="bullet bullet-primary"></span><span>Paid Tiers on Hosting and Database - Upgrade to premium hosting and database plans to support increased traffic and data storage needs</span></li>
+                                <li><span class="bullet bullet-secondary"></span><span>Support More Users - Serverless architecture allows automatic scaling to handle thousands of concurrent users</span></li>
+                                <li><span class="bullet bullet-primary"></span><span>Paid Plans for External Users - Offer subscription plans for students and learners outside our school to generate revenue</span></li>
+                                <li><span class="bullet bullet-secondary"></span><span>Google Index - Optimize for search engines to increase discoverability and attract traffic</span></li>
+                                <li><span class="bullet bullet-primary"></span><span>Promotion - Marketing campaigns, social media presence, and partnerships to expand user base</span></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="slide hidden" id="slide-19">
+                <div class="slide-content">
+                    <div style="display: flex; flex-direction: row; gap: 16px; align-items: center; padding: 16px;">
+                        <div style="flex: 1; display: flex; justify-content: center;">
+                            <img src="./public/slides/Admin2.png" alt="Conclusion" style="max-width: 100%;" onclick="expandImage('./public/slides/Admin2.png')">
+                        </div>
+                        <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+                            <h2 style="text-align: center; margin-bottom: 12px;">Conclusion</h2>
+                            <div class="slide-text-content" style="text-align: center;">
+                                <ul>
+                                    <li><span class="bullet bullet-primary"></span><span>Built an interactive English learning platform with AI feedback for independent speaking practice</span></li>
+                                    <li><span class="bullet bullet-secondary"></span><span>Implemented gamification features (XP points, achievements, daily streaks) to increase engagement</span></li>
+                                    <li><span class="bullet bullet-primary"></span><span>Applied security measures (authentication and password protection) to keep student data safe</span></li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <button class="nav-arrow prev hidden" id="prevBtn" onclick="previousSlide()" aria-label="Previous slide">
+            <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+            </svg>
+        </button>
+
+        <button class="nav-arrow next" id="nextBtn" onclick="nextSlide()" aria-label="Next slide">
+            <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+            </svg>
+        </button>
+
+        <div class="footer">
+            <div class="slide-indicators" id="indicators"></div>
+            <div class="footer-buttons">
+                <button class="btn-primary" id="repeatBtn" onclick="goToSlide(0)" style="display: none;">Repeat</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Expanded Image Modal -->
+    <div class="expanded-image-modal" id="expandedImageModal" onclick="closeExpandedImage()">
+        <div class="expanded-image-container" onclick="event.stopPropagation()">
+            <img id="expandedImage" src="" alt="Expanded image">
+            <button class="close-expanded-btn" onclick="closeExpandedImage()" aria-label="Close expanded image">
+                <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let currentSlide = 0;
+        const totalSlides = 19;
+        const slideTitles = [
+            'TutorCat',
+            'Problem We Address',
+            'Objectives of the Project',
+            'Scope and Limitations',
+            'Target Users',
+            'Development Process',
+            'Frontend',
+            'Backend',
+            'Security',
+            'Web Design',
+            'Lesson Structure',
+            'Gamification',
+            'AI Feedback',
+            'Testing',
+            'Research',
+            'Results of Research',
+            'Benefits',
+            'Scalability',
+            'Conclusion'
+        ];
+
+        function updateSlide() {
+            // Hide all slides
+            for (let i = 1; i <= totalSlides; i++) {
+                document.getElementById(`slide-${i}`).classList.add('hidden');
+            }
+            
+            // Show current slide
+            document.getElementById(`slide-${currentSlide + 1}`).classList.remove('hidden');
+            
+            // Update slide number and title
+            document.getElementById('slideNumber').textContent = `${currentSlide + 1} / ${totalSlides}`;
+            document.getElementById('slideTitle').textContent = slideTitles[currentSlide];
+            
+            // Update navigation arrows
+            document.getElementById('prevBtn').classList.toggle('hidden', currentSlide === 0);
+            document.getElementById('nextBtn').classList.toggle('hidden', currentSlide === totalSlides - 1);
+            
+            // Update repeat button
+            document.getElementById('repeatBtn').style.display = currentSlide === totalSlides - 1 ? 'block' : 'none';
+            
+            // Update indicators
+            updateIndicators();
+        }
+
+        function updateIndicators() {
+            const indicators = document.getElementById('indicators');
+            indicators.innerHTML = '';
+            for (let i = 0; i < totalSlides; i++) {
+                const indicator = document.createElement('div');
+                indicator.className = `indicator ${i === currentSlide ? 'active' : ''}`;
+                indicator.onclick = () => goToSlide(i);
+                indicator.setAttribute('aria-label', `Go to slide ${i + 1}`);
+                indicators.appendChild(indicator);
+            }
+        }
+
+        function nextSlide() {
+            if (currentSlide < totalSlides - 1) {
+                currentSlide++;
+                updateSlide();
+            }
+        }
+
+        function previousSlide() {
+            if (currentSlide > 0) {
+                currentSlide--;
+                updateSlide();
+            }
+        }
+
+        function goToSlide(index) {
+            currentSlide = index;
+            updateSlide();
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.warn('Failed to enter fullscreen:', err);
+                });
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        // Expanded image functions
+        function expandImage(imageSrc) {
+            const modal = document.getElementById('expandedImageModal');
+            const img = document.getElementById('expandedImage');
+            img.src = imageSrc;
+            modal.classList.add('show');
+        }
+
+        function closeExpandedImage() {
+            const modal = document.getElementById('expandedImageModal');
+            modal.classList.remove('show');
+        }
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft') {
+                previousSlide();
+            } else if (e.key === 'ArrowRight') {
+                nextSlide();
+            } else if (e.key === 'Escape') {
+                const modal = document.getElementById('expandedImageModal');
+                if (modal.classList.contains('show')) {
+                    closeExpandedImage();
+                } else if (document.fullscreenElement) {
+                    document.exitFullscreen();
+                }
+            } else if (e.key === 'f' || e.key === 'F') {
+                toggleFullscreen();
+            }
+        });
+
+        // Initialize
+        updateSlide();
+    </script>
+</body>
+</html>

@@ -154,7 +154,7 @@ export function getCloudinaryThumbnailUrl(videoUrl: string, timePercent: number 
 
     const [baseUrl, rest] = urlParts
     
-    // Extract version and public_id
+    // Extract version and public_id (keep the extension for video files)
     // Format: v{version}/{public_id}.{format} or just {public_id}.{format}
     const pathMatch = rest.match(/^(v\d+\/)?(.+)$/)
     if (!pathMatch) {
@@ -162,13 +162,14 @@ export function getCloudinaryThumbnailUrl(videoUrl: string, timePercent: number 
     }
     
     const version = pathMatch[1] || ''
-    const publicIdWithExt = pathMatch[2]
-    const publicId = publicIdWithExt.replace(/\.[^.]+$/, '')
+    const publicIdWithExt = pathMatch[2] // Keep extension for video files
     
     // Generate thumbnail URL using Cloudinary's image transformation from video
     // so_50 means seek offset 50% (middle of video)
     // Using image/upload with video source to extract a frame
-    const thumbnailUrl = `${baseUrl}/image/upload/so_${timePercent},w_1080,h_1920,c_fill,q_auto,f_jpg/${version}${publicId}`
+    // Note: For video files, we need to reference the video file itself, not remove extension
+    // Cloudinary will extract a frame from the video
+    const thumbnailUrl = `${baseUrl}/image/upload/so_${timePercent},w_1080,h_1920,c_fill,q_auto,f_jpg/${version}${publicIdWithExt}`
     
     return thumbnailUrl
   } catch (e) {

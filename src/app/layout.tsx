@@ -63,9 +63,16 @@ export const metadata: Metadata = {
     alternateLocale: ['th_TH'],
     url: siteUrl,
     siteName: siteName,
-    title: `${siteName} - AI Language Learning Platform`,
-    description: siteDescription,
+    title: 'TutorCat – Interactive English Learning',
+    description: 'An interactive English learning platform that uses game-based tasks, visual prompts, and speaking-focused activities to build learner confidence and fluency.',
     images: [
+      {
+        url: `${siteUrl}/og-cover.webp`,
+        width: 1200,
+        height: 630,
+        alt: 'TutorCat – Interactive English Learning',
+        type: 'image/webp',
+      },
       {
         url: `${siteUrl}/logo.webp`,
         width: 1200,
@@ -84,9 +91,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: `${siteName} - AI Language Learning Platform`,
-    description: siteDescription,
-    images: [siteImage],
+    title: 'TutorCat – Interactive English Learning',
+    description: 'An interactive English learning platform that uses game-based tasks, visual prompts, and speaking-focused activities to build learner confidence and fluency.',
+    images: [`${siteUrl}/og-cover.webp`],
     creator: '@tutorcat',
   },
   alternates: {
