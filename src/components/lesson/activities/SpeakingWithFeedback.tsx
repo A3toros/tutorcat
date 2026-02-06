@@ -15,6 +15,16 @@ interface SpeakingPrompt {
   text: string;
 }
 
+// Minimum word count requirements by language level
+const MIN_WORD_COUNTS = {
+  'A1': 0,    // No minimum for A1
+  'A2': 25,   // 25 words for A2
+  'B1': 50,   // 50 words for B1
+  'B2': 50,   // 50 words for B2
+  'C1': 100,  // 100 words for C1
+  'C2': 100   // 100 words for C2
+};
+
 interface SpeakingWithFeedbackData {
   lessonId: string;
   activityOrder: number;
@@ -24,6 +34,7 @@ interface SpeakingWithFeedbackData {
     vocabulary: boolean;
     pronunciation: boolean;
   };
+  languageLevel?: keyof typeof MIN_WORD_COUNTS; // Add language level
 }
 
 interface SpeakingWithFeedbackProps {
@@ -269,7 +280,19 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
   }, []);
 
   // Handle analyzing transcript
+    // Get the language level from lessonData or default to A2
+  const languageLevel = lessonData.languageLevel || 'A2';
+  const minWordCount = MIN_WORD_COUNTS[languageLevel] || 0;
+
   const handleAnalyzeTranscript = useCallback(async (transcriptText: string) => {
+    // Check word count before proceeding with analysis
+    const wordCount = transcriptText.trim().split(/\s+/).filter(word => word.length > 0).length;
+    if (wordCount < minWordCount) {
+      setAnalysisState('failed');
+      setSubmissionError(`Your response is too short. For level ${languageLevel}, please speak at least ${minWordCount} words.`);
+      setCurrentStep('error');
+      return;
+    }
     if (!transcriptText || !transcriptText.trim()) {
       setAnalysisState('failed');
       setSubmissionError('No transcript available for analysis');
@@ -1123,9 +1146,16 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
     <Card>
       <Card.Header>
         <h3 className="text-xl font-semibold">Speaking Practice</h3>
-        <p className="text-sm text-neutral-600">
-          Practice speaking by responding to the prompts below
-        </p>
+        <div className="space-y-1">
+          <p className="text-sm text-neutral-600">
+            Practice speaking by responding to the prompts below
+          </p>
+          {minWordCount > 0 && (
+            <p className="text-xs text-blue-600">
+              Speak at least {minWordCount} words (Level: {languageLevel})
+            </p>
+          )}
+        </div>
         <div className="mt-2 text-sm">
           Prompt {currentPromptIndex + 1} of {prompts.length}
         </div>
