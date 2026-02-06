@@ -17,7 +17,7 @@ interface SpeakingPrompt {
 
 // Minimum word count requirements by language level
 const MIN_WORD_COUNTS = {
-  'A1': 15,    // No minimum for A1
+  'A1': 0,    // No minimum for A1
   'A2': 25,   // 25 words for A2
   'B1': 50,   // 50 words for B1
   'B2': 50,   // 50 words for B2
@@ -762,14 +762,6 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
 
   // Handle next prompt or completion
   const handleNext = useCallback(() => {
-    const currentTranscript = transcripts[promptId];
-    const wordCount = currentTranscript ? currentTranscript.trim().split(/\s+/).filter(word => word.length > 0).length : 0;
-    
-    if (wordCount < minWordCount) {
-      setError(`Your response is too short. For level ${languageLevel}, please speak at least ${minWordCount} words.`);
-      return;
-    }
-
     if (currentPromptIndex < prompts.length - 1) {
       setCurrentPromptIndex(prev => prev + 1);
       setTranscripts(prev => ({ ...prev }));
@@ -784,7 +776,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
     } else {
       setIsComplete(true);
     }
-  }, [currentPromptIndex, prompts.length, promptId, transcripts, minWordCount, languageLevel]);
+  }, [currentPromptIndex, prompts.length]);
 
   // Generate combined improved version from all transcripts
   const generateCombinedImprovedVersion = useCallback(async (allTranscripts: string[]): Promise<string> => {
@@ -823,20 +815,6 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
   // Handle completion
   const handleComplete = useCallback(async () => {
     if (!user || isGeneratingImproved) return;
-
-    // Verify all prompts have a transcript with sufficient word count
-    for (const [promptId, transcript] of Object.entries(transcripts)) {
-      if (!transcript) {
-        setError('Please complete all speaking prompts before continuing.');
-        return;
-      }
-      
-      const wordCount = transcript.trim().split(/\s+/).filter(word => word.length > 0).length;
-      if (wordCount < minWordCount) {
-        setError(`One or more responses are too short. For level ${languageLevel}, each response must be at least ${minWordCount} words.`);
-        return;
-      }
-    }
 
     setIsGeneratingImproved(true);
     const timeSpent = Math.round((Date.now() - startTime) / 1000);
