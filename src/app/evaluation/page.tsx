@@ -804,7 +804,7 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
         await handleRecordingComplete(audioBlob);
       };
 
-      mediaRecorder.start();
+      mediaRecorder.start(isIOSDevice ? 1000 : undefined);
       setIsRecording(true);
       setRecordingTime(0);
 
@@ -815,6 +815,7 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
           // Auto-stop at 60 seconds
           if (newTime >= 60 && mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
             console.log('⏰ Auto-stopping recording after 1 minute');
+            mediaRecorderRef.current.requestData();
             mediaRecorderRef.current.stop();
             if (recordingIntervalRef.current) {
               clearInterval(recordingIntervalRef.current);
@@ -835,6 +836,7 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
         autoStopTimeoutRef.current = null;
         if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
           console.log('⏰ Auto-stopping recording after 1 minute (timeout)');
+          mediaRecorderRef.current.requestData();
           mediaRecorderRef.current.stop();
         }
       }, 60000);
@@ -873,6 +875,7 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
     }
 
     if (mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.requestData();
       mediaRecorderRef.current.stop();
     }
 

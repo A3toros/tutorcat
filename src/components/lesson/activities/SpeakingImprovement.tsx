@@ -358,7 +358,9 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
       mediaRecorder.onstop = async () => {
         const audioBlob = new Blob(chunksRef.current, { type: mimeType })
         if (audioBlob.size === 0) {
-          showNotification('No audio recorded. Please try again.', 'error')
+          showNotification(isIOSDevice
+            ? 'No audio recorded. Try speaking for 1–2 seconds before stopping, and ensure you\'re using Safari with microphone access allowed.'
+            : 'No audio recorded. Please try again.', 'error')
           setIsRecording(false)
           setCurrentStep('idle')
           if (streamRef.current) {
@@ -487,7 +489,7 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
         }
       }
 
-      mediaRecorder.start()
+      mediaRecorder.start(isIOSDevice ? 1000 : undefined)
     } catch (error: any) {
       console.error('Recording error:', error)
       showNotification(error.message || 'Failed to start recording. Please check microphone permissions.', 'error')
@@ -501,6 +503,7 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
     // Immediately disable button and show gray state
     setIsStopping(true)
     if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.requestData()
       mediaRecorderRef.current.stop()
     }
   }, [isRecording])

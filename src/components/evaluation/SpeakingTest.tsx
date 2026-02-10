@@ -704,8 +704,8 @@ const SpeakingTest: React.FC<SpeakingTestProps> = ({ onComplete }) => {
         stream.getTracks().forEach(track => track.stop());
       };
 
-      // Start recording - upload on stop (single chunk for short recordings)
-      mediaRecorder.start();
+      // Start recording - upload on stop (single chunk for short recordings); timeslice on iOS for reliable chunks
+      mediaRecorder.start(isIOSDevice ? 1000 : undefined);
 
       // Store recording start time for analysis
       (window as any).recordingStartTime = Date.now();
@@ -719,6 +719,7 @@ const SpeakingTest: React.FC<SpeakingTestProps> = ({ onComplete }) => {
         autoStopTimeoutRef.current = null;
         if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
           console.log('⏰ Auto-stopping recording after 1 minute');
+          mediaRecorderRef.current.requestData();
           mediaRecorderRef.current.stop();
           mediaRecorderRef.current = null;
         }
@@ -1198,6 +1199,7 @@ const SpeakingTest: React.FC<SpeakingTestProps> = ({ onComplete }) => {
     // CRITICAL: Actually stop the MediaRecorder immediately
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       console.log('🎤 Immediately stopping MediaRecorder...');
+      mediaRecorderRef.current.requestData();
       mediaRecorderRef.current.stop();
       mediaRecorderRef.current = null; // Clear reference
     } else {

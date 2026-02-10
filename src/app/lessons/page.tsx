@@ -1782,7 +1782,9 @@ function WarmupStep({ data, level, onComplete, isCompleted, isTransitioning = fa
       mediaRecorder.onstop = async () => {
         const audioBlob = new Blob(chunksRef.current, { type: mimeType })
         if (audioBlob.size === 0) {
-          setError('No audio recorded. Please try again.')
+          setError(isIOSDevice
+            ? 'No audio recorded. Try speaking for 1–2 seconds before stopping, and ensure you\'re using Safari with microphone access allowed.'
+            : 'No audio recorded. Please try again.')
           setIsProcessing(false)
           setIsRecording(false)
           if (streamRef.current) {
@@ -1860,7 +1862,7 @@ function WarmupStep({ data, level, onComplete, isCompleted, isTransitioning = fa
         }
       }
 
-      mediaRecorder.start()
+      mediaRecorder.start(isIOSDevice ? 1000 : undefined)
       if (autoStopTimeoutRef.current) {
         clearTimeout(autoStopTimeoutRef.current)
         autoStopTimeoutRef.current = null

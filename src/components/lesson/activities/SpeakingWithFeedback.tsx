@@ -576,7 +576,9 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
         
         if (audioBlob.size === 0) {
           console.error('⚠️ Audio blob is empty!');
-          setError('No audio recorded. Please try again.');
+          setError(isIOSDevice
+            ? 'No audio recorded. Try speaking for 1–2 seconds before stopping, and ensure you\'re using Safari with microphone access allowed.'
+            : 'No audio recorded. Please try again.');
           setCurrentStep('error');
           setIsProcessing(false);
           setIsRecording(false);
@@ -637,7 +639,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
         }
       };
 
-      mediaRecorder.start();
+      mediaRecorder.start(isIOSDevice ? 1000 : undefined);
       (window as any).recordingStartTime = Date.now();
       console.log('✅ Recording started successfully');
 
