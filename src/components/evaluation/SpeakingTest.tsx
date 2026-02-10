@@ -53,6 +53,7 @@ const SpeakingTest: React.FC<SpeakingTestProps> = ({ onComplete }) => {
 
   // NEW: Error handling state
   const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const [isMinWordsError, setIsMinWordsError] = useState(false);
   const [failedPayload, setFailedPayload] = useState<any>(null);
   const [isResending, setIsResending] = useState(false);
 
@@ -205,6 +206,16 @@ const SpeakingTest: React.FC<SpeakingTestProps> = ({ onComplete }) => {
     };
 
     checkPermissionStatus();
+  }, []);
+
+  // Clear 60s auto-stop timeout on unmount
+  React.useEffect(() => {
+    return () => {
+      if (autoStopTimeoutRef.current) {
+        clearTimeout(autoStopTimeoutRef.current);
+        autoStopTimeoutRef.current = null;
+      }
+    };
   }, []);
 
   // Request microphone permission with forced popup
@@ -481,6 +492,15 @@ const SpeakingTest: React.FC<SpeakingTestProps> = ({ onComplete }) => {
         const result = await response.json();
 
         if (!result.success) {
+          if (result.min_words != null && result.word_count != null) {
+            setSubmissionError(result.error || `Please speak at least ${result.min_words} words. You said ${result.word_count} word(s).`);
+            setIsMinWordsError(true);
+            setTranscriptionState('failed');
+            setCurrentStep('error');
+            setIsProcessing(false);
+            cleanup();
+            return;
+          }
           throw new Error(result.error || result.message || 'Streaming analysis failed');
         }
 
@@ -580,6 +600,7 @@ const SpeakingTest: React.FC<SpeakingTestProps> = ({ onComplete }) => {
 
   // Store MediaRecorder reference for stopping
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const autoStopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // CRITICAL: Feature Detection for Audio Formats
   const getSupportedMimeType = useCallback(() => {
@@ -672,8 +693,12 @@ const SpeakingTest: React.FC<SpeakingTestProps> = ({ onComplete }) => {
         console.log(`⏱️ Delay from stop button to MediaRecorder.onstop: ${stopToMediaStopDelay}ms`);
         console.log(`🎵 Actual recording duration: ${actualRecordingDuration}ms`);
 
-        // Clear MediaRecorder reference
+        // Clear MediaRecorder reference and 60s timeout so it can't stop a future recording
         mediaRecorderRef.current = null;
+        if (autoStopTimeoutRef.current) {
+          clearTimeout(autoStopTimeoutRef.current);
+          autoStopTimeoutRef.current = null;
+        }
 
         // Stop all tracks
         stream.getTracks().forEach(track => track.stop());
@@ -685,8 +710,13 @@ const SpeakingTest: React.FC<SpeakingTestProps> = ({ onComplete }) => {
       // Store recording start time for analysis
       (window as any).recordingStartTime = Date.now();
 
-      // Auto-stop after 1 minute (60 seconds) - generous time for long responses
-      setTimeout(() => {
+      // Auto-stop after 1 minute (60 seconds) - clear any previous timeout, then set new one
+      if (autoStopTimeoutRef.current) {
+        clearTimeout(autoStopTimeoutRef.current);
+        autoStopTimeoutRef.current = null;
+      }
+      autoStopTimeoutRef.current = setTimeout(() => {
+        autoStopTimeoutRef.current = null;
         if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
           console.log('⏰ Auto-stopping recording after 1 minute');
           mediaRecorderRef.current.stop();
@@ -737,6 +767,13 @@ const SpeakingTest: React.FC<SpeakingTestProps> = ({ onComplete }) => {
       const result = await response.json();
 
       if (!result.success) {
+        if (result.min_words != null && result.word_count != null) {
+          setSubmissionError(result.error || `Please speak at least ${result.min_words} words. You said ${result.word_count} word(s).`);
+          setIsMinWordsError(true);
+          setCurrentStep('error');
+          setIsProcessing(false);
+          return;
+        }
         throw new Error(result.error || result.message || 'Processing failed');
       }
 
@@ -846,6 +883,16 @@ const SpeakingTest: React.FC<SpeakingTestProps> = ({ onComplete }) => {
 
       result = await response.json();
 
+      // Minimum word count: warn and force re-record (retrying same audio would fail again)
+      if (!result.success && result.min_words != null && result.word_count != null) {
+        setSubmissionError(result.error || `Please speak at least ${result.min_words} words. You said ${result.word_count} word(s).`);
+        setIsMinWordsError(true);
+        setCurrentStep('error');
+        setTranscriptionState('failed');
+        setIsResending(false);
+        return;
+      }
+
       // If WebM failed, try WAV fallback
       if (!result.success && audioBlob.type !== 'audio/wav') {
         console.log('🎤 WebM retry failed, trying WAV fallback...');
@@ -872,11 +919,27 @@ const SpeakingTest: React.FC<SpeakingTestProps> = ({ onComplete }) => {
         result = await response.json();
 
         if (!result.success) {
+          if (result.min_words != null && result.word_count != null) {
+            setSubmissionError(result.error || `Please speak at least ${result.min_words} words. You said ${result.word_count} word(s).`);
+            setIsMinWordsError(true);
+            setCurrentStep('error');
+            setTranscriptionState('failed');
+            setIsResending(false);
+            return;
+          }
           throw new Error(result.error || result.message || 'WAV transcription retry failed');
         }
 
         console.log('🎤 Transcription retry succeeded with WAV fallback:', result.cached ? '(cached)' : '(new)');
       } else if (!result.success) {
+        if (result.min_words != null && result.word_count != null) {
+          setSubmissionError(result.error || `Please speak at least ${result.min_words} words. You said ${result.word_count} word(s).`);
+          setIsMinWordsError(true);
+          setCurrentStep('error');
+          setTranscriptionState('failed');
+          setIsResending(false);
+          return;
+        }
         throw new Error(result.error || result.message || 'Transcription retry failed');
       } else {
         console.log('🎤 Transcription retry succeeded with WebM:', result.cached ? '(cached)' : '(new)');
@@ -1011,6 +1074,15 @@ const SpeakingTest: React.FC<SpeakingTestProps> = ({ onComplete }) => {
 
       result = await response.json();
 
+      // Minimum word count: force re-record (retrying same audio would fail again)
+      if (!result.success && result.min_words != null && result.word_count != null) {
+        setSubmissionError(result.error || `Please speak at least ${result.min_words} words. You said ${result.word_count} word(s).`);
+        setIsMinWordsError(true);
+        setCurrentStep('error');
+        setIsResending(false);
+        return;
+      }
+
       // If WebM failed, try WAV fallback
       if (!result.success && audioBlob.type !== 'audio/wav') {
         console.log('🎤 WebM resend failed, trying WAV fallback...');
@@ -1037,11 +1109,25 @@ const SpeakingTest: React.FC<SpeakingTestProps> = ({ onComplete }) => {
         result = await response.json();
 
         if (!result.success) {
+          if (result.min_words != null && result.word_count != null) {
+            setSubmissionError(result.error || `Please speak at least ${result.min_words} words. You said ${result.word_count} word(s).`);
+            setIsMinWordsError(true);
+            setCurrentStep('error');
+            setIsResending(false);
+            return;
+          }
           throw new Error(result.error || result.message || 'WAV processing failed');
         }
 
         console.log('🎤 Processing resend succeeded with WAV fallback:', result.cached ? '(cached)' : '(new)');
       } else if (!result.success) {
+        if (result.min_words != null && result.word_count != null) {
+          setSubmissionError(result.error || `Please speak at least ${result.min_words} words. You said ${result.word_count} word(s).`);
+          setIsMinWordsError(true);
+          setCurrentStep('error');
+          setIsResending(false);
+          return;
+        }
         throw new Error(result.error || result.message || 'Processing resend failed');
       } else {
         console.log('🎤 Processing resend succeeded with WebM:', result.cached ? '(cached)' : '(new)');
@@ -1091,6 +1177,12 @@ const SpeakingTest: React.FC<SpeakingTestProps> = ({ onComplete }) => {
   const confirmStopRecording = useCallback(() => {
     console.log('🛑 CONFIRMED - Immediate stop + UI update');
     setShowStopConfirmation(false);
+
+    // Clear 60s auto-stop timeout so it never fires and can't stop a future recording
+    if (autoStopTimeoutRef.current) {
+      clearTimeout(autoStopTimeoutRef.current);
+      autoStopTimeoutRef.current = null;
+    }
 
     // IMMEDIATE UI CHANGE: Show "Analyzing Your Speech" right away
     setIsRecording(false);
@@ -1231,7 +1323,7 @@ const SpeakingTest: React.FC<SpeakingTestProps> = ({ onComplete }) => {
 
   // Error state with retry options
   if (currentStep === 'error') {
-    const isTranscriptionError = transcriptionState === 'failed';
+    const isTranscriptionError = !isMinWordsError && transcriptionState === 'failed';
     const isAnalysisError = analysisState === 'failed';
     const retryHandler = isTranscriptionError ? handleRetryTranscription :
                        isAnalysisError ? handleRetryAnalysis :
@@ -1240,7 +1332,9 @@ const SpeakingTest: React.FC<SpeakingTestProps> = ({ onComplete }) => {
     return (
       <Card>
         <Card.Header>
-          <h3 className="text-xl font-semibold text-red-800">⚠️ Processing Error</h3>
+          <h3 className="text-xl font-semibold text-red-800">
+            {isMinWordsError ? 'Not enough words' : '⚠️ Processing Error'}
+          </h3>
           <p className="text-sm text-red-600">
             {submissionError}
           </p>
@@ -1248,7 +1342,9 @@ const SpeakingTest: React.FC<SpeakingTestProps> = ({ onComplete }) => {
         <Card.Body>
           <div className="space-y-4">
             <p className="text-sm text-neutral-600">
-              {isTranscriptionError
+              {isMinWordsError
+                ? 'Please tap "Re-record" and speak for longer to meet the minimum word count.'
+                : isTranscriptionError
                 ? 'Transcription failed. Click "Retry Transcription" to try again, or "Re-record" to start over.'
                 : isAnalysisError
                 ? 'Analysis failed. Your transcription was successful. Click "Retry Analysis" to try again.'
@@ -1256,6 +1352,7 @@ const SpeakingTest: React.FC<SpeakingTestProps> = ({ onComplete }) => {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3">
+              {!isMinWordsError && (
               <Button
                 onClick={retryHandler}
                 disabled={isResending}
@@ -1265,13 +1362,15 @@ const SpeakingTest: React.FC<SpeakingTestProps> = ({ onComplete }) => {
                  isTranscriptionError ? 'Retry Transcription' :
                  isAnalysisError ? 'Retry Analysis' : 'Resend'}
               </Button>
+              )}
 
-              {!isAnalysisError && (
+              {(!isAnalysisError || isMinWordsError) && (
                 <Button
                   onClick={() => {
                     setAudioBlob(null);
                     setError(null);
                     setSubmissionError(null);
+                    setIsMinWordsError(false);
                     setFailedPayload(null);
                     setIsProcessing(false);
                     setIsResending(false);
@@ -1382,7 +1481,7 @@ const SpeakingTest: React.FC<SpeakingTestProps> = ({ onComplete }) => {
             <strong>{t('evaluation.speaking.instructions', 'Instructions')}:</strong> {currentPrompt.instructions}
           </div>
           <div className="text-sm text-blue-800 bg-yellow-50 border border-yellow-200 p-2 rounded mt-2">
-            💡 <strong>{t('evaluation.speaking.tip', 'Tip')}:</strong> {t('evaluation.speaking.speakLonger', 'Speak longer for more accurate results. The more you say, the better we can assess your level.')}
+            💡 <strong>{t('evaluation.speaking.tip', 'Tip')}:</strong> {t('evaluation.speaking.speakLonger', 'Speak at least 25 words. The more you say, the better we can assess your level.')}
           </div>
         </div>
 
@@ -1425,6 +1524,7 @@ const SpeakingTest: React.FC<SpeakingTestProps> = ({ onComplete }) => {
         {/* Processing Indicator */}
         {isProcessing && (
           <div className="mb-4 text-center">
+            <p className="text-sm font-medium text-amber-700 mb-2">Stop pressed. Recording stopped.</p>
             <div className="inline-flex items-center space-x-2 text-blue-600">
               <div className="animate-spin w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
               <span>{t('evaluation.speaking.analyzing', 'Analyzing your speech...')}</span>
@@ -1466,26 +1566,6 @@ const SpeakingTest: React.FC<SpeakingTestProps> = ({ onComplete }) => {
                     <p className="text-red-800 text-sm">
                       {currentFeedback.feedback || `Your response doesn't seem to address the prompt. Please speak about: ${currentPrompt.prompt}`}
                     </p>
-                    <div className="mt-3">
-                      <Button
-                        onClick={() => {
-                          // Clear current transcript and feedback, allow re-recording
-                          setTranscripts(prev => ({
-                            ...prev,
-                            [currentPrompt.id]: ''
-                          }));
-                          setFeedback(prev => ({
-                            ...prev,
-                            [currentPrompt.id]: undefined
-                          }));
-                        }}
-                        size="sm"
-                        className="bg-red-500 hover:bg-red-600"
-                        disabled={isProcessing}
-                      >
-                        🎤 Try Again
-                      </Button>
-                    </div>
                   </div>
                 )}
 

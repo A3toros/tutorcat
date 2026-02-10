@@ -679,6 +679,7 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const autoStopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Check microphone permission
   useEffect(() => {
@@ -794,6 +795,10 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
       };
 
       mediaRecorder.onstop = async () => {
+        if (autoStopTimeoutRef.current) {
+          clearTimeout(autoStopTimeoutRef.current);
+          autoStopTimeoutRef.current = null;
+        }
         const audioBlob = new Blob(chunksRef.current, { type: mimeType });
         setAudioBlob(audioBlob);
         await handleRecordingComplete(audioBlob);
@@ -821,8 +826,13 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
         });
       }, 1000);
 
-      // Auto-stop after 1 minute (60 seconds) - backup timeout
-      setTimeout(() => {
+      // Auto-stop after 1 minute (60 seconds) - backup timeout; store ID so we can clear it when user stops
+      if (autoStopTimeoutRef.current) {
+        clearTimeout(autoStopTimeoutRef.current);
+        autoStopTimeoutRef.current = null;
+      }
+      autoStopTimeoutRef.current = setTimeout(() => {
+        autoStopTimeoutRef.current = null;
         if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
           console.log('⏰ Auto-stopping recording after 1 minute (timeout)');
           mediaRecorderRef.current.stop();
@@ -842,6 +852,12 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
   // Confirm stop recording - Actually stop the recording
   const confirmStopRecording = () => {
     setShowStopConfirmation(false);
+    
+    // Clear 60s auto-stop timeout so it never fires and can't stop a future recording
+    if (autoStopTimeoutRef.current) {
+      clearTimeout(autoStopTimeoutRef.current);
+      autoStopTimeoutRef.current = null;
+    }
     
     // Immediately disable button and show gray state
     setIsStopping(true);
@@ -906,6 +922,12 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
       const feedbackResult = await feedbackResponse.json();
 
       if (!feedbackResult.success) {
+        if (feedbackResult.min_words != null && feedbackResult.word_count != null) {
+          setError(feedbackResult.error || `Please speak at least ${feedbackResult.min_words} words. You said ${feedbackResult.word_count} word(s).`);
+          setCurrentStep('idle');
+          setIsProcessing(false);
+          return;
+        }
         throw new Error(feedbackResult.error || 'Analysis failed');
       }
 
@@ -950,6 +972,10 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      if (autoStopTimeoutRef.current) {
+        clearTimeout(autoStopTimeoutRef.current);
+        autoStopTimeoutRef.current = null;
+      }
       if (recordingIntervalRef.current) {
         clearInterval(recordingIntervalRef.current);
       }
@@ -1050,6 +1076,27 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
                 </p>
               </div>
             )}
+
+            {/* Below 60%: prompt re-record */}
+            {feedback.overall_score !== undefined && feedback.overall_score < 60 && (
+              <div className="mt-4 p-3 bg-amber-50 border border-amber-300 rounded-lg">
+                <p className="text-amber-800 text-sm font-medium mb-2">
+                  ⚠️ Score is below 60%. Consider re-recording for a better result.
+                </p>
+                <Button
+                  onClick={() => {
+                    setFeedback(null);
+                    setTranscript('');
+                    setCurrentStep('idle');
+                  }}
+                  variant="secondary"
+                  size="sm"
+                  className="bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-400 mb-4"
+                >
+                  Re-record this response
+                </Button>
+              </div>
+            )}
           </div>
           
           <div className="text-center">
@@ -1095,14 +1142,20 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
           ) : (
             <div className="space-y-4">
               <div className="flex flex-col items-center gap-4">
-                <p className={`text-lg font-semibold ${recordingTime >= 55 ? 'text-red-600' : ''}`}>
-                  Recording: {formatTime(recordingTime)}
-                  {recordingTime >= 55 && recordingTime < 60 && (
-                    <span className="ml-2 text-sm">(Auto-stopping soon...)</span>
-                  )}
-                </p>
-                {recordingTime >= 60 && (
-                  <p className="text-sm text-red-600 font-medium">Recording stopped automatically (1 minute limit)</p>
+                {isStopping ? (
+                  <p className="text-lg font-semibold text-amber-700">Stop pressed. Processing your recording...</p>
+                ) : (
+                  <>
+                    <p className={`text-lg font-semibold ${recordingTime >= 55 ? 'text-red-600' : ''}`}>
+                      Recording: {formatTime(recordingTime)}
+                      {recordingTime >= 55 && recordingTime < 60 && (
+                        <span className="ml-2 text-sm">(Auto-stopping soon...)</span>
+                      )}
+                    </p>
+                    {recordingTime >= 60 && (
+                      <p className="text-sm text-red-600 font-medium">Recording stopped automatically (1 minute limit)</p>
+                    )}
+                  </>
                 )}
                 <img
                   src="/mic-stop.png"
@@ -1118,7 +1171,9 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
                     e.currentTarget.style.display = 'none';
                   }}
                 />
-                <p className="text-sm text-gray-600">Click to stop recording (max 1 minute)</p>
+                <p className="text-sm text-gray-600">
+                  {isStopping ? 'Please wait...' : 'Click to stop recording (max 1 minute)'}
+                </p>
               </div>
             </div>
           )}

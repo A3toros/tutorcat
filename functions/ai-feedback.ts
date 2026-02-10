@@ -7,10 +7,27 @@ const openai = new OpenAI({
   apiKey: OPENAI_API_KEY
 });
 
+// Level-based minimum word count: A1/A2 = 25, B1/B2 = 50, C1/C2 = 100 (default 25)
+function getMinWordsForLevel(cefrLevel?: string | null, minWordsOverride?: number | null): number {
+  if (typeof minWordsOverride === 'number' && minWordsOverride >= 1) return minWordsOverride;
+  const level = (cefrLevel || '').toUpperCase().trim();
+  if (level === 'A1' || level === 'A2') return 25;
+  if (level === 'B1' || level === 'B2') return 50;
+  if (level === 'C1' || level === 'C2') return 100;
+  return 25;
+}
+
+function countWords(text: string): number {
+  if (!text || !text.trim()) return 0;
+  return text.trim().split(/\s+/).filter(word => word.length > 0).length;
+}
+
 interface RequestBody {
   audio_blob: string      // Base64 encoded audio (REQUIRED)
   audio_mime_type?: string
   prompt: string
+  cefr_level?: string
+  min_words?: number
   criteria?: {
     grammar?: boolean
     vocabulary?: boolean
@@ -138,21 +155,20 @@ const handler: Handler = async (event, context) => {
         } as any;
       }
 
-      // Check for very short responses (skip feedback for meaningless audio)
-      const wordCount = transcription.split(/\s+/).filter(word => word.length > 0).length;
-      if (wordCount < 3) {
-        console.log('⚡ Response too short, returning basic result');
+      // Enforce minimum word count (level-based: A1/A2=25, B1/B2=50, C1/C2=100)
+      const minWords = getMinWordsForLevel(body.cefr_level, body.min_words);
+      const wordCount = countWords(transcription);
+      if (wordCount < minWords) {
+        console.log(`⚡ Response too short: ${wordCount} words (minimum ${minWords})`);
         return {
           statusCode: 200,
           headers,
           body: JSON.stringify({
-            success: true,
+            success: false,
+            error: `Please speak at least ${minWords} words. You said ${wordCount} word(s).`,
             transcript: transcription,
-            overall_score: 10,
-            is_off_topic: true,
-            feedback: "Your response is too short. Please introduce yourself with your name, where you're from, and what you like to do.",
-            grammar_corrections: [],
-            vocabulary_corrections: []
+            word_count: wordCount,
+            min_words: minWords
           })
         } as any;
       }

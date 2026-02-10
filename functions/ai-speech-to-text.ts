@@ -11,6 +11,21 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 const ASSEMBLYAI_API_KEY = process.env.ASSEMBLYAI_API_KEY;
 const ASSEMBLYAI_BASE_URL = process.env.ASSEMBLYAI_BASE_URL || 'https://api.assemblyai.com';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
+// Level-based minimum word count: A1/A2 = 25, B1/B2 = 50, C1/C2 = 100, 0 = no minimum (e.g. warmup)
+function getMinWordsForLevel(cefrLevel?: string | null, minWordsOverride?: number | null): number {
+  if (typeof minWordsOverride === 'number') return Math.max(0, minWordsOverride);
+  const level = (cefrLevel || '').toUpperCase().trim();
+  if (level === 'A1' || level === 'A2') return 25;
+  if (level === 'B1' || level === 'B2') return 50;
+  if (level === 'C1' || level === 'C2') return 100;
+  return 25; // default for unknown / evaluation
+}
+
+function countWords(text: string): number {
+  if (!text || !text.trim()) return 0;
+  return text.trim().split(/\s+/).filter(word => word.length > 0).length;
+}
 const openai = new OpenAI({
   apiKey: OPENAI_API_KEY
 });
@@ -264,7 +279,8 @@ const streamHandler: Handler = async (event, context) => {
 
   try {
     const body = JSON.parse(event.body || '{}');
-    let { audio_blob, audio_mime_type, test_id, question_id } = body;
+    let { audio_blob, audio_mime_type, test_id, question_id, cefr_level, min_words: min_words_body } = body;
+    const minWords = getMinWordsForLevel(cefr_level, min_words_body);
 
     if (!audio_blob) {
       return {
@@ -277,10 +293,27 @@ const streamHandler: Handler = async (event, context) => {
       };
     }
 
-    console.log(`🎬 Starting streaming analysis for ${test_id || 'unknown'}...`);
+    console.log(`🎬 Starting streaming analysis for ${test_id || 'unknown'}... (min words: ${minWords})`);
 
     // Use streaming function
-    const result = await streamTranscribeAndAnalyze(audio_blob, audio_mime_type);
+    const result = await streamTranscribeAndAnalyze(audio_blob, audio_mime_type, { minWords });
+
+    // Minimum word count enforced inside streamTranscribeAndAnalyze (returns minWordsNotMet)
+    if (result.minWordsNotMet) {
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          success: false,
+          error: result.error || `Please speak at least ${result.min_words} words. You said ${result.word_count} word(s).`,
+          transcript: result.transcript,
+          transcript_id: result.transcript_id,
+          word_count: result.word_count,
+          min_words: result.min_words,
+          cached: false
+        })
+      };
+    }
 
     console.log(`✅ Streaming analysis complete in ${result.timing}ms`);
 
@@ -333,7 +366,8 @@ const handler: Handler = async (event, context) => {
   try {
     // Parse request body
     const body = JSON.parse(event.body || '{}');
-    let { audio_blob, audio_mime_type, test_id, question_id, audio_hash, chunk_index, total_chunks, is_chunked } = body;
+    let { audio_blob, audio_mime_type, test_id, question_id, audio_hash, chunk_index, total_chunks, is_chunked, cefr_level, min_words: min_words_body } = body;
+    const minWords = getMinWordsForLevel(cefr_level, min_words_body);
 
     // FETCH THE ACTUAL PROMPT FROM DATABASE (at handler level)
     var questionPrompt = "Please respond to the speaking question."; // Default fallback
@@ -579,22 +613,20 @@ const handler: Handler = async (event, context) => {
     });
     console.log('Transcription cached:', cacheKey);
 
-    // Check for very short responses (skip feedback for meaningless audio)
-    const wordCount = transcriptionResult.text.trim().split(/\s+/).length;
-    if (wordCount < 3) {
-      console.log('⚡ Response too short, returning basic result');
+    // Enforce minimum word count for speaking sections (level-based: A1/A2=25, B1/B2=50, C1/C2=100)
+    const wordCount = countWords(transcriptionResult.text);
+    if (wordCount < minWords) {
+      console.log(`⚡ Response too short: ${wordCount} words (minimum ${minWords})`);
       return {
         statusCode: 200,
         headers,
         body: JSON.stringify({
-          success: true,
+          success: false,
+          error: `Please speak at least ${minWords} words. You said ${wordCount} word(s).`,
           transcript: transcriptionResult.text,
           transcript_id: transcriptionResult.transcript_id,
-          overall_score: 10,
-          is_off_topic: true,
-          feedback: "Your response is too short. Please introduce yourself with your name, where you're from, and what you like to do.",
-          grammar_corrections: [],
-          vocabulary_corrections: [],
+          word_count: wordCount,
+          min_words: minWords,
           cached: false
         })
       };
@@ -691,7 +723,13 @@ Provide scores and list specific grammar mistakes with corrections, plus vocabul
 };
 
 // NEW: Streaming transcription with progressive feedback
-async function streamTranscribeAndAnalyze(audioBlob: string, audioMimeType: string, onProgress?: (progress: any) => void) {
+async function streamTranscribeAndAnalyze(
+  audioBlob: string,
+  audioMimeType: string,
+  options?: { onProgress?: (progress: any) => void; minWords?: number }
+) {
+  const minWords = options?.minWords ?? 25;
+  const onProgress = options?.onProgress;
   if (!OPENAI_API_KEY) {
     throw new Error('OpenAI API key not configured');
   }
@@ -789,6 +827,23 @@ async function streamTranscribeAndAnalyze(audioBlob: string, audioMimeType: stri
     await transcriptionPromise;
     clearInterval(progressInterval);
 
+    // Enforce minimum word count before running feedback (level-based)
+    const wordCount = countWords(finalTranscript);
+    if (wordCount < minWords) {
+      console.log(`⚡ Response too short: ${wordCount} words (minimum ${minWords})`);
+      return {
+        transcript: finalTranscript,
+        transcript_id: `stream_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        feedback: null,
+        timing: Date.now() - startTime,
+        cached: false,
+        minWordsNotMet: true,
+        word_count: wordCount,
+        min_words: minWords,
+        error: `Please speak at least ${minWords} words. You said ${wordCount} word(s).`
+      };
+    }
+
     // START FEEDBACK ANALYSIS IMMEDIATELY
     console.time('🤖 Feedback Analysis Time');
     console.log('🤖 Starting feedback analysis...');
@@ -796,20 +851,6 @@ async function streamTranscribeAndAnalyze(audioBlob: string, audioMimeType: stri
     const feedbackPromise = (async () => {
       // Use dynamic prompt if available, otherwise fallback
       const currentPrompt = (global as any).questionPrompt || "Please respond to the speaking question.";
-
-      // FAST LOCAL ANALYSIS for obvious cases (skip AI for very short responses)
-      const wordCount = finalTranscript.split(/\s+/).filter(word => word.length > 0).length;
-
-      if (wordCount < 3) {
-        console.log('⚡ Using instant feedback for short response');
-        return {
-          overall_score: 10,
-          is_off_topic: true,
-          feedback: `Your response is too short. Please ${currentPrompt.toLowerCase()}`,
-          grammar_corrections: [],
-          vocabulary_corrections: []
-        };
-      }
 
       // FASTER FEEDBACK: Use streaming and simplified analysis
       const feedbackResponse = await openai.chat.completions.create({

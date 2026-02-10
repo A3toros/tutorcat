@@ -19,6 +19,8 @@ interface SpeakingWithFeedbackData {
   lessonId: string;
   activityOrder: number;
   prompts: SpeakingPrompt[];
+  /** CEFR level for minimum word count: A1/A2=25, B1/B2=70, C1/C2=100 */
+  level?: string;
   feedbackCriteria: {
     grammar: boolean;
     vocabulary: boolean;
@@ -53,6 +55,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const [isMinWordsError, setIsMinWordsError] = useState(false);
   const [isResending, setIsResending] = useState(false);
 
   // Two-stage processing state
@@ -64,6 +67,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  const autoStopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Handle prompts - can be array of strings or array of objects with {id, text}
   const prompts = lessonData.prompts || [];
@@ -203,6 +207,16 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
     };
 
     checkPermissionStatus();
+  }, []);
+
+  // Clear 60s auto-stop timeout on unmount so it never fires after component is gone
+  useEffect(() => {
+    return () => {
+      if (autoStopTimeoutRef.current) {
+        clearTimeout(autoStopTimeoutRef.current);
+        autoStopTimeoutRef.current = null;
+      }
+    };
   }, []);
 
   // Request microphone permission
@@ -438,7 +452,8 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
             audio_mime_type: audioBlob.type || 'audio/webm',
             test_id: 'lesson_activity',
             question_id: promptId,
-            prompt: promptText
+            prompt: promptText,
+            cefr_level: lessonData.level || undefined
           })
       });
 
@@ -449,6 +464,16 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       const result = await response.json();
 
       if (!result.success) {
+        // Minimum word count: warn and force re-record (retrying same audio would fail again)
+        if (result.min_words != null && result.word_count != null) {
+          setSubmissionError(result.error || `Please speak at least ${result.min_words} words. You said ${result.word_count} word(s).`);
+          setIsMinWordsError(true);
+          setCurrentStep('error');
+          setTranscriptionState('failed');
+          setAnalysisState('failed');
+          setIsProcessing(false);
+          return;
+        }
         throw new Error(result.error || result.message || 'Streaming analysis failed');
       }
 
@@ -560,6 +585,10 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
             streamRef.current = null;
           }
           mediaRecorderRef.current = null;
+          if (autoStopTimeoutRef.current) {
+            clearTimeout(autoStopTimeoutRef.current);
+            autoStopTimeoutRef.current = null;
+          }
           return;
         }
         
@@ -573,8 +602,12 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
           streamRef.current = null;
         }
         
-        // Clear the MediaRecorder ref
+        // Clear the MediaRecorder ref and the 60s auto-stop timeout so it can't stop a future recording
         mediaRecorderRef.current = null;
+        if (autoStopTimeoutRef.current) {
+          clearTimeout(autoStopTimeoutRef.current);
+          autoStopTimeoutRef.current = null;
+        }
         
         // Now call the API to process the audio
         try {
@@ -598,13 +631,22 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
           streamRef.current = null;
         }
         mediaRecorderRef.current = null;
+        if (autoStopTimeoutRef.current) {
+          clearTimeout(autoStopTimeoutRef.current);
+          autoStopTimeoutRef.current = null;
+        }
       };
 
       mediaRecorder.start();
       (window as any).recordingStartTime = Date.now();
       console.log('✅ Recording started successfully');
 
-      setTimeout(() => {
+      if (autoStopTimeoutRef.current) {
+        clearTimeout(autoStopTimeoutRef.current);
+        autoStopTimeoutRef.current = null;
+      }
+      autoStopTimeoutRef.current = setTimeout(() => {
+        autoStopTimeoutRef.current = null;
         if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
           console.log('⏰ Auto-stopping recording after 1 minute');
           mediaRecorderRef.current.requestData();
@@ -638,6 +680,10 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
     
     if (mediaRecorder.state === 'recording') {
       console.log('🛑 Stopping MediaRecorder...');
+      if (autoStopTimeoutRef.current) {
+        clearTimeout(autoStopTimeoutRef.current);
+        autoStopTimeoutRef.current = null;
+      }
       // Update UI state immediately
       setIsRecording(false);
       setIsProcessing(true);
@@ -651,6 +697,10 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
     } else {
       console.log('⚠️ MediaRecorder not recording, state:', mediaRecorder.state);
       setIsRecording(false);
+      if (autoStopTimeoutRef.current) {
+        clearTimeout(autoStopTimeoutRef.current);
+        autoStopTimeoutRef.current = null;
+      }
       // If already stopped, clean up manually
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
@@ -686,7 +736,8 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
           audio_blob: base64Audio,
           audio_mime_type: audioBlob.type || 'audio/webm',
           test_id: 'lesson_activity',
-            question_id: promptId
+          question_id: promptId,
+          cefr_level: lessonData.level || undefined
         })
       });
 
@@ -1033,16 +1084,18 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
 
   // Error state
   if (currentStep === 'error') {
-    const isTranscriptionError = transcriptionState === 'failed';
+    const isTranscriptionError = !isMinWordsError && transcriptionState === 'failed';
     const isAnalysisError = analysisState === 'failed';
     const retryHandler = isTranscriptionError ? handleRetryTranscription :
                        isAnalysisError ? handleRetryAnalysis :
-                       () => { setCurrentStep('idle'); setError(null); };
+                       () => { setCurrentStep('idle'); setError(null); setIsMinWordsError(false); };
 
     return (
       <Card>
         <Card.Header>
-          <h3 className="text-lg md:text-xl font-semibold text-red-800">⚠️ Processing Error</h3>
+          <h3 className="text-lg md:text-xl font-semibold text-red-800">
+            {isMinWordsError ? 'Not enough words' : '⚠️ Processing Error'}
+          </h3>
           <p className="text-sm text-red-600">
             {submissionError || error}
           </p>
@@ -1050,13 +1103,16 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
         <Card.Body>
           <div className="space-y-4">
             <p className="text-sm text-neutral-600">
-              {isTranscriptionError
+              {isMinWordsError
+                ? 'Please tap "Re-record" and speak for longer to meet the minimum word count.'
+                : isTranscriptionError
                 ? 'Transcription failed. Click "Retry Transcription" to try again, or "Re-record" to start over.'
                 : isAnalysisError
                 ? 'Analysis failed. Your transcription was successful. Click "Retry Analysis" to try again.'
                 : 'Your recording has been saved. Click "Retry" to try again, or "Re-record" to start over.'}
             </p>
             <div className="flex flex-col sm:flex-row gap-3">
+              {!isMinWordsError && (
               <Button
                 onClick={retryHandler}
                 disabled={isResending}
@@ -1066,12 +1122,14 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
                  isTranscriptionError ? 'Retry Transcription' :
                  isAnalysisError ? 'Retry Analysis' : 'Retry'}
               </Button>
-              {!isAnalysisError && (
+              )}
+              {(!isAnalysisError || isMinWordsError) && (
                 <Button
                   onClick={() => {
                     setAudioBlob(null);
                     setError(null);
                     setSubmissionError(null);
+                    setIsMinWordsError(false);
                     setIsProcessing(false);
                     setIsResending(false);
                     setTranscriptionState('idle');
@@ -1169,20 +1227,27 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
                 }}
               />
             ) : (
-              <img
-                src="/mic-stop.png"
-                alt="Stop Recording"
-                className={`w-16 h-16 transition-all duration-200 ${
-                  isStopping 
-                    ? 'opacity-50 grayscale cursor-not-allowed' 
-                    : 'cursor-pointer hover:opacity-80'
-                }`}
-                onClick={isStopping ? undefined : stopRecording}
-                onError={(e) => {
-                  console.error('Failed to load mic-stop.png');
-                  e.currentTarget.style.display = 'none';
-                }}
-              />
+              <div className="flex flex-col items-center gap-2">
+                <img
+                  src="/mic-stop.png"
+                  alt="Stop Recording"
+                  className={`w-16 h-16 transition-all duration-200 ${
+                    isStopping 
+                      ? 'opacity-50 grayscale cursor-not-allowed' 
+                      : 'cursor-pointer hover:opacity-80'
+                  }`}
+                  onClick={isStopping ? undefined : stopRecording}
+                  onError={(e) => {
+                    console.error('Failed to load mic-stop.png');
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+                {isStopping ? (
+                  <p className="text-sm font-medium text-amber-700">Stop pressed. Processing your recording...</p>
+                ) : (
+                  <p className="text-sm text-neutral-600">Recording... Click the button above to stop</p>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -1209,29 +1274,6 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
                     <p className="text-red-800 text-sm">
                       {currentFeedback.feedback || `Your response doesn't seem to address the prompt. Please speak about: ${promptText}`}
                     </p>
-                    <div className="mt-3">
-                      <div
-                        onClick={() => {
-                          if (isProcessing) return;
-                          setTranscripts(prev => ({
-                            ...prev,
-                            [promptId]: ''
-                          }));
-                          setFeedback(prev => ({
-                            ...prev,
-                            [promptId]: undefined
-                          }));
-                          setCurrentStep('idle');
-                        }}
-                        className={`px-4 py-2 rounded-lg text-white font-semibold cursor-pointer transition-opacity inline-block ${
-                          isProcessing 
-                            ? 'bg-gray-400 cursor-not-allowed opacity-50' 
-                            : 'bg-red-500 hover:opacity-80'
-                        }`}
-                      >
-                        Try Again
-                      </div>
-                    </div>
                   </div>
                 )}
 
@@ -1306,6 +1348,29 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
                       </div>
                     )}
                   </>
+                )}
+
+                {/* Below 60%: prompt re-record */}
+                {currentFeedback?.overall_score !== undefined && currentFeedback.overall_score < 60 && (
+                  <div className="mt-4 p-3 bg-amber-50 border border-amber-300 rounded-lg">
+                    <p className="text-amber-800 text-sm font-medium mb-2">
+                      ⚠️ Score is below 60%. Consider re-recording for better practice.
+                    </p>
+                    <Button
+                      onClick={() => {
+                        setTranscripts(prev => ({ ...prev, [promptId]: '' }));
+                        setFeedback(prev => ({ ...prev, [promptId]: undefined }));
+                        setCachedTranscript(null);
+                        setCurrentStep('idle');
+                        setAudioBlob(null);
+                      }}
+                      variant="secondary"
+                      size="sm"
+                      className="bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-400"
+                    >
+                      Re-record this response
+                    </Button>
+                  </div>
                 )}
               </div>
             )}

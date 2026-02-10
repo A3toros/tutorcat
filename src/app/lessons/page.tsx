@@ -1613,15 +1613,15 @@ function LessonStepContent({ step, lessonData, currentActivity, onComplete, isCo
 
     switch (step) {
       case 'warmup':
-        return <WarmupStep data={lessonData.steps.warmup} onComplete={(result: any) => !isTransitioning && handleActivityComplete('warm_up_speaking', result)} isCompleted={isCompleted} isTransitioning={isTransitioning} />
+        return <WarmupStep data={lessonData.steps.warmup} level={lessonData.level} onComplete={(result: any) => !isTransitioning && handleActivityComplete('warm_up_speaking', result)} isCompleted={isCompleted} isTransitioning={isTransitioning} />
       case 'vocabulary':
         return <VocabularyStep data={lessonData.steps.vocabulary} onComplete={onComplete || noopOnComplete} isCompleted={isCompleted} lessonId={lessonId} handleActivityComplete={handleActivityComplete} isTransitioning={isTransitioning} />
       case 'grammar':
         return <GrammarStep data={lessonData.steps.grammar} currentActivity={currentActivity} onComplete={onComplete || noopOnComplete} isCompleted={isCompleted} lessonId={lessonId} handleActivityComplete={handleActivityComplete} isTransitioning={isTransitioning} />
       case 'speaking':
-        return <SpeakingStep data={lessonData.steps.speaking} currentActivity={currentActivity} onComplete={onComplete || noopOnComplete} isCompleted={isCompleted} lessonId={lessonId} handleActivityComplete={handleActivityComplete} isTransitioning={isTransitioning} />
+        return <SpeakingStep data={lessonData.steps.speaking} level={lessonData.level} currentActivity={currentActivity} onComplete={onComplete || noopOnComplete} isCompleted={isCompleted} lessonId={lessonId} handleActivityComplete={handleActivityComplete} isTransitioning={isTransitioning} />
       case 'improvement':
-        return <ImprovementStep data={lessonData.steps.improvement} currentActivity={currentActivity} onComplete={onComplete || noopOnComplete} isCompleted={isCompleted} lessonId={lessonId} handleActivityComplete={handleActivityComplete} isTransitioning={isTransitioning} />
+        return <ImprovementStep data={lessonData.steps.improvement} level={lessonData.level} currentActivity={currentActivity} onComplete={onComplete || noopOnComplete} isCompleted={isCompleted} lessonId={lessonId} handleActivityComplete={handleActivityComplete} isTransitioning={isTransitioning} />
       default:
         return <div>Unknown step</div>
     }
@@ -1635,7 +1635,7 @@ function LessonStepContent({ step, lessonData, currentActivity, onComplete, isCo
 }
 
 // Warmup step with recording and API calls
-function WarmupStep({ data, onComplete, isCompleted, isTransitioning = false }: any) {
+function WarmupStep({ data, level, onComplete, isCompleted, isTransitioning = false }: any) {
   const { t } = useTranslation()
   const { showNotification } = useNotification()
   const { makeAuthenticatedRequest } = useApi()
@@ -1650,6 +1650,7 @@ function WarmupStep({ data, onComplete, isCompleted, isTransitioning = false }: 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const streamRef = useRef<MediaStream | null>(null)
+  const autoStopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Check microphone permission
   useEffect(() => {
@@ -1666,6 +1667,16 @@ function WarmupStep({ data, onComplete, isCompleted, isTransitioning = false }: 
       }
     }
     checkPermission()
+  }, [])
+
+  // Clear 60s auto-stop timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (autoStopTimeoutRef.current) {
+        clearTimeout(autoStopTimeoutRef.current)
+        autoStopTimeoutRef.current = null
+      }
+    }
   }, [])
 
   // Request microphone permission
@@ -1779,6 +1790,10 @@ function WarmupStep({ data, onComplete, isCompleted, isTransitioning = false }: 
             streamRef.current = null
           }
           mediaRecorderRef.current = null
+          if (autoStopTimeoutRef.current) {
+            clearTimeout(autoStopTimeoutRef.current)
+            autoStopTimeoutRef.current = null
+          }
           return
         }
 
@@ -1790,6 +1805,10 @@ function WarmupStep({ data, onComplete, isCompleted, isTransitioning = false }: 
           streamRef.current = null
         }
         mediaRecorderRef.current = null
+        if (autoStopTimeoutRef.current) {
+          clearTimeout(autoStopTimeoutRef.current)
+          autoStopTimeoutRef.current = null
+        }
 
         try {
           const base64Audio = await blobToBase64(audioBlob)
@@ -1802,13 +1821,20 @@ function WarmupStep({ data, onComplete, isCompleted, isTransitioning = false }: 
               audio_mime_type: mimeType,
               test_id: 'lesson_warmup',
               question_id: 'warmup',
-              prompt: data.prompt
+              prompt: data.prompt,
+              min_words: 0
             })
           })
 
           const result = await response.json()
 
           if (!result.success) {
+            if (result.min_words != null && result.word_count != null) {
+              setError(result.error || `Please speak at least ${result.min_words} words. You said ${result.word_count} word(s).`)
+              setIsProcessing(false)
+              setIsRecording(false)
+              return
+            }
             throw new Error(result.error || result.message || 'Processing failed')
           }
 
@@ -1835,7 +1861,12 @@ function WarmupStep({ data, onComplete, isCompleted, isTransitioning = false }: 
       }
 
       mediaRecorder.start()
-      setTimeout(() => {
+      if (autoStopTimeoutRef.current) {
+        clearTimeout(autoStopTimeoutRef.current)
+        autoStopTimeoutRef.current = null
+      }
+      autoStopTimeoutRef.current = setTimeout(() => {
+        autoStopTimeoutRef.current = null
         if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
           mediaRecorderRef.current.requestData()
           mediaRecorderRef.current.stop()
@@ -1861,11 +1892,19 @@ function WarmupStep({ data, onComplete, isCompleted, isTransitioning = false }: 
 
     const mediaRecorder = mediaRecorderRef.current
     if (mediaRecorder.state === 'recording') {
+      if (autoStopTimeoutRef.current) {
+        clearTimeout(autoStopTimeoutRef.current)
+        autoStopTimeoutRef.current = null
+      }
       setIsRecording(false)
       setIsProcessing(true)
       mediaRecorder.requestData()
       mediaRecorder.stop()
     } else {
+      if (autoStopTimeoutRef.current) {
+        clearTimeout(autoStopTimeoutRef.current)
+        autoStopTimeoutRef.current = null
+      }
       setIsRecording(false)
       setIsStopping(false)
       if (streamRef.current) {
@@ -1917,22 +1956,29 @@ function WarmupStep({ data, onComplete, isCompleted, isTransitioning = false }: 
         )}
 
         {!isProcessing && !response && (
-          <div className="flex justify-center">
+          <div className="flex flex-col items-center justify-center gap-2">
             {isRecording ? (
-              <img 
-                src="/mic-stop.png" 
-                alt="Stop Recording" 
-                className={`w-16 h-16 transition-all duration-200 ${
-                  isStopping 
-                    ? 'opacity-50 grayscale cursor-not-allowed' 
-                    : 'cursor-pointer hover:opacity-80'
-                }`}
-                onClick={isStopping ? undefined : stopRecording}
-                onError={(e) => {
-                  console.error('Failed to load mic-stop.png');
-                  e.currentTarget.style.display = 'none';
-                }}
-              />
+              <>
+                <img 
+                  src="/mic-stop.png" 
+                  alt="Stop Recording" 
+                  className={`w-16 h-16 transition-all duration-200 ${
+                    isStopping 
+                      ? 'opacity-50 grayscale cursor-not-allowed' 
+                      : 'cursor-pointer hover:opacity-80'
+                  }`}
+                  onClick={isStopping ? undefined : stopRecording}
+                  onError={(e) => {
+                    console.error('Failed to load mic-stop.png');
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+                {isStopping ? (
+                  <p className="text-sm font-medium text-amber-700">Stop pressed. Processing your recording...</p>
+                ) : (
+                  <p className="text-sm text-neutral-600">Recording... Click the button above to stop</p>
+                )}
+              </>
             ) : (
               <img 
                 src="/mic-start.png" 
@@ -2549,7 +2595,7 @@ function GrammarStep({ data, currentActivity, onComplete, isCompleted, lessonId,
   )
 }
 
-function SpeakingStep({ data, currentActivity, onComplete, isCompleted, lessonId, handleActivityComplete, isTransitioning = false }: any) {
+function SpeakingStep({ data, level, currentActivity, onComplete, isCompleted, lessonId, handleActivityComplete, isTransitioning = false }: any) {
   const { t } = useTranslation()
 
   // #region agent log
@@ -2583,6 +2629,7 @@ function SpeakingStep({ data, currentActivity, onComplete, isCompleted, lessonId
           lessonId,
           activityOrder: currentActivity?.activityOrder || 4,
           prompts: data.prompts || [],
+          level: level || undefined,
           feedbackCriteria: data.feedbackCriteria
         }}
         onComplete={(result) => {
@@ -2603,7 +2650,7 @@ function SpeakingStep({ data, currentActivity, onComplete, isCompleted, lessonId
   )
 }
 
-function ImprovementStep({ data, currentActivity, onComplete, isCompleted, lessonId, handleActivityComplete, isTransitioning = false }: any) {
+function ImprovementStep({ data, level, currentActivity, onComplete, isCompleted, lessonId, handleActivityComplete, isTransitioning = false }: any) {
   const { t } = useTranslation()
 
   // Check if this is a speaking improvement activity
@@ -2616,7 +2663,8 @@ function ImprovementStep({ data, currentActivity, onComplete, isCompleted, lesso
             activityOrder: currentActivity?.activityOrder || data.activityOrder || 6,
             prompt: data.prompt,
             improvedText: data.improvedText || data.targetText,
-            similarityThreshold: data.similarityThreshold
+            similarityThreshold: data.similarityThreshold,
+            level: level || undefined
           }}
           onComplete={(result) => {
             if (result && handleActivityComplete) {

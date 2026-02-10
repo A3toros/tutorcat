@@ -17,6 +17,8 @@ interface SpeakingImprovementProps {
     prompt?: string
     improvedText: string
     similarityThreshold?: number
+    /** CEFR level for minimum word count: A1/A2=25, B1/B2=70, C1/C2=100 */
+    level?: string
   }
   onComplete: (result?: any) => void
 }
@@ -388,13 +390,20 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
               audio_mime_type: mimeType,
               test_id: 'lesson_speaking_improvement',
               question_id: 'improvement',
-              prompt: lessonData.improvedText
+              prompt: lessonData.improvedText,
+              cefr_level: lessonData.level || undefined
             })
           })
 
           const result = await response.json()
 
           if (!result.success) {
+            if (result.min_words != null && result.word_count != null) {
+              showNotification(result.error || `Please speak at least ${result.min_words} words. You said ${result.word_count} word(s).`, 'error')
+              setIsProcessing(false)
+              setCurrentStep('idle')
+              return
+            }
             throw new Error(result.error || 'Transcription failed')
           }
 
@@ -612,7 +621,11 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
                   }`}
                   onClick={isStopping ? undefined : stopRecording}
                 />
-                <p className="text-sm text-neutral-600">Recording... Click to stop</p>
+                {isStopping ? (
+                  <p className="text-sm font-medium text-amber-700">Stop pressed. Processing your recording...</p>
+                ) : (
+                  <p className="text-sm text-neutral-600">Recording... Click to stop</p>
+                )}
               </div>
             )}
           </div>
