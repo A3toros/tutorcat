@@ -197,7 +197,7 @@ const handler: Handler = async (event, context) => {
     }
 
     // Update user progress incrementally
-    // If final activity, mark lesson as completed
+    // Do NOT mark lessons completed here; finalize-lesson is authoritative for pass/completion.
     // Check if user_progress record exists
     const existingProgress = await sql`
       SELECT id FROM user_progress
@@ -211,8 +211,6 @@ const handler: Handler = async (event, context) => {
         UPDATE user_progress
         SET
           score = user_progress.score + ${activityScore}, -- Incremental: add to existing score
-          completed = CASE WHEN ${isFinalActivity} THEN true ELSE user_progress.completed END,
-          completed_at = CASE WHEN ${isFinalActivity} THEN ${submission.completedAt}::timestamp ELSE user_progress.completed_at END,
           attempts = ${submission.attempts}
         WHERE user_id = ${userId} AND lesson_id = ${submission.lessonId}
       `;
@@ -220,7 +218,7 @@ const handler: Handler = async (event, context) => {
       // Insert new progress record
       await sql`
         INSERT INTO user_progress (user_id, lesson_id, score, completed, completed_at, attempts)
-        VALUES (${userId}, ${submission.lessonId}, ${activityScore}, ${isFinalActivity}, ${isFinalActivity ? submission.completedAt : null}, ${submission.attempts})
+        VALUES (${userId}, ${submission.lessonId}, ${activityScore}, false, null, ${submission.attempts})
       `;
     }
 

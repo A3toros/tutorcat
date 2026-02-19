@@ -90,7 +90,8 @@ const handler: Handler = async (event, context) => {
     const totalScore = activityResults.reduce((sum, result) => sum + (result.score || 0), 0);
     const maxScore = activityResults.reduce((sum, result) => sum + (result.max_score || 0), 0);
     const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
-    const isPassed = percentage >= 60; // 60% passing threshold
+    // If there is no maxScore (non-assessed lesson), allow completion.
+    const isPassed = maxScore === 0 ? true : percentage >= 60; // 60% passing threshold
 
     // Calculate stars earned (1-3 stars based on performance)
     // 60-79% = 1 star, 80-89% = 2 stars, 90-100% = 3 stars
@@ -109,14 +110,47 @@ const handler: Handler = async (event, context) => {
     await sql`BEGIN`;
 
     try {
-      // Check if user_progress record exists
+      // Below-pass: reset only this lesson attempt (DB rows for this lesson only)
+      if (!isPassed) {
+        await sql`
+          DELETE FROM lesson_activity_results
+          WHERE user_id = ${userId} AND lesson_id = ${request.lessonId}
+        `;
+        await sql`
+          DELETE FROM user_progress
+          WHERE user_id = ${userId} AND lesson_id = ${request.lessonId}
+        `;
+
+        await sql`COMMIT`;
+
+        return {
+          statusCode: 200,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            success: true,
+            data: {
+              lessonId: request.lessonId,
+              totalScore,
+              maxScore,
+              percentage,
+              passed: false,
+              reset: true,
+              starsEarned: 0,
+              completedActivities: activityResults.length,
+              completedAt: new Date().toISOString(),
+              newlyEarnedAchievements: []
+            }
+          })
+        } as any;
+      }
+
+      // Passed: upsert progress and award stars
       const existingProgress = await sql`
         SELECT id, attempts FROM user_progress
         WHERE user_id = ${userId} AND lesson_id = ${request.lessonId}
       `;
 
       if (existingProgress.length > 0) {
-        // Update existing record
         await sql`
           UPDATE user_progress
           SET score = ${totalScore},
@@ -126,15 +160,13 @@ const handler: Handler = async (event, context) => {
           WHERE user_id = ${userId} AND lesson_id = ${request.lessonId}
         `;
       } else {
-        // Insert new record
         await sql`
           INSERT INTO user_progress (user_id, lesson_id, score, completed, completed_at, attempts)
           VALUES (${userId}, ${request.lessonId}, ${totalScore}, true, NOW(), 1)
         `;
       }
 
-      // If lesson was passed, award stars to user
-      if (isPassed && starsEarned > 0) {
+      if (starsEarned > 0) {
         await sql`
           UPDATE users
           SET total_stars = total_stars + ${starsEarned}
@@ -142,11 +174,9 @@ const handler: Handler = async (event, context) => {
         `;
       }
 
-
-      // Commit transaction (after level progression is checked)
       await sql`COMMIT`;
 
-      // Check and award achievements after lesson completion
+      // Achievements are only checked on pass (avoid granting completion achievements on reset)
       let newlyEarnedAchievements: any[] = [];
       try {
         const achievementResults = await sql`
@@ -154,7 +184,6 @@ const handler: Handler = async (event, context) => {
         `;
         newlyEarnedAchievements = achievementResults || [];
       } catch (achievementError) {
-        // Log but don't fail the lesson completion
         console.error('Error checking achievements:', achievementError);
       }
 
@@ -168,7 +197,8 @@ const handler: Handler = async (event, context) => {
             totalScore,
             maxScore,
             percentage,
-            passed: isPassed,
+            passed: true,
+            reset: false,
             starsEarned,
             completedActivities: activityResults.length,
             completedAt: new Date().toISOString(),

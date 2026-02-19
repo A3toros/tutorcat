@@ -672,6 +672,7 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
   const [feedback, setFeedback] = useState<any>(savedAnswer?.feedback || null);
   const [hasMicPermission, setHasMicPermission] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isMinWordsError, setIsMinWordsError] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
 
@@ -927,6 +928,7 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
       if (!feedbackResult.success) {
         if (feedbackResult.min_words != null && feedbackResult.word_count != null) {
           setError(feedbackResult.error || `Please speak at least ${feedbackResult.min_words} words. You said ${feedbackResult.word_count} word(s).`);
+          setIsMinWordsError(true);
           setCurrentStep('idle');
           setIsProcessing(false);
           return;
@@ -1124,8 +1126,37 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
         </div>
       )}
 
+      {/* Min-words error: show Re-record card (same pattern as speaking practice) */}
+      {isMinWordsError && !isRecording && !feedback && (
+        <Card className="border-2 border-amber-300 bg-amber-50">
+          <Card.Header>
+            <h3 className="text-lg font-semibold text-amber-800">
+              Not enough words
+            </h3>
+            <p className="text-sm text-red-600">
+              {error}
+            </p>
+          </Card.Header>
+          <Card.Body>
+            <p className="text-sm text-neutral-600 mb-4">
+              Please tap &quot;Re-record&quot; and speak for longer to meet the minimum word count.
+            </p>
+            <Button
+              onClick={() => {
+                setError(null);
+                setIsMinWordsError(false);
+              }}
+              variant="secondary"
+              className="bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-400"
+            >
+              Re-record
+            </Button>
+          </Card.Body>
+        </Card>
+      )}
+
       {/* Recording controls */}
-      {!isProcessing && currentStep !== 'transcribing' && currentStep !== 'analyzing' && !feedback && (
+      {!isProcessing && currentStep !== 'transcribing' && currentStep !== 'analyzing' && !feedback && !isMinWordsError && (
         <div className="text-center">
           {!isRecording ? (
             <div className="flex flex-col items-center gap-4">

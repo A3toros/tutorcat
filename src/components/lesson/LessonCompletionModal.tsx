@@ -53,15 +53,17 @@ const LessonCompletionModal: React.FC<LessonCompletionModalProps> = ({
   const { user } = useAuth();
   const [showCelebration, setShowCelebration] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isResetByBackend, setIsResetByBackend] = useState(false);
 
   const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
   const isPassed = percentage >= 60; // 60% passing threshold
+  const canProgress = isPassed && !isResetByBackend;
 
   // Finalize lesson (calculate scores from existing activity results and clear localStorage)
-  const handleSubmitResults = async () => {
+  const handleSubmitResults = async (): Promise<boolean> => {
     if (!user?.id) {
       showNotification('User not authenticated', 'error');
-      return;
+      return false;
     }
 
     try {
@@ -82,10 +84,21 @@ const LessonCompletionModal: React.FC<LessonCompletionModalProps> = ({
           // 3. Clear localStorage only after successful finalization
           lessonProgressStorage.clearProgress(user.id, lessonId);
 
+          // If lesson did not pass and backend reset this lesson attempt, block progression
+          if (result?.data?.reset === true || result?.data?.passed === false) {
+            setIsResetByBackend(true);
+            showNotification(
+              'You need at least 60% to pass. We reset this lesson so you can try again.',
+              'error'
+            );
+            return false;
+          }
+
           showNotification(
             `Lesson completed! You earned ${result.data.starsEarned} star${result.data.starsEarned !== 1 ? 's' : ''}!`,
             'success'
           );
+          return true;
         } else {
           throw new Error(result.error || 'Finalization failed');
         }
@@ -99,6 +112,7 @@ const LessonCompletionModal: React.FC<LessonCompletionModalProps> = ({
         error instanceof Error ? error.message : 'Failed to save lesson progress',
         'error'
       );
+      return false;
     } finally {
       setIsSubmitting(false);
     }
@@ -126,6 +140,7 @@ const LessonCompletionModal: React.FC<LessonCompletionModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
+      setIsResetByBackend(false);
       // Automatically finalize lesson when modal opens (lesson is complete)
       const finalizeLesson = async () => {
         if (!user?.id) return;
@@ -146,6 +161,14 @@ const LessonCompletionModal: React.FC<LessonCompletionModalProps> = ({
               // 3. Clear localStorage only after successful finalization
               lessonProgressStorage.clearProgress(user.id, lessonId);
               console.log('Lesson automatically finalized when modal opened');
+              
+              if (result?.data?.reset === true || result?.data?.passed === false) {
+                setIsResetByBackend(true);
+                showNotification(
+                  'You need at least 60% to pass. We reset this lesson so you can try again.',
+                  'error'
+                );
+              }
             } else {
               console.error('Finalization failed:', result.error);
             }
@@ -166,7 +189,7 @@ const LessonCompletionModal: React.FC<LessonCompletionModalProps> = ({
     } else {
       setShowCelebration(false);
     }
-  }, [isOpen, user?.id, lessonId, makeAuthenticatedRequest]);
+  }, [isOpen, user?.id, lessonId, makeAuthenticatedRequest, showNotification]);
 
   const formatTime = (seconds: number) => {
     // Ensure we're working with seconds (not milliseconds)
@@ -415,37 +438,37 @@ const LessonCompletionModal: React.FC<LessonCompletionModalProps> = ({
 
                 {/* Action Buttons */}
                 <div className="flex flex-col sm:flex-row gap-3">
-                  <Button
-                    onClick={async () => {
-                      try {
-                        await handleSubmitResults();
-                      } catch (error) {
-                        console.error('Error finalizing lesson:', error);
-                        // Continue anyway - lesson is already auto-finalized when modal opens
+                  {canProgress ? (
+                    <Button
+                      onClick={async () => {
+                        try {
+                          const okToContinue = await handleSubmitResults();
+                          if (!okToContinue) return;
+                        } catch (error) {
+                          console.error('Error finalizing lesson:', error);
+                          // Continue anyway - lesson is already auto-finalized when modal opens
+                        }
+                        onContinue();
+                        router.push('/dashboard');
+                      }}
+                      disabled={isSubmitting}
+                      className="flex-1"
+                      size="lg"
+                    >
+                      {isSubmitting
+                        ? t('lesson.completion.saving', 'Saving Progress...')
+                        : t('lesson.completion.continue', 'Continue to Next Lesson')
                       }
-                      onContinue();
-                      router.push('/dashboard');
-                    }}
-                    disabled={isSubmitting}
-                    className="flex-1"
-                    size="lg"
-                  >
-                    {isSubmitting
-                      ? t('lesson.completion.saving', 'Saving Progress...')
-                      : t('lesson.completion.continue', 'Continue to Next Lesson')
-                    }
-                  </Button>
-
-                  {!isPassed && (
-                  <Button
-                    onClick={onRetry}
-                    variant="secondary"
-                    className="flex-1"
-                    size="lg"
-                  >
-                    {t('lesson.completion.retry', 'Try Again')}
-                  </Button>
-                )}
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={onRetry}
+                      className="flex-1"
+                      size="lg"
+                    >
+                      {t('lesson.completion.retry', 'Try Again')}
+                    </Button>
+                  )}
 
                 <Button
                   onClick={() => {
