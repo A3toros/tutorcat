@@ -83,12 +83,6 @@ const Footer: React.FC = () => {
 
           </div>
 
-          {/* Additional Footer Text */}
-          <div className="mt-4 text-center text-neutral-500 text-xs break-words px-2">
-            <p>
-              {t('footer.educationalNote', 'TutorCat is an educational platform developed by Mathayomwatsing School to enhance language learning through AI-powered feedback and gamified experiences. For educational use only.')}
-            </p>
-          </div>
         </div>
       </div>
     </footer>

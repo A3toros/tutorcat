@@ -614,8 +614,9 @@ const handler: Handler = async (event, context) => {
     console.log('Transcription cached:', cacheKey);
 
     // Enforce minimum word count for speaking sections (level-based: A1/A2=20, B1/B2=40, C1/C2=60)
+    // Skip check if minWords is 0 (warmup - no limit)
     const wordCount = countWords(transcriptionResult.text);
-    if (wordCount < minWords) {
+    if (minWords > 0 && wordCount < minWords) {
       console.log(`⚡ Response too short: ${wordCount} words (minimum ${minWords})`);
       return {
         statusCode: 200,
@@ -828,8 +829,9 @@ async function streamTranscribeAndAnalyze(
     clearInterval(progressInterval);
 
     // Enforce minimum word count before running feedback (level-based)
+    // Skip check if minWords is 0 (warmup - no limit)
     const wordCount = countWords(finalTranscript);
-    if (wordCount < minWords) {
+    if (minWords > 0 && wordCount < minWords) {
       console.log(`⚡ Response too short: ${wordCount} words (minimum ${minWords})`);
       return {
         transcript: finalTranscript,

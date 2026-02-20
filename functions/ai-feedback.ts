@@ -156,9 +156,10 @@ const handler: Handler = async (event, context) => {
       }
 
       // Enforce minimum word count (level-based: A1/A2=20, B1/B2=40, C1/C2=60)
+      // Skip check if minWords is 0 (warmup - no limit)
       const minWords = getMinWordsForLevel(body.cefr_level, body.min_words);
       const wordCount = countWords(transcription);
-      if (wordCount < minWords) {
+      if (minWords > 0 && wordCount < minWords) {
         console.log(`⚡ Response too short: ${wordCount} words (minimum ${minWords})`);
         return {
           statusCode: 200,
