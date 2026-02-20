@@ -157,7 +157,10 @@ const handler: Handler = async (event, context) => {
 
       // Enforce minimum word count (level-based: A1/A2=20, B1/B2=40, C1/C2=60)
       // Skip validation if min_words is 0 (warmup - no limit)
-      const minWords = getMinWordsForLevel(body.cefr_level, body.min_words);
+      // Ensure min_words is a number (handle string "0" case)
+      const minWordsOverride = typeof body.min_words === 'string' ? parseInt(body.min_words, 10) : body.min_words;
+      const minWords = getMinWordsForLevel(body.cefr_level, minWordsOverride);
+      console.log(`📊 Word count check - min_words: ${body.min_words} (type: ${typeof body.min_words}), minWordsOverride: ${minWordsOverride}, minWords: ${minWords}`);
       const wordCount = countWords(transcription);
       if (minWords > 0 && wordCount < minWords) {
         console.log(`⚡ Response too short: ${wordCount} words (minimum ${minWords})`);

@@ -280,7 +280,10 @@ const streamHandler: Handler = async (event, context) => {
   try {
     const body = JSON.parse(event.body || '{}');
     let { audio_blob, audio_mime_type, test_id, question_id, cefr_level, min_words: min_words_body } = body;
-    const minWords = getMinWordsForLevel(cefr_level, min_words_body);
+    // Ensure min_words is a number (handle string "0" case)
+    const minWordsOverride = typeof min_words_body === 'string' ? parseInt(min_words_body, 10) : min_words_body;
+    const minWords = getMinWordsForLevel(cefr_level, minWordsOverride);
+    console.log(`📊 Word count check - min_words_body: ${min_words_body} (type: ${typeof min_words_body}), minWordsOverride: ${minWordsOverride}, minWords: ${minWords}`);
 
     if (!audio_blob) {
       return {
@@ -729,7 +732,8 @@ async function streamTranscribeAndAnalyze(
   audioMimeType: string,
   options?: { onProgress?: (progress: any) => void; minWords?: number }
 ) {
-  const minWords = options?.minWords ?? 20;
+  // Use provided minWords (including 0 for warmups), default to 20 only if undefined
+  const minWords = options?.minWords !== undefined ? options.minWords : 20;
   const onProgress = options?.onProgress;
   if (!OPENAI_API_KEY) {
     throw new Error('OpenAI API key not configured');
