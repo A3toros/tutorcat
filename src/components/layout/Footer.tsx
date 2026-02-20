@@ -26,58 +26,52 @@ const Footer: React.FC = () => {
             </div>
           </div>
 
-          {/* Links Section - 2 columns on mobile, separate columns on desktop */}
-          <div className="grid grid-cols-2 md:contents gap-6 md:gap-0">
-            {/* Left Column - Developers & Contact (Mobile: Left, Desktop: 3rd column) */}
-            <div className="md:col-span-1">
-              {/* Developers Section */}
-              <div className="mb-6 md:mb-0">
-                <h4 className="text-base md:text-lg font-semibold mb-4">{t('footer.developers', 'Developers')}</h4>
-                <ul className="space-y-2">
-                  <li>
-                    <Link href="/developers" className="text-neutral-300 hover:text-white transition-colors text-sm break-words">
-                      {t('footer.meetTheTeam', 'Meet the Team')}
-                    </Link>
-                  </li>
-                </ul>
-              </div>
+          {/* Developers Section - Mobile: Left, Desktop: 3rd column */}
+          <div className="md:col-span-1">
+            <h4 className="text-base md:text-lg font-semibold mb-4">{t('footer.developers', 'Developers')}</h4>
+            <ul className="space-y-2">
+              <li>
+                <Link href="/developers" className="text-neutral-300 hover:text-white transition-colors text-sm break-words">
+                  {t('footer.meetTheTeam', 'Meet the Team')}
+                </Link>
+              </li>
+            </ul>
+          </div>
 
-              {/* Contact Section */}
-              <div className="mt-6 md:mt-6">
-                <h4 className="text-base md:text-lg font-semibold mb-4">{t('footer.contact', 'Contact')}</h4>
-                <ul className="space-y-2">
-                  <li>
-                    <Link href="/contact" className="text-neutral-300 hover:text-white transition-colors text-sm break-words">
-                      {t('footer.contactUs', 'Contact Us')}
-                    </Link>
-                  </li>
-                </ul>
-              </div>
-            </div>
+          {/* Legal Section - Mobile: Right, Desktop: 4th column */}
+          <div className="md:col-span-1">
+            <h4 className="text-base md:text-lg font-semibold mb-4">{t('footer.legal', 'Legal')}</h4>
+            <ul className="space-y-2">
+              <li>
+                <Link href="/privacy-policy" className="text-neutral-300 hover:text-white transition-colors text-sm break-words">
+                  {t('footer.privacyPolicy', 'Privacy Policy')}
+                </Link>
+              </li>
+              <li>
+                <Link href="/terms-of-service" className="text-neutral-300 hover:text-white transition-colors text-sm break-words">
+                  {t('footer.termsOfService', 'Terms of Service')}
+                </Link>
+              </li>
+            </ul>
+          </div>
 
-            {/* Right Column - Legal (Mobile: Right, Desktop: 4th column) */}
-            <div className="md:col-span-1">
-              <h4 className="text-base md:text-lg font-semibold mb-4">{t('footer.legal', 'Legal')}</h4>
-              <ul className="space-y-2">
-                <li>
-                  <Link href="/privacy-policy" className="text-neutral-300 hover:text-white transition-colors text-sm break-words">
-                    {t('footer.privacyPolicy', 'Privacy Policy')}
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/terms-of-service" className="text-neutral-300 hover:text-white transition-colors text-sm break-words">
-                    {t('footer.termsOfService', 'Terms of Service')}
-                  </Link>
-                </li>
-              </ul>
-            </div>
+          {/* Contact Section - Mobile: Below, Desktop: New row (spans full width) */}
+          <div className="md:col-span-4 md:mt-6">
+            <h4 className="text-base md:text-lg font-semibold mb-4">{t('footer.contact', 'Contact')}</h4>
+            <ul className="space-y-2">
+              <li>
+                <Link href="/contact" className="text-neutral-300 hover:text-white transition-colors text-sm break-words">
+                  {t('footer.contactUs', 'Contact Us')}
+                </Link>
+              </li>
+            </ul>
           </div>
         </div>
 
         {/* Bottom Section */}
         <div className="border-t border-neutral-800 mt-8 pt-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="text-neutral-400 text-sm text-center md:text-left break-words">
+            <div className="text-neutral-400 text-sm text-center break-words">
               © {currentYear} {t('footer.schoolName', 'Mathayomwatsing School')}. {t('common.allRightsReserved', 'All rights reserved.')}
             </div>
 

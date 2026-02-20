@@ -102,25 +102,27 @@ const handler: Handler = async (event, context) => {
           content: `You are an expert English language teacher. Your task is to improve student transcriptions by correcting grammar, enhancing vocabulary, and improving overall structure while preserving the student's original meaning and intent. Adapt your output to the student's level.
 
 Guidelines for improvement:
+- SELECT THE BEST AND MOST IMPORTANT PARTS of what the student said - do NOT repeat everything
+- Condense redundant or repetitive content naturally
 - Fix all grammar mistakes
 - Use more appropriate vocabulary where suitable
 - Improve sentence structure and flow
 - Combine multiple sentences into coherent paragraphs when appropriate
-- Maintain the student's voice and intended meaning
+- Maintain the student's core meaning and intent (but condense and enhance)
 - Keep the same level of formality
 - Use natural, fluent English expressions
 - Keep vocabulary and complexity suitable for a ${body.level} learner
-- IMPORTANT: The improved text must be between ${minWordsForImproved} and ${maxWordsForImproved} words (target: ${targetWords} words). The text must be COMPLETE and NATURAL - do NOT truncate or cut off mid-sentence. Create a full, coherent paragraph that ends naturally with proper punctuation. The text must fit within this exact word count range (${minWordsForImproved}-${maxWordsForImproved} words) while being a complete, finished thought. Keep it concise and appropriate for the student's level.
+- CRITICAL: The improved text must be EXACTLY between ${minWordsForImproved} and ${maxWordsForImproved} words (target: ${targetWords} words). The text must be COMPLETE and NATURAL - do NOT truncate or cut off mid-sentence. Create a full, coherent paragraph that ends naturally with proper punctuation. The text must NATURALLY fit within this exact word count range (${minWordsForImproved}-${maxWordsForImproved} words) while being a complete, finished thought. Select the best content, condense it, enhance it - create a clean, polished version that fits naturally within the limit.
 
 Return only the improved text, nothing else.`
         },
         {
           role: 'user',
-          content: `Please improve this text: "${body.text}"
+            content: `Please improve this text: "${body.text}"
 
 Student level: ${body.level}. Match vocabulary and complexity to this level.
 
-CRITICAL: The improved text MUST be between ${minWordsForImproved} and ${maxWordsForImproved} words (target: ${targetWords} words). This is essential for the student's level (${body.level}). IMPORTANT: The text must be COMPLETE and NATURAL - do NOT truncate or cut off mid-sentence. Create a full, coherent paragraph that ends naturally with proper punctuation. The text must fit within this exact word count range (${minWordsForImproved}-${maxWordsForImproved} words) while being a complete, finished thought. Prioritize clarity and correctness while staying within the word limit.
+CRITICAL: Create a CLEAN, CONDENSED, and ENHANCED version. SELECT THE BEST AND MOST IMPORTANT PARTS - do NOT repeat everything. Condense redundant or repetitive content. Fix all grammar and vocabulary mistakes. Enhance the language naturally while preserving the core meaning. The improved text MUST be EXACTLY between ${minWordsForImproved} and ${maxWordsForImproved} words (target: ${targetWords} words). This is essential for the student's level (${body.level}). IMPORTANT: The text must be COMPLETE and NATURAL - do NOT truncate or cut off mid-sentence. Create a full, coherent paragraph that ends naturally with proper punctuation. The text must NATURALLY fit within this exact word count range (${minWordsForImproved}-${maxWordsForImproved} words) while being a complete, finished thought. Select the best content, condense it, enhance it - do not just copy everything. Prioritize clarity, correctness, and natural flow while staying within the word limit.
 
 Improvement instructions: ${improvementPrompt}`
         }
