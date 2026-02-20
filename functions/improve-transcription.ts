@@ -7,6 +7,16 @@ const openai = new OpenAI({
   apiKey: OPENAI_API_KEY
 });
 
+// Level-based minimum word count: A1/A2 = 20, B1/B2 = 40, C1/C2 = 60 (default 20)
+function getMinWordsForLevel(cefrLevel?: string | null): number {
+  if (!cefrLevel) return 20;
+  const level = (cefrLevel || '').toUpperCase().trim();
+  if (level === 'A1' || level === 'A2') return 20;
+  if (level === 'B1' || level === 'B2') return 40;
+  if (level === 'C1' || level === 'C2') return 60;
+  return 20;
+}
+
 interface RequestBody {
   text: string;              // Raw student transcription text
   prompt?: string;           // Improvement instructions
@@ -70,9 +80,15 @@ const handler: Handler = async (event, context) => {
 
     console.log('✨ Improving transcription text...');
 
+    // Calculate target word count for improved transcript (level-based with ±20 tolerance)
+    const targetWords = getMinWordsForLevel(body.level);
+    const maxWordsForImproved = targetWords + 20; // Allow up to target + 20 words
+    const minWordsForImproved = Math.max(0, targetWords - 20); // Minimum target - 20 words
+
     // Use the same improvement logic from ai-feedback.ts, but include level guidance if provided
     const levelHint = `Target the difficulty for level ${body.level}. Keep vocabulary and structures appropriate for that level.`;
-    const improvementPrompt = body.prompt || `Combine and improve all the student's responses into one coherent, well-structured paragraph. Use appropriate transitions and connectors to create a unified text that flows naturally. Fix all grammar and vocabulary mistakes while maintaining the student's original meaning and intent. ${levelHint}`;
+    const wordCountGuidance = `CRITICAL: The improved text MUST be approximately ${targetWords} words (acceptable range: ${minWordsForImproved}-${maxWordsForImproved} words). This is essential for the student's level (${body.level}). Keep it concise and appropriate while maintaining clarity and correctness.`;
+    const improvementPrompt = body.prompt || `Combine and improve all the student's responses into one coherent, well-structured paragraph. Use appropriate transitions and connectors to create a unified text that flows naturally. Fix all grammar and vocabulary mistakes while maintaining the student's original meaning and intent. ${levelHint} ${wordCountGuidance}`;
 
     console.time('✨ Text Improvement Time');
 
@@ -92,6 +108,7 @@ Guidelines for improvement:
 - Keep the same level of formality
 - Use natural, fluent English expressions
 - Keep vocabulary and complexity suitable for a ${body.level} learner
+- IMPORTANT: The improved text should be approximately ${targetWords} words (acceptable range: ${minWordsForImproved}-${maxWordsForImproved} words). Keep it concise and appropriate for the student's level.
 
 Return only the improved text, nothing else.`
         },
@@ -100,6 +117,8 @@ Return only the improved text, nothing else.`
           content: `Please improve this text: "${body.text}"
 
 Student level: ${body.level}. Match vocabulary and complexity to this level.
+
+CRITICAL: The improved text MUST be approximately ${targetWords} words (acceptable range: ${minWordsForImproved}-${maxWordsForImproved} words). This is essential for the student's level (${body.level}). Prioritize clarity and correctness while staying within the word limit.
 
 Improvement instructions: ${improvementPrompt}`
         }

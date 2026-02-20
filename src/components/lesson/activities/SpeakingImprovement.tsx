@@ -17,7 +17,7 @@ interface SpeakingImprovementProps {
     prompt?: string
     improvedText: string
     similarityThreshold?: number
-    /** CEFR level for minimum word count: A1/A2=25, B1/B2=70, C1/C2=100 */
+    /** CEFR level for minimum word count: A1/A2=20, B1/B2=40, C1/C2=60 */
     level?: string
   }
   onComplete: (result?: any) => void
@@ -41,6 +41,7 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
   const [startTime] = useState(Date.now())
   const [originalTranscript, setOriginalTranscript] = useState<string>('')
   const [improvedTranscript, setImprovedTranscript] = useState<string>('')
+  const [condensedDisplayText, setCondensedDisplayText] = useState<string>('')
   const [isLoadingFromDB, setIsLoadingFromDB] = useState(false)
   const [hasTriedLoadingFromDB, setHasTriedLoadingFromDB] = useState(false)
 
@@ -49,6 +50,65 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
   const chunksRef = useRef<Blob[]>([])
   const streamRef = useRef<MediaStream | null>(null)
   const improvedTranscriptRef = useRef<string>('')
+
+  // Get target word count for level (20/40/60)
+  const getTargetWordCount = useCallback((level?: string): number => {
+    if (!level) return 20; // default
+    const normalizedLevel = level.toUpperCase().trim();
+    if (normalizedLevel === 'A1' || normalizedLevel === 'A2') return 20;
+    if (normalizedLevel === 'B1' || normalizedLevel === 'B2') return 40;
+    if (normalizedLevel === 'C1' || normalizedLevel === 'C2') return 60;
+    return 20; // default
+  }, []);
+
+  // Count words in text
+  const countWords = useCallback((text: string): number => {
+    if (!text || !text.trim()) return 0;
+    return text.trim().split(/\s+/).filter(word => word.length > 0).length;
+  }, []);
+
+  // Condense text to fit within ±20 words of target for the level
+  const condenseTextForLevel = useCallback((text: string, level?: string): string => {
+    if (!text || !text.trim()) return text;
+    
+    const targetWords = getTargetWordCount(level);
+    const tolerance = 20;
+    const minWords = Math.max(0, targetWords - tolerance);
+    const maxWords = targetWords + tolerance;
+    
+    const wordCount = countWords(text);
+    
+    // If text is already within acceptable range, return as-is
+    if (wordCount >= minWords && wordCount <= maxWords) {
+      return text;
+    }
+    
+    // If text is too short, return as-is (can't add words)
+    if (wordCount < minWords) {
+      return text;
+    }
+    
+    // If text is too long, trim to maxWords
+    if (wordCount > maxWords) {
+      const words = text.trim().split(/\s+/);
+      const trimmedWords = words.slice(0, maxWords);
+      // Try to end at a sentence boundary if possible
+      let condensed = trimmedWords.join(' ');
+      // Remove trailing incomplete sentence if it's very short
+      const lastSentence = condensed.match(/[.!?][^.!?]*$/);
+      if (lastSentence && lastSentence[0].split(/\s+/).length < 5) {
+        // Remove the last incomplete sentence
+        condensed = condensed.replace(/[.!?][^.!?]*$/, '');
+        // Add period if not ending with punctuation
+        if (!condensed.match(/[.!?]$/)) {
+          condensed += '.';
+        }
+      }
+      return condensed.trim();
+    }
+    
+    return text;
+  }, [getTargetWordCount, countWords]);
 
   // Load original and improved transcripts from previous speaking activity
   const loadImprovedTranscript = useCallback(() => {
@@ -101,6 +161,9 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
           
           setImprovedTranscript(improved);
           improvedTranscriptRef.current = improved;
+          // Create condensed version for display
+          const condensed = condenseTextForLevel(improved, lessonData.level);
+          setCondensedDisplayText(condensed);
           foundImproved = true;
 
           // Get original transcript
@@ -130,6 +193,9 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
       const improved = lessonData.improvedText;
       setImprovedTranscript(prev => prev || improved);
       improvedTranscriptRef.current = improved;
+      // Create condensed version for display
+      const condensed = condenseTextForLevel(improved, lessonData.level);
+      setCondensedDisplayText(condensed);
       foundImproved = true;
     }
     
@@ -208,6 +274,9 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
       // Update improved transcript
       setImprovedTranscript(improvedFromDB);
       improvedTranscriptRef.current = improvedFromDB;
+      // Create condensed version for display
+      const condensed = condenseTextForLevel(improvedFromDB, lessonData.level);
+      setCondensedDisplayText(condensed);
       
       // Also update localStorage
       if (user.id && lessonData.lessonId) {
@@ -252,6 +321,15 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
       loadImprovedTranscriptFromDB();
     }
   }, [hasTriedLoadingFromDB, improvedTranscript, lessonData.improvedText, loadImprovedTranscriptFromDB]);
+
+  // Update condensed display text when improved transcript or level changes
+  useEffect(() => {
+    if (improvedTranscript || lessonData.improvedText) {
+      const textToCondense = improvedTranscript || lessonData.improvedText;
+      const condensed = condenseTextForLevel(textToCondense, lessonData.level);
+      setCondensedDisplayText(condensed);
+    }
+  }, [improvedTranscript, lessonData.improvedText, lessonData.level, condenseTextForLevel]);
 
   // Load on mount and re-check periodically in case data is saved after mount
   useEffect(() => {
@@ -529,6 +607,7 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
         transcript,
         originalTranscript,
         improvedTranscript: improvedTranscript || lessonData.improvedText,
+        condensedDisplayText: condensedDisplayText || condenseTextForLevel(improvedTranscript || lessonData.improvedText, lessonData.level),
         similarity: similarityScore
       },
       feedback: similarityResult
@@ -538,7 +617,7 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
     if (onComplete) {
       onComplete(activityResult)
     }
-  }, [user?.id, lessonData, transcript, originalTranscript, improvedTranscript, similarityResult, attempts, startTime, onComplete])
+  }, [user?.id, lessonData, transcript, originalTranscript, improvedTranscript, condensedDisplayText, similarityResult, attempts, startTime, onComplete, condenseTextForLevel])
 
   if (isComplete) {
     return (
@@ -591,7 +670,9 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
         <div className="mb-6 p-4 bg-blue-50 rounded-lg border-2 border-blue-200">
           <h4 className="font-semibold text-blue-800 mb-2">Read this improved version:</h4>
           {improvedTranscript || lessonData.improvedText ? (
-            <p className="text-sm md:text-lg text-blue-900">{improvedTranscript || lessonData.improvedText}</p>
+            <p className="text-sm md:text-lg text-blue-900">
+              {condensedDisplayText || condenseTextForLevel(improvedTranscript || lessonData.improvedText, lessonData.level)}
+            </p>
           ) : (
             <div className="text-center py-4">
               <p className="text-sm md:text-lg text-blue-600 italic mb-2">

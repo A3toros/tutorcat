@@ -7,14 +7,14 @@ const openai = new OpenAI({
   apiKey: OPENAI_API_KEY
 });
 
-// Level-based minimum word count: A1/A2 = 25, B1/B2 = 50, C1/C2 = 100 (default 25)
+// Level-based minimum word count: A1/A2 = 20, B1/B2 = 40, C1/C2 = 60 (default 20)
 function getMinWordsForLevel(cefrLevel?: string | null, minWordsOverride?: number | null): number {
   if (typeof minWordsOverride === 'number' && minWordsOverride >= 1) return minWordsOverride;
   const level = (cefrLevel || '').toUpperCase().trim();
-  if (level === 'A1' || level === 'A2') return 25;
-  if (level === 'B1' || level === 'B2') return 50;
-  if (level === 'C1' || level === 'C2') return 100;
-  return 25;
+  if (level === 'A1' || level === 'A2') return 20;
+  if (level === 'B1' || level === 'B2') return 40;
+  if (level === 'C1' || level === 'C2') return 60;
+  return 20;
 }
 
 function countWords(text: string): number {
@@ -155,7 +155,7 @@ const handler: Handler = async (event, context) => {
         } as any;
       }
 
-      // Enforce minimum word count (level-based: A1/A2=25, B1/B2=50, C1/C2=100)
+      // Enforce minimum word count (level-based: A1/A2=20, B1/B2=40, C1/C2=60)
       const minWords = getMinWordsForLevel(body.cefr_level, body.min_words);
       const wordCount = countWords(transcription);
       if (wordCount < minWords) {
@@ -207,6 +207,13 @@ const handler: Handler = async (event, context) => {
             .join(', ')
         : 'grammar, vocabulary, pronunciation, topic_validation';
 
+      // Calculate target word count for improved transcript (level-based with ±20 tolerance)
+      // If min_words is 0 (warmup), use 0 for improved transcript target too
+      // Otherwise, use level-based target (20/40/60)
+      const targetWords = (body.min_words === 0) ? 0 : getMinWordsForLevel(body.cefr_level, null);
+      const maxWordsForImproved = targetWords + 20; // Allow up to target + 20 words
+      const minWordsForImproved = Math.max(0, targetWords - 20); // Minimum target - 20 words
+
       const systemPrompt = `Analyze speech for language learning. Return concise JSON:
 {
   "overall_score": number (0-100),
@@ -214,7 +221,7 @@ const handler: Handler = async (event, context) => {
   "feedback": "brief summary",
   "grammar_corrections": [{"mistake": "text", "correction": "text"}],
   "vocabulary_corrections": [{"mistake": "text", "correction": "text"}],
-  "improved_transcript": "corrected and improved version of the student's transcript with all grammar and vocabulary mistakes fixed. If multiple sentences are provided, combine them into one coherent, well-structured paragraph that flows naturally. Use appropriate transitions and connectors to create a unified text.",
+  "improved_transcript": "corrected and improved version of the student's transcript with all grammar and vocabulary mistakes fixed. If multiple sentences are provided, combine them into one coherent, well-structured paragraph that flows naturally. Use appropriate transitions and connectors to create a unified text. IMPORTANT: The improved_transcript should be approximately ${targetWords} words (acceptable range: ${minWordsForImproved}-${maxWordsForImproved} words). Keep it concise and appropriate for the student's level.",
   "assessed_level": "Pre-A1" | "A1" | "A2" | "B1" | "B2" | "C1" | "C2",
   "word_count": number,
   "grammar_constructions_count": number (count of distinct grammar structures used: simple past, present perfect, conditionals, passive voice, relative clauses, etc.),
@@ -294,7 +301,7 @@ Return assessed_level as one of: Pre-A1, A1, A2, B1, B2, C1, C2`;
           { role: 'system', content: systemPrompt },
           {
             role: 'user',
-            content: `Recording Duration: 1 minute (60 seconds)\nPrompt: "${body.prompt}"\n\nStudent's spoken response: "${transcription}"\n\nPlease analyze their speaking performance fairly. Remember: 100 words in 1 minute is EXCELLENT performance. Count grammar constructions (simple past, present perfect, conditionals, passive voice, relative clauses, etc.) and be generous with fluency and vocabulary scores.\n\nIMPORTANT: For the improved_transcript, if the student provided multiple sentences or responses, combine them into one coherent, well-structured paragraph. Use appropriate transitions (e.g., "and", "but", "so", "because", "however", "furthermore") and connectors to create a unified text that flows naturally. The improved transcript should read as a single, cohesive paragraph rather than separate sentences.`
+            content: `Recording Duration: 1 minute (60 seconds)\nPrompt: "${body.prompt}"\n\nStudent's spoken response: "${transcription}"\n\nPlease analyze their speaking performance fairly. Remember: 100 words in 1 minute is EXCELLENT performance. Count grammar constructions (simple past, present perfect, conditionals, passive voice, relative clauses, etc.) and be generous with fluency and vocabulary scores.\n\nCRITICAL: For the improved_transcript, you MUST keep it to approximately ${targetWords} words (acceptable range: ${minWordsForImproved}-${maxWordsForImproved} words). This is essential for the student's level (${body.cefr_level || 'unknown'}). If the student provided multiple sentences or responses, combine them into one coherent, well-structured paragraph that fits within this word count. Use appropriate transitions (e.g., "and", "but", "so", "because", "however", "furthermore") and connectors to create a unified text that flows naturally. The improved transcript should read as a single, cohesive paragraph rather than separate sentences. Prioritize clarity and correctness while staying within the word limit.`
           }
         ]
       });

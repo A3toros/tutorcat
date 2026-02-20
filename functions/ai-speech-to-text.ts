@@ -12,14 +12,14 @@ const ASSEMBLYAI_API_KEY = process.env.ASSEMBLYAI_API_KEY;
 const ASSEMBLYAI_BASE_URL = process.env.ASSEMBLYAI_BASE_URL || 'https://api.assemblyai.com';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-// Level-based minimum word count: A1/A2 = 25, B1/B2 = 50, C1/C2 = 100, 0 = no minimum (e.g. warmup)
+// Level-based minimum word count: A1/A2 = 20, B1/B2 = 40, C1/C2 = 60, 0 = no minimum (e.g. warmup)
 function getMinWordsForLevel(cefrLevel?: string | null, minWordsOverride?: number | null): number {
   if (typeof minWordsOverride === 'number') return Math.max(0, minWordsOverride);
   const level = (cefrLevel || '').toUpperCase().trim();
-  if (level === 'A1' || level === 'A2') return 25;
-  if (level === 'B1' || level === 'B2') return 50;
-  if (level === 'C1' || level === 'C2') return 100;
-  return 25; // default for unknown / evaluation
+  if (level === 'A1' || level === 'A2') return 20;
+  if (level === 'B1' || level === 'B2') return 40;
+  if (level === 'C1' || level === 'C2') return 60;
+  return 20; // default for unknown / evaluation
 }
 
 function countWords(text: string): number {
@@ -613,7 +613,7 @@ const handler: Handler = async (event, context) => {
     });
     console.log('Transcription cached:', cacheKey);
 
-    // Enforce minimum word count for speaking sections (level-based: A1/A2=25, B1/B2=50, C1/C2=100)
+    // Enforce minimum word count for speaking sections (level-based: A1/A2=20, B1/B2=40, C1/C2=60)
     const wordCount = countWords(transcriptionResult.text);
     if (wordCount < minWords) {
       console.log(`⚡ Response too short: ${wordCount} words (minimum ${minWords})`);
@@ -728,7 +728,7 @@ async function streamTranscribeAndAnalyze(
   audioMimeType: string,
   options?: { onProgress?: (progress: any) => void; minWords?: number }
 ) {
-  const minWords = options?.minWords ?? 25;
+  const minWords = options?.minWords ?? 20;
   const onProgress = options?.onProgress;
   if (!OPENAI_API_KEY) {
     throw new Error('OpenAI API key not configured');

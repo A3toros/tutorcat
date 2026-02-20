@@ -1483,7 +1483,7 @@ const SpeakingTest: React.FC<SpeakingTestProps> = ({ onComplete }) => {
             <strong>{t('evaluation.speaking.instructions', 'Instructions')}:</strong> {currentPrompt.instructions}
           </div>
           <div className="text-sm text-blue-800 bg-yellow-50 border border-yellow-200 p-2 rounded mt-2">
-            💡 <strong>{t('evaluation.speaking.tip', 'Tip')}:</strong> {t('evaluation.speaking.speakLonger', 'Speak at least 25 words. The more you say, the better we can assess your level.')}
+            💡 <strong>{t('evaluation.speaking.tip', 'Tip')}:</strong> {t('evaluation.speaking.speakLonger', 'Speak at least 20 words. The more you say, the better we can assess your level.')}
           </div>
         </div>
 

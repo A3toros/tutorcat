@@ -19,7 +19,7 @@ interface SpeakingWithFeedbackData {
   lessonId: string;
   activityOrder: number;
   prompts: SpeakingPrompt[];
-  /** CEFR level for minimum word count: A1/A2=25, B1/B2=70, C1/C2=100 */
+  /** CEFR level for minimum word count: A1/A2=20, B1/B2=40, C1/C2=60 */
   level?: string;
   feedbackCriteria: {
     grammar: boolean;
@@ -818,7 +818,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
           text: allTranscripts.join(' '), // Combine all transcripts
           prompt: `Combine and improve all the student's responses into one coherent, well-structured paragraph. Use appropriate transitions and connectors to create a unified text that flows naturally. Fix all grammar and vocabulary mistakes while maintaining the student's original meaning and intent.`,
           criteria: lessonData.feedbackCriteria,
-          level: user?.level || 'A1'
+          level: lessonData.level || user?.level || 'A1'
         })
       });
 

@@ -18,6 +18,7 @@ interface VideoPlayerProps {
   onLoadedData?: () => void
   onError?: (error: Error) => void
   onVideoRef?: (video: HTMLVideoElement | null) => void
+  isYouTube?: boolean
 }
 
 export default function VideoPlayer({
@@ -34,6 +35,7 @@ export default function VideoPlayer({
   onLoadedData,
   onError,
   onVideoRef,
+  isYouTube = false,
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const thumbnailAttemptedRef = useRef(false)
@@ -42,8 +44,42 @@ export default function VideoPlayer({
   const [error, setError] = useState<Error | null>(null)
   const [isCached, setIsCached] = useState(false)
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(poster || null)
+  
+  // Check if src is a YouTube URL
+  const isYouTubeUrl = isYouTube || /youtube\.com|youtu\.be/.test(src)
+  
+  // Convert YouTube URL to embed format
+  const getYouTubeEmbedUrl = (url: string): string => {
+    let videoId = ''
+    if (url.includes('youtu.be/')) {
+      videoId = url.split('youtu.be/')[1].split('?')[0]
+    } else if (url.includes('youtube.com/watch?v=')) {
+      videoId = url.split('v=')[1].split('&')[0]
+    } else if (url.includes('youtube.com/embed/')) {
+      videoId = url.split('embed/')[1].split('?')[0]
+    } else if (url.includes('youtube.com/shorts/')) {
+      videoId = url.split('shorts/')[1].split('?')[0]
+    }
+    
+    if (!videoId) return url
+    
+    const params = new URLSearchParams()
+    if (muted) params.append('mute', '1')
+    if (!controls) params.append('controls', '0')
+    if (autoPlay) params.append('autoplay', '1')
+    params.append('playsinline', '1')
+    
+    return `https://www.youtube.com/embed/${videoId}?${params.toString()}`
+  }
 
   useEffect(() => {
+    // Skip loading for YouTube videos (handled by iframe)
+    if (isYouTubeUrl) {
+      setIsLoading(false)
+      onLoadedData?.()
+      return
+    }
+
     let isMounted = true
     let objectUrl: string | null = null
 
@@ -81,7 +117,7 @@ export default function VideoPlayer({
         URL.revokeObjectURL(objectUrl)
       }
     }
-  }, [src, onLoadStart, onLoadedData, onError])
+  }, [src, isYouTubeUrl, onLoadStart, onLoadedData, onError])
 
   // Check if video is cached
   useEffect(() => {
@@ -189,7 +225,16 @@ export default function VideoPlayer({
         </div>
       )}
       
-      {videoUrl && (
+      {isYouTubeUrl ? (
+        <iframe
+          src={getYouTubeEmbedUrl(src)}
+          className="w-full h-full"
+          style={{ border: 'none', ...style }}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+          title="YouTube video player"
+        />
+      ) : videoUrl ? (
         <video
           ref={(el) => {
             videoRef.current = el
@@ -206,7 +251,7 @@ export default function VideoPlayer({
           poster={thumbnailUrl || undefined}
           preload="metadata"
         />
-      )}
+      ) : null}
     </div>
   )
 }

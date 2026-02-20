@@ -33,8 +33,8 @@ function HomeContent() {
   // Memoize video src to prevent unnecessary re-renders and re-fetches
   const videoSrc = useMemo(() => {
     return isMobile 
-      ? "https://res.cloudinary.com/dnovxoaqi/video/upload/v1768026339/Sequence_01_1_a0e55g.mp4"
-      : "https://res.cloudinary.com/dnovxoaqi/video/upload/v1768027056/0001-0402_ycsdrv.mkv"
+      ? "https://youtube.com/shorts/9i4E60Uwewc"
+      : "https://youtu.be/0gquDNdoMCI"
   }, [isMobile])
 
   // Redirect authenticated users away from home page
@@ -235,6 +235,7 @@ function HomeContent() {
                 loop={false}
                 muted={false}
                 playsInline={true}
+                isYouTube={true}
               />
             </div>
           </div>
