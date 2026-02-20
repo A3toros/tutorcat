@@ -84,10 +84,12 @@ const handler: Handler = async (event, context) => {
     const targetWords = getMinWordsForLevel(body.level);
     const maxWordsForImproved = targetWords + 20; // Allow up to target + 20 words
     const minWordsForImproved = Math.max(0, targetWords - 20); // Minimum target - 20 words
+    
+    console.log(`📊 Word count requirements for improved transcript - Level: ${body.level}, Target: ${targetWords}, Range: ${minWordsForImproved}-${maxWordsForImproved} words`);
 
     // Use the same improvement logic from ai-feedback.ts, but include level guidance if provided
     const levelHint = `Target the difficulty for level ${body.level}. Keep vocabulary and structures appropriate for that level.`;
-    const wordCountGuidance = `CRITICAL: The improved text MUST be approximately ${targetWords} words (acceptable range: ${minWordsForImproved}-${maxWordsForImproved} words). This is essential for the student's level (${body.level}). Keep it concise and appropriate while maintaining clarity and correctness.`;
+    const wordCountGuidance = `CRITICAL: The improved text MUST be between ${minWordsForImproved} and ${maxWordsForImproved} words (target: ${targetWords} words). This is essential for the student's level (${body.level}). IMPORTANT: The text must be COMPLETE and NATURAL - do NOT truncate or cut off mid-sentence. Create a full, coherent paragraph that ends naturally with proper punctuation. The text must fit within this exact word count range (${minWordsForImproved}-${maxWordsForImproved} words) while being a complete, finished thought. Prioritize clarity and correctness while staying within the word limit.`;
     const improvementPrompt = body.prompt || `Combine and improve all the student's responses into one coherent, well-structured paragraph. Use appropriate transitions and connectors to create a unified text that flows naturally. Fix all grammar and vocabulary mistakes while maintaining the student's original meaning and intent. ${levelHint} ${wordCountGuidance}`;
 
     console.time('✨ Text Improvement Time');
@@ -108,7 +110,7 @@ Guidelines for improvement:
 - Keep the same level of formality
 - Use natural, fluent English expressions
 - Keep vocabulary and complexity suitable for a ${body.level} learner
-- IMPORTANT: The improved text should be approximately ${targetWords} words (acceptable range: ${minWordsForImproved}-${maxWordsForImproved} words). Keep it concise and appropriate for the student's level.
+- IMPORTANT: The improved text must be between ${minWordsForImproved} and ${maxWordsForImproved} words (target: ${targetWords} words). The text must be COMPLETE and NATURAL - do NOT truncate or cut off mid-sentence. Create a full, coherent paragraph that ends naturally with proper punctuation. The text must fit within this exact word count range (${minWordsForImproved}-${maxWordsForImproved} words) while being a complete, finished thought. Keep it concise and appropriate for the student's level.
 
 Return only the improved text, nothing else.`
         },
@@ -118,7 +120,7 @@ Return only the improved text, nothing else.`
 
 Student level: ${body.level}. Match vocabulary and complexity to this level.
 
-CRITICAL: The improved text MUST be approximately ${targetWords} words (acceptable range: ${minWordsForImproved}-${maxWordsForImproved} words). This is essential for the student's level (${body.level}). Prioritize clarity and correctness while staying within the word limit.
+CRITICAL: The improved text MUST be between ${minWordsForImproved} and ${maxWordsForImproved} words (target: ${targetWords} words). This is essential for the student's level (${body.level}). IMPORTANT: The text must be COMPLETE and NATURAL - do NOT truncate or cut off mid-sentence. Create a full, coherent paragraph that ends naturally with proper punctuation. The text must fit within this exact word count range (${minWordsForImproved}-${maxWordsForImproved} words) while being a complete, finished thought. Prioritize clarity and correctness while staying within the word limit.
 
 Improvement instructions: ${improvementPrompt}`
         }

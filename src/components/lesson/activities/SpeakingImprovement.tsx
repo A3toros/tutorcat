@@ -161,7 +161,7 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
           
           setImprovedTranscript(improved);
           improvedTranscriptRef.current = improved;
-          // Create condensed version for display
+          // Create condensed version for display (backend should already be within limits, this is fallback)
           const condensed = condenseTextForLevel(improved, lessonData.level);
           setCondensedDisplayText(condensed);
           foundImproved = true;
@@ -193,7 +193,7 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
       const improved = lessonData.improvedText;
       setImprovedTranscript(prev => prev || improved);
       improvedTranscriptRef.current = improved;
-      // Create condensed version for display
+      // Create condensed version for display (backend should already be within limits, this is fallback)
       const condensed = condenseTextForLevel(improved, lessonData.level);
       setCondensedDisplayText(condensed);
       foundImproved = true;
@@ -274,7 +274,7 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
       // Update improved transcript
       setImprovedTranscript(improvedFromDB);
       improvedTranscriptRef.current = improvedFromDB;
-      // Create condensed version for display
+      // Create condensed version for display (backend should already be within limits, this is fallback)
       const condensed = condenseTextForLevel(improvedFromDB, lessonData.level);
       setCondensedDisplayText(condensed);
       

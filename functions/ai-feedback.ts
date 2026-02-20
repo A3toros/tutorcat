@@ -216,6 +216,8 @@ const handler: Handler = async (event, context) => {
       const targetWords = getMinWordsForLevel(body.cefr_level, null);
       const maxWordsForImproved = targetWords + 20; // Allow up to target + 20 words
       const minWordsForImproved = Math.max(0, targetWords - 20); // Minimum target - 20 words
+      
+      console.log(`📊 Word count requirements for improved transcript - Level: ${body.cefr_level || 'unknown'}, Target: ${targetWords}, Range: ${minWordsForImproved}-${maxWordsForImproved} words`);
 
       const systemPrompt = `Analyze speech for language learning. Return concise JSON:
 {
@@ -224,7 +226,7 @@ const handler: Handler = async (event, context) => {
   "feedback": "brief summary",
   "grammar_corrections": [{"mistake": "text", "correction": "text"}],
   "vocabulary_corrections": [{"mistake": "text", "correction": "text"}],
-  "improved_transcript": "corrected and improved version of the student's transcript with all grammar and vocabulary mistakes fixed. If multiple sentences are provided, combine them into one coherent, well-structured paragraph that flows naturally. Use appropriate transitions and connectors to create a unified text. IMPORTANT: The improved_transcript should be approximately ${targetWords} words (acceptable range: ${minWordsForImproved}-${maxWordsForImproved} words). Keep it concise and appropriate for the student's level.",
+  "improved_transcript": "corrected and improved version of the student's transcript with all grammar and vocabulary mistakes fixed. If multiple sentences are provided, combine them into one coherent, well-structured paragraph that flows naturally. Use appropriate transitions and connectors to create a unified text. IMPORTANT: The improved_transcript must be between ${minWordsForImproved} and ${maxWordsForImproved} words (target: ${targetWords} words). The text must be COMPLETE and NATURAL - do NOT truncate or cut off mid-sentence. Create a full, coherent paragraph that ends naturally with proper punctuation. The text must fit within this exact word count range (${minWordsForImproved}-${maxWordsForImproved} words) while being a complete, finished thought. Keep it concise and appropriate for the student's level.",
   "assessed_level": "Pre-A1" | "A1" | "A2" | "B1" | "B2" | "C1" | "C2",
   "word_count": number,
   "grammar_constructions_count": number (count of distinct grammar structures used: simple past, present perfect, conditionals, passive voice, relative clauses, etc.),
@@ -304,7 +306,7 @@ Return assessed_level as one of: Pre-A1, A1, A2, B1, B2, C1, C2`;
           { role: 'system', content: systemPrompt },
           {
             role: 'user',
-            content: `Recording Duration: 1 minute (60 seconds)\nPrompt: "${body.prompt}"\n\nStudent's spoken response: "${transcription}"\n\nPlease analyze their speaking performance fairly. Remember: 100 words in 1 minute is EXCELLENT performance. Count grammar constructions (simple past, present perfect, conditionals, passive voice, relative clauses, etc.) and be generous with fluency and vocabulary scores.\n\nCRITICAL: For the improved_transcript, you MUST keep it to approximately ${targetWords} words (acceptable range: ${minWordsForImproved}-${maxWordsForImproved} words). This is essential for the student's level (${body.cefr_level || 'unknown'}). If the student provided multiple sentences or responses, combine them into one coherent, well-structured paragraph that fits within this word count. Use appropriate transitions (e.g., "and", "but", "so", "because", "however", "furthermore") and connectors to create a unified text that flows naturally. The improved transcript should read as a single, cohesive paragraph rather than separate sentences. Prioritize clarity and correctness while staying within the word limit.`
+            content: `Recording Duration: 1 minute (60 seconds)\nPrompt: "${body.prompt}"\n\nStudent's spoken response: "${transcription}"\n\nPlease analyze their speaking performance fairly. Remember: 100 words in 1 minute is EXCELLENT performance. Count grammar constructions (simple past, present perfect, conditionals, passive voice, relative clauses, etc.) and be generous with fluency and vocabulary scores.\n\nCRITICAL: For the improved_transcript, you MUST keep it between ${minWordsForImproved} and ${maxWordsForImproved} words (target: ${targetWords} words). This is essential for the student's level (${body.cefr_level || 'unknown'}). IMPORTANT: The text must be COMPLETE and NATURAL - do NOT truncate or cut off mid-sentence. Create a full, coherent paragraph that ends naturally with proper punctuation. If the student provided multiple sentences or responses, combine them into one coherent, well-structured paragraph that fits within this exact word count range (${minWordsForImproved}-${maxWordsForImproved} words). Use appropriate transitions (e.g., "and", "but", "so", "because", "however", "furthermore") and connectors to create a unified text that flows naturally. The improved transcript should read as a single, cohesive paragraph rather than separate sentences. The text must fit within this exact word count range while being a complete, finished thought. Prioritize clarity and correctness while staying within the word limit.`
           }
         ]
       });
