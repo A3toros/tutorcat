@@ -440,25 +440,16 @@ const LessonCompletionModal: React.FC<LessonCompletionModalProps> = ({
                 <div className="flex flex-col sm:flex-row gap-3">
                   {canProgress ? (
                     <Button
-                      onClick={async () => {
-                        try {
-                          const okToContinue = await handleSubmitResults();
-                          if (!okToContinue) return;
-                        } catch (error) {
-                          console.error('Error finalizing lesson:', error);
-                          // Continue anyway - lesson is already auto-finalized when modal opens
-                        }
+                      onClick={() => {
+                        // Lesson is already auto-finalized when modal opened
+                        // Just navigate - no need to save again
                         onContinue();
                         router.push('/dashboard');
                       }}
-                      disabled={isSubmitting}
                       className="flex-1"
                       size="lg"
                     >
-                      {isSubmitting
-                        ? t('lesson.completion.saving', 'Saving Progress...')
-                        : t('lesson.completion.continue', 'Continue to Next Lesson')
-                      }
+                      {t('lesson.completion.continue', 'Continue to Next Lesson')}
                     </Button>
                   ) : (
                     <Button

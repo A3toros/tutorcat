@@ -67,48 +67,13 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
     return text.trim().split(/\s+/).filter(word => word.length > 0).length;
   }, []);
 
-  // Condense text to fit within ±20 words of target for the level
+  // Display text as-is - backend should already generate text within word limits
+  // No truncation needed since backend handles word count constraints
   const condenseTextForLevel = useCallback((text: string, level?: string): string => {
-    if (!text || !text.trim()) return text;
-    
-    const targetWords = getTargetWordCount(level);
-    const tolerance = 20;
-    const minWords = Math.max(0, targetWords - tolerance);
-    const maxWords = targetWords + tolerance;
-    
-    const wordCount = countWords(text);
-    
-    // If text is already within acceptable range, return as-is
-    if (wordCount >= minWords && wordCount <= maxWords) {
-      return text;
-    }
-    
-    // If text is too short, return as-is (can't add words)
-    if (wordCount < minWords) {
-      return text;
-    }
-    
-    // If text is too long, trim to maxWords
-    if (wordCount > maxWords) {
-      const words = text.trim().split(/\s+/);
-      const trimmedWords = words.slice(0, maxWords);
-      // Try to end at a sentence boundary if possible
-      let condensed = trimmedWords.join(' ');
-      // Remove trailing incomplete sentence if it's very short
-      const lastSentence = condensed.match(/[.!?][^.!?]*$/);
-      if (lastSentence && lastSentence[0].split(/\s+/).length < 5) {
-        // Remove the last incomplete sentence
-        condensed = condensed.replace(/[.!?][^.!?]*$/, '');
-        // Add period if not ending with punctuation
-        if (!condensed.match(/[.!?]$/)) {
-          condensed += '.';
-        }
-      }
-      return condensed.trim();
-    }
-    
-    return text;
-  }, [getTargetWordCount, countWords]);
+    // Backend generates text within exact word limits, so just return as-is
+    // No truncation - trust the backend to provide complete, natural text
+    return text || '';
+  }, []);
 
   // Load original and improved transcripts from previous speaking activity
   const loadImprovedTranscript = useCallback(() => {
@@ -161,9 +126,9 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
           
           setImprovedTranscript(improved);
           improvedTranscriptRef.current = improved;
-          // Create condensed version for display (backend should already be within limits, this is fallback)
-          const condensed = condenseTextForLevel(improved, lessonData.level);
-          setCondensedDisplayText(condensed);
+          // Backend generates text within exact word limits, so display as-is
+          const displayText = condenseTextForLevel(improved, lessonData.level);
+          setCondensedDisplayText(displayText);
           foundImproved = true;
 
           // Get original transcript
@@ -193,9 +158,9 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
       const improved = lessonData.improvedText;
       setImprovedTranscript(prev => prev || improved);
       improvedTranscriptRef.current = improved;
-      // Create condensed version for display (backend should already be within limits, this is fallback)
-      const condensed = condenseTextForLevel(improved, lessonData.level);
-      setCondensedDisplayText(condensed);
+      // Backend generates text within exact word limits, so display as-is
+      const displayText = condenseTextForLevel(improved, lessonData.level);
+      setCondensedDisplayText(displayText);
       foundImproved = true;
     }
     
@@ -274,9 +239,9 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
       // Update improved transcript
       setImprovedTranscript(improvedFromDB);
       improvedTranscriptRef.current = improvedFromDB;
-      // Create condensed version for display (backend should already be within limits, this is fallback)
-      const condensed = condenseTextForLevel(improvedFromDB, lessonData.level);
-      setCondensedDisplayText(condensed);
+      // Backend generates text within exact word limits, so display as-is
+      const displayText = condenseTextForLevel(improvedFromDB, lessonData.level);
+      setCondensedDisplayText(displayText);
       
       // Also update localStorage
       if (user.id && lessonData.lessonId) {
@@ -322,12 +287,12 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
     }
   }, [hasTriedLoadingFromDB, improvedTranscript, lessonData.improvedText, loadImprovedTranscriptFromDB]);
 
-  // Update condensed display text when improved transcript or level changes
+  // Update display text when improved transcript or level changes
   useEffect(() => {
     if (improvedTranscript || lessonData.improvedText) {
-      const textToCondense = improvedTranscript || lessonData.improvedText;
-      const condensed = condenseTextForLevel(textToCondense, lessonData.level);
-      setCondensedDisplayText(condensed);
+      const textToDisplay = improvedTranscript || lessonData.improvedText;
+      const displayText = condenseTextForLevel(textToDisplay, lessonData.level);
+      setCondensedDisplayText(displayText);
     }
   }, [improvedTranscript, lessonData.improvedText, lessonData.level, condenseTextForLevel]);
 
