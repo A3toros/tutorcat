@@ -24,13 +24,6 @@ const Footer: React.FC = () => {
                 <p className="text-neutral-400 text-sm truncate">{t('footer.platformDescription', 'AI Language Learning Platform')}</p>
               </div>
             </div>
-            <p className="text-neutral-300 leading-relaxed mb-4 text-sm break-words">
-              {t('footer.description', 'An innovative AI-powered language learning platform designed for students at Mathayomwatsing School, combining gamified learning with intelligent feedback to make language acquisition engaging and effective.')}
-            </p>
-            <div className="text-neutral-400 text-sm break-words">
-              <p>{t('footer.schoolName', 'Mathayomwatsing School')}</p>
-              <p>{t('footer.schoolTagline', 'Empowering students through technology-enhanced education')}</p>
-            </div>
           </div>
 
           {/* Links Section - 2 columns on mobile, separate columns on desktop */}
@@ -88,9 +81,6 @@ const Footer: React.FC = () => {
               © {currentYear} {t('footer.schoolName', 'Mathayomwatsing School')}. {t('common.allRightsReserved', 'All rights reserved.')}
             </div>
 
-            <div className="flex flex-wrap items-center justify-center gap-3 md:gap-6 text-sm text-neutral-400">
-              <span className="whitespace-nowrap">{t('footer.builtWith', 'Built with ❤️ for education')}</span>
-            </div>
           </div>
 
           {/* Additional Footer Text */}

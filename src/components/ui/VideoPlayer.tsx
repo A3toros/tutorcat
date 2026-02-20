@@ -68,6 +68,8 @@ export default function VideoPlayer({
     if (!controls) params.append('controls', '0')
     if (autoPlay) params.append('autoplay', '1')
     params.append('playsinline', '1')
+    params.append('vq', 'hd1080') // Request 1080p quality
+    params.append('enablejsapi', '1') // Enable JS API for quality control
     
     return `https://www.youtube.com/embed/${videoId}?${params.toString()}`
   }
