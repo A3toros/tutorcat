@@ -7,9 +7,9 @@ const openai = new OpenAI({
   apiKey: OPENAI_API_KEY
 });
 
-// Level-based minimum word count: A1/A2 = 20, B1/B2 = 40, C1/C2 = 60 (default 20)
+// Level-based minimum word count: A1/A2 = 20, B1/B2 = 40, C1/C2 = 60, 0 = no minimum (e.g. warmup)
 function getMinWordsForLevel(cefrLevel?: string | null, minWordsOverride?: number | null): number {
-  if (typeof minWordsOverride === 'number' && minWordsOverride >= 1) return minWordsOverride;
+  if (typeof minWordsOverride === 'number') return Math.max(0, minWordsOverride);
   const level = (cefrLevel || '').toUpperCase().trim();
   if (level === 'A1' || level === 'A2') return 20;
   if (level === 'B1' || level === 'B2') return 40;
@@ -156,9 +156,10 @@ const handler: Handler = async (event, context) => {
       }
 
       // Enforce minimum word count (level-based: A1/A2=20, B1/B2=40, C1/C2=60)
+      // Skip validation if min_words is 0 (warmup - no limit)
       const minWords = getMinWordsForLevel(body.cefr_level, body.min_words);
       const wordCount = countWords(transcription);
-      if (wordCount < minWords) {
+      if (minWords > 0 && wordCount < minWords) {
         console.log(`⚡ Response too short: ${wordCount} words (minimum ${minWords})`);
         return {
           statusCode: 200,
