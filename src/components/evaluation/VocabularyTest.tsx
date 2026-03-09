@@ -183,7 +183,8 @@ const VocabularyTest: React.FC<VocabularyTestProps> = ({ questions, onComplete }
               <VocabularyMatchingDrag
                 lessonData={lessonData}
                 onComplete={(results) => {
-                  if (results) {
+                  // Only mark as completed if we have valid results with actual matches
+                  if (results && results.maxScore > 0 && results.score >= 0) {
                     // Mark this question as completed and store results
                     setCompletedQuestions(prev => new Set(prev).add(question.id));
                     handleAnswer(question.id, `drag_match_${results.score}_${results.maxScore}`);
@@ -200,10 +201,12 @@ const VocabularyTest: React.FC<VocabularyTestProps> = ({ questions, onComplete }
     }
   };
 
-  // Check if question is answered - for drag_match, check completedQuestions; for others, check answers
+  // Check if question is answered - for drag_match, check completedQuestions AND that we have a valid answer; for others, check answers
   const isAnswered = question ? (
-    answers[question.id] !== undefined && answers[question.id] !== '' && answers[question.id] !== null
-  ) || completedQuestions.has(question.id) : false;
+    question.type === 'drag_match' 
+      ? (completedQuestions.has(question.id) && answers[question.id] !== undefined && answers[question.id] !== '' && answers[question.id] !== null)
+      : (answers[question.id] !== undefined && answers[question.id] !== '' && answers[question.id] !== null)
+  ) : false;
 
   // For single question (evaluation context), call onComplete when answered to enable Next button
   useEffect(() => {

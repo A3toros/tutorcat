@@ -231,7 +231,17 @@ const handler: Handler = async (event, context) => {
   "word_count": number,
   "grammar_constructions_count": number (count of distinct grammar structures used: simple past, present perfect, conditionals, passive voice, relative clauses, etc.),
   "vocabulary_quality": number (0-100),
-  "fluency_score": number (0-100)
+  "fluency_score": number (0-100),
+  "integrity": {
+    "risk_score": number (0-100),
+    "flagged": boolean,
+    "message": "string",
+    "signals": {
+      "level_mismatch": number (0-100),
+      "off_syllabus_vocab": number (0-100),
+      "robotic_cues": number (0-100)
+    }
+  }
 }
 
 CRITICAL CONTEXT: This is a 1-minute (60 second) speaking evaluation. Word count expectations:
@@ -295,11 +305,17 @@ Scoring Fairness:
 
 Return assessed_level as one of: Pre-A1, A1, A2, B1, B2, C1, C2`;
 
+      // AI integrity guidance (kept outside the JSON schema for clarity)
+      // This endpoint is used for speaking practice. Students might read AI-written text aloud.
+      // We want a high-precision flag, not aggressive detection.
+      // If integrity.risk_score >= 60 set integrity.flagged=true and set integrity.message to:
+      // "Your answer was flagged for using AI. Please try again using your own words."
+
       console.log('🤖 Starting feedback analysis...');
       console.time('🤖 Feedback Analysis Time');
 
       const feedbackResponse = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model: 'gpt-5-mini',
         temperature: 0.7,
         max_tokens: 800,
         messages: [
@@ -327,6 +343,27 @@ Return assessed_level as one of: Pre-A1, A1, A2, B1, B2, C1, C2`;
       } catch (parseError) {
         console.error('❌ Failed to parse feedback JSON:', aiResponse);
         throw new Error('AI returned invalid JSON response');
+      }
+
+      // Harden integrity output: enforce flagged threshold + defaults even if model forgets.
+      if (!feedback.integrity || typeof feedback.integrity !== 'object') {
+        feedback.integrity = {};
+      }
+      if (typeof feedback.integrity.risk_score !== 'number') {
+        feedback.integrity.risk_score = 0;
+      }
+      feedback.integrity.flagged = feedback.integrity.risk_score >= 60;
+      if (typeof feedback.integrity.message !== 'string' || !feedback.integrity.message) {
+        feedback.integrity.message = feedback.integrity.flagged
+          ? 'Your answer was flagged for using AI. Please try again using your own words.'
+          : '';
+      }
+      if (!feedback.integrity.signals || typeof feedback.integrity.signals !== 'object') {
+        feedback.integrity.signals = {
+          level_mismatch: 0,
+          off_syllabus_vocab: 0,
+          robotic_cues: 0
+        };
       }
 
       // Validate the response structure (simplified)

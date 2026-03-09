@@ -56,6 +56,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [isMinWordsError, setIsMinWordsError] = useState(false);
+  const [isAIFlaggedError, setIsAIFlaggedError] = useState(false);
   const [isResending, setIsResending] = useState(false);
 
   // Two-stage processing state
@@ -294,6 +295,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
     setAnalysisState('analyzing');
     setCurrentStep('analyzing');
     setSubmissionError(null);
+    setIsAIFlaggedError(false);
 
     try {
       checkNetworkStatus();
@@ -304,7 +306,9 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
         body: JSON.stringify({
           transcription: transcriptText,
           prompt: promptText,
-          criteria: lessonData.feedbackCriteria
+          criteria: lessonData.feedbackCriteria,
+          // Use lesson level as the expected baseline; fallback to user level.
+          cefr_level: lessonData.level || user?.level || undefined
         })
       });
 
@@ -320,6 +324,28 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
         throw new Error(result.message || result.error || 'Analysis failed');
       }
 
+      // AI integrity: if backend flags the answer, block progression and force re-record.
+      // Support multiple possible shapes so frontend works as soon as backend prompt is updated.
+      const flagged =
+        result?.integrity?.flagged === true ||
+        result?.ai_flagged === true ||
+        result?.flagged === true ||
+        result?.feedback?.integrity?.flagged === true;
+
+      if (flagged) {
+        const message =
+          result?.integrity?.message ||
+          result?.feedback?.integrity?.message ||
+          result?.message ||
+          'Your answer was flagged for using AI. Please try again using your own words.';
+
+        setSubmissionError(message);
+        setIsAIFlaggedError(true);
+        setAnalysisState('failed');
+        setCurrentStep('error');
+        return;
+      }
+
       setAnalysisState('succeeded');
       setSubmissionError(null);
 
@@ -330,7 +356,8 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
         grammar_corrections: result.grammar_corrections || [],
         vocabulary_corrections: result.vocabulary_corrections || [],
         ai_feedback: result.ai_feedback || null,
-        improved_transcript: result.improved_transcript || null // Store improved transcript from API
+        improved_transcript: result.improved_transcript || null, // Store improved transcript from API
+        integrity: result.integrity || result?.feedback?.integrity || null
       };
 
       setFeedback(prev => ({
@@ -439,6 +466,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       }
 
       checkNetworkStatus();
+      setIsAIFlaggedError(false);
 
       const base64Audio = await blobToBase64(audioBlob);
 
@@ -477,6 +505,29 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
         throw new Error(result.error || result.message || 'Streaming analysis failed');
       }
 
+      // AI integrity: if backend flags the answer, block progression and force re-record.
+      const flagged =
+        result?.integrity?.flagged === true ||
+        result?.ai_flagged === true ||
+        result?.flagged === true ||
+        result?.feedback?.integrity?.flagged === true;
+
+      if (flagged) {
+        const message =
+          result?.integrity?.message ||
+          result?.feedback?.integrity?.message ||
+          result?.message ||
+          'Your answer was flagged for using AI. Please try again using your own words.';
+
+        setSubmissionError(message);
+        setIsAIFlaggedError(true);
+        setCurrentStep('error');
+        setTranscriptionState('failed');
+        setAnalysisState('failed');
+        setIsProcessing(false);
+        return;
+      }
+
       setTranscriptionState('succeeded');
       setAnalysisState('succeeded');
       setCachedTranscript(result.transcript);
@@ -496,7 +547,8 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
             feedback: result.feedback,
             grammar_corrections: result.grammar_corrections || [],
             vocabulary_corrections: result.vocabulary_corrections || [],
-            ai_feedback: result.ai_feedback || null
+            ai_feedback: result.ai_feedback || null,
+            integrity: result.integrity || result?.feedback?.integrity || null
           }
         }));
         setCurrentStep('feedback');
@@ -1088,6 +1140,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
   if (currentStep === 'error') {
     const isTranscriptionError = !isMinWordsError && transcriptionState === 'failed';
     const isAnalysisError = analysisState === 'failed';
+    const isIntegrityError = isAIFlaggedError === true;
     const retryHandler = isTranscriptionError ? handleRetryTranscription :
                        isAnalysisError ? handleRetryAnalysis :
                        () => { setCurrentStep('idle'); setError(null); setIsMinWordsError(false); };
@@ -1096,7 +1149,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       <Card>
         <Card.Header>
           <h3 className="text-lg md:text-xl font-semibold text-red-800">
-            {isMinWordsError ? 'Not enough words' : '⚠️ Processing Error'}
+            {isMinWordsError ? 'Not enough words' : isIntegrityError ? 'Flagged' : '⚠️ Processing Error'}
           </h3>
           <p className="text-sm text-red-600">
             {submissionError || error}
@@ -1107,6 +1160,8 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
             <p className="text-sm text-neutral-600">
               {isMinWordsError
                 ? 'Please tap "Re-record" and speak for longer to meet the minimum word count.'
+                : isIntegrityError
+                ? 'Your answer was flagged for using AI. Please re-record and answer using your own words.'
                 : isTranscriptionError
                 ? 'Transcription failed. Click "Retry Transcription" to try again, or "Re-record" to start over.'
                 : isAnalysisError
@@ -1114,7 +1169,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
                 : 'Your recording has been saved. Click "Retry" to try again, or "Re-record" to start over.'}
             </p>
             <div className="flex flex-col sm:flex-row gap-3">
-              {!isMinWordsError && (
+              {!isMinWordsError && !isIntegrityError && (
               <Button
                 onClick={retryHandler}
                 disabled={isResending}
@@ -1125,13 +1180,14 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
                  isAnalysisError ? 'Retry Analysis' : 'Retry'}
               </Button>
               )}
-              {(!isAnalysisError || isMinWordsError) && (
+              {(!isAnalysisError || isMinWordsError || isIntegrityError) && (
                 <Button
                   onClick={() => {
                     setAudioBlob(null);
                     setError(null);
                     setSubmissionError(null);
                     setIsMinWordsError(false);
+                    setIsAIFlaggedError(false);
                     setIsProcessing(false);
                     setIsResending(false);
                     setTranscriptionState('idle');

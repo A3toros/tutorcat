@@ -1550,7 +1550,15 @@ function LessonContent() {
         }}
         onRetry={() => {
           setShowCompletionModal(false)
-          // Reset lesson state and start over
+          
+          // Clear localStorage to ensure fresh start
+          if (user?.id && lessonData?.id) {
+            lessonProgressStorage.clearProgress(user.id, lessonData.id)
+            console.log('Cleared lesson progress from localStorage for retry')
+          }
+          
+          // Reset all lesson state
+          setSession(null) // Clear session - will be recreated on reload
           setStepProgress({
             warmup: false,
             vocabulary: false,
@@ -1560,7 +1568,14 @@ function LessonContent() {
           })
           setCurrentStep('warmup')
           setActivityResults([])
+          setActivityUpdateCounter(0)
+          setPartialActivityStates({})
+          setActivityStartTimes({})
           setLessonStartTime(Date.now())
+          hasInitializedFromStorage.current = false // Allow re-initialization
+          
+          // Reload lesson data to start fresh
+          loadLessonData()
         }}
       />
     </div>
@@ -1840,6 +1855,25 @@ function WarmupStep({ data, level, onComplete, isCompleted, isTransitioning = fa
             throw new Error(result.error || result.message || 'Processing failed')
           }
 
+          // AI integrity: if backend flags the answer, block progression and force re-record.
+          const flagged =
+            result?.integrity?.flagged === true ||
+            result?.ai_flagged === true ||
+            result?.flagged === true ||
+            result?.feedback?.integrity?.flagged === true
+
+          if (flagged) {
+            setError(
+              result?.integrity?.message ||
+              result?.feedback?.integrity?.message ||
+              result?.message ||
+              'Your answer was flagged for using AI. Please try again using your own words.'
+            )
+            setIsProcessing(false)
+            setIsRecording(false)
+            return
+          }
+
           setResponse(result.transcript || '')
           
           // Map feedback structure - API returns properties at top level (matching SpeakingTest.tsx)
@@ -1850,7 +1884,8 @@ function WarmupStep({ data, level, onComplete, isCompleted, isTransitioning = fa
               feedback: result.feedback,
               grammar_corrections: result.grammar_corrections || [],
               vocabulary_corrections: result.vocabulary_corrections || [],
-              ai_feedback: result.ai_feedback || null
+              ai_feedback: result.ai_feedback || null,
+              integrity: result.integrity || result?.feedback?.integrity || null
             };
             setFeedback(mappedFeedback);
           }

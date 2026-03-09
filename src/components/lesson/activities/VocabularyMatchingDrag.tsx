@@ -480,15 +480,18 @@ const VocabularyMatchingDrag = memo<VocabularyMatchingDragProps>(({ lessonData, 
       if (rightIndex === expectedRightIndex) {
         correctMatches++;
       } else {
-        // Track incorrect matches for error message
-        incorrectMatches.push(
-          `"${displayData.leftWords[leftIndex]}" should match with "${displayData.rightWords[expectedRightIndex]}"`
-        );
+        // Track incorrect matches for error message (only in lesson context)
+        if (lessonData.lessonId) {
+          incorrectMatches.push(
+            `"${displayData.leftWords[leftIndex]}" should match with "${displayData.rightWords[expectedRightIndex]}"`
+          );
+        }
       }
     });
 
-    // If there are incorrect matches, show error and reset all
-    if (incorrectMatches.length > 0) {
+    // In lesson context: require all matches to be correct
+    // In evaluation context: allow proceeding even with wrong answers (for assessment)
+    if (incorrectMatches.length > 0 && lessonData.lessonId) {
       setErrorMessage('Some matches are incorrect. Please try again.');
       // Reset all matches
       setStudentAnswers({});
@@ -519,18 +522,21 @@ const VocabularyMatchingDrag = memo<VocabularyMatchingDragProps>(({ lessonData, 
       });
     } else {
       // This is used in evaluation context - return results
-      const results = {
-        score: correctMatches,
-        maxScore: totalPairs,
-        timeSpent,
-        answers: {
-          matchedPairs: Object.entries(studentAnswers).map(([leftIndexStr, rightIndex]) => ({
-            leftWord: displayData.leftWords[parseInt(leftIndexStr)],
-            rightWord: displayData.rightWords[rightIndex]
-          }))
-        }
-      };
-      onComplete(results);
+      // Only call onComplete if we have actual matches (all pairs matched)
+      if (totalPairs > 0 && Object.keys(studentAnswers).length === totalPairs) {
+        const results = {
+          score: correctMatches,
+          maxScore: totalPairs,
+          timeSpent,
+          answers: {
+            matchedPairs: Object.entries(studentAnswers).map(([leftIndexStr, rightIndex]) => ({
+              leftWord: displayData.leftWords[parseInt(leftIndexStr)],
+              rightWord: displayData.rightWords[rightIndex]
+            }))
+          }
+        };
+        onComplete(results);
+      }
     }
   }, [isComplete, displayData, lessonData, startTime, studentAnswers, onComplete, hasCalledOnComplete]);
 

@@ -95,7 +95,7 @@ const handler: Handler = async (event, context) => {
     console.time('✨ Text Improvement Time');
 
     const improvementResponse = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-5-mini',
       messages: [
         {
           role: 'system',

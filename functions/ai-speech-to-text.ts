@@ -299,7 +299,7 @@ const streamHandler: Handler = async (event, context) => {
     console.log(`🎬 Starting streaming analysis for ${test_id || 'unknown'}... (min words: ${minWords})`);
 
     // Use streaming function
-    const result = await streamTranscribeAndAnalyze(audio_blob, audio_mime_type, { minWords });
+    const result = await streamTranscribeAndAnalyze(audio_blob, audio_mime_type, { minWords, cefrLevel: cefr_level });
 
     // Minimum word count enforced inside streamTranscribeAndAnalyze (returns minWordsNotMet)
     if (result.minWordsNotMet) {
@@ -642,7 +642,7 @@ const handler: Handler = async (event, context) => {
 
     try {
       const feedbackResponse = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model: 'gpt-5-mini',
         temperature: 0,
         max_tokens: 500,
         messages: [
@@ -654,14 +654,33 @@ const handler: Handler = async (event, context) => {
   "is_off_topic": boolean (only if completely irrelevant),
   "feedback": "brief summary",
   "grammar_corrections": [{"mistake": "text", "correction": "text"}],
-  "vocabulary_corrections": [{"mistake": "text", "correction": "text"}]
+  "vocabulary_corrections": [{"mistake": "text", "correction": "text"}],
+  "integrity": {
+    "risk_score": number (0-100),
+    "flagged": boolean,
+    "message": "string",
+    "signals": {
+      "level_mismatch": number (0-100),
+      "off_syllabus_vocab": number (0-100),
+      "robotic_cues": number (0-100)
+    }
+  }
 }
 
-Keep it brief. Only flag as off-topic if completely irrelevant to speaking practice.`
+Keep it brief. Only flag as off-topic if completely irrelevant to speaking practice.
+
+AI integrity:
+- Students may paste AI-written text into speaking practice (reading it aloud).
+- Detect *strong* signs only. Avoid false positives.
+- If integrity.risk_score >= 60 set integrity.flagged=true and set integrity.message to:
+  "Your answer was flagged for using AI. Please try again using your own words."
+- Evaluate signals using: level mismatch (relative to the prompt difficulty), off-syllabus vocabulary (overly advanced/academic words for typical learners), and robotic cues (template-y essay markers like "Moreover", "In conclusion").`
           },
           {
             role: 'user',
-            content: `Analyze: "${transcriptionResult.text}"
+            content: `Expected CEFR level: ${cefr_level || 'unknown'}
+
+Analyze: "${transcriptionResult.text}"
 
 Provide scores and list specific grammar mistakes with corrections, plus vocabulary suggestions. Keep it brief and actionable.`
           }
@@ -672,6 +691,26 @@ Provide scores and list specific grammar mistakes with corrections, plus vocabul
       console.log('🤖 Feedback response:', feedbackText?.substring(0, 100) + '...');
 
       const feedbackResult = JSON.parse(feedbackText || '{}');
+      // Harden integrity output: enforce flagged threshold + defaults even if model forgets.
+      if (!feedbackResult.integrity || typeof feedbackResult.integrity !== 'object') {
+        feedbackResult.integrity = {};
+      }
+      if (typeof feedbackResult.integrity.risk_score !== 'number') {
+        feedbackResult.integrity.risk_score = 0;
+      }
+      feedbackResult.integrity.flagged = feedbackResult.integrity.risk_score >= 60;
+      if (typeof feedbackResult.integrity.message !== 'string' || !feedbackResult.integrity.message) {
+        feedbackResult.integrity.message = feedbackResult.integrity.flagged
+          ? 'Your answer was flagged for using AI. Please try again using your own words.'
+          : '';
+      }
+      if (!feedbackResult.integrity.signals || typeof feedbackResult.integrity.signals !== 'object') {
+        feedbackResult.integrity.signals = {
+          level_mismatch: 0,
+          off_syllabus_vocab: 0,
+          robotic_cues: 0
+        };
+      }
       const feedbackTime = Date.now() - feedbackStartTime;
 
       console.log(`✅ Feedback analysis complete in ${feedbackTime}ms - Score: ${feedbackResult.overall_score}/100`);
@@ -688,6 +727,7 @@ Provide scores and list specific grammar mistakes with corrections, plus vocabul
           feedback: feedbackResult.feedback,
           grammar_corrections: feedbackResult.grammar_corrections || [],
           vocabulary_corrections: feedbackResult.vocabulary_corrections || [],
+          integrity: feedbackResult.integrity || null,
           cached: false
         })
       };
@@ -730,11 +770,12 @@ Provide scores and list specific grammar mistakes with corrections, plus vocabul
 async function streamTranscribeAndAnalyze(
   audioBlob: string,
   audioMimeType: string,
-  options?: { onProgress?: (progress: any) => void; minWords?: number }
+  options?: { onProgress?: (progress: any) => void; minWords?: number; cefrLevel?: string }
 ) {
   // Use provided minWords (including 0 for warmups), default to 20 only if undefined
   const minWords = options?.minWords !== undefined ? options.minWords : 20;
   const onProgress = options?.onProgress;
+  const cefrLevel = options?.cefrLevel;
   if (!OPENAI_API_KEY) {
     throw new Error('OpenAI API key not configured');
   }
@@ -860,7 +901,7 @@ async function streamTranscribeAndAnalyze(
 
       // FASTER FEEDBACK: Use streaming and simplified analysis
       const feedbackResponse = await openai.chat.completions.create({
-        model: 'gpt-4o-mini', // Correct model for live feedback
+        model: 'gpt-5-mini',
         temperature: 0,
         max_tokens: 500, // Even smaller for speed
         stream: false, // Keep simple for now
@@ -873,14 +914,33 @@ async function streamTranscribeAndAnalyze(
   "is_off_topic": boolean (only if completely irrelevant),
   "feedback": "brief summary",
   "grammar_corrections": [{"mistake": "text", "correction": "text"}],
-  "vocabulary_corrections": [{"mistake": "text", "correction": "text"}]
+  "vocabulary_corrections": [{"mistake": "text", "correction": "text"}],
+  "integrity": {
+    "risk_score": number (0-100),
+    "flagged": boolean,
+    "message": "string",
+    "signals": {
+      "level_mismatch": number (0-100),
+      "off_syllabus_vocab": number (0-100),
+      "robotic_cues": number (0-100)
+    }
+  }
 }
 
-Keep it brief. Only flag as off-topic if completely irrelevant to speaking practice.`
+Keep it brief. Only flag as off-topic if completely irrelevant to speaking practice.
+
+AI integrity:
+- Students may paste AI-written text into speaking practice (reading it aloud).
+- Detect *strong* signs only. Avoid false positives.
+- If integrity.risk_score >= 60 set integrity.flagged=true and set integrity.message to:
+  "Your answer was flagged for using AI. Please try again using your own words."
+- Evaluate signals using: level mismatch (relative to the prompt difficulty), off-syllabus vocabulary (overly advanced/academic words for typical learners), and robotic cues (template-y essay markers like "Moreover", "In conclusion").`
           },
           {
             role: 'user',
             content: `Prompt: "${currentPrompt}"
+
+Expected CEFR level: ${cefrLevel || 'unknown'}
 
 Student's spoken response: "${finalTranscript}"
 
@@ -895,6 +955,26 @@ Please analyze their speaking performance. Focus on how well they addressed the 
       // Parse feedback JSON
       try {
         feedbackResult = JSON.parse(feedbackText || '{}');
+        // Harden integrity output: enforce flagged threshold + defaults even if model forgets.
+        if (!feedbackResult.integrity || typeof feedbackResult.integrity !== 'object') {
+          feedbackResult.integrity = {};
+        }
+        if (typeof feedbackResult.integrity.risk_score !== 'number') {
+          feedbackResult.integrity.risk_score = 0;
+        }
+        feedbackResult.integrity.flagged = feedbackResult.integrity.risk_score >= 60;
+        if (typeof feedbackResult.integrity.message !== 'string' || !feedbackResult.integrity.message) {
+          feedbackResult.integrity.message = feedbackResult.integrity.flagged
+            ? 'Your answer was flagged for using AI. Please try again using your own words.'
+            : '';
+        }
+        if (!feedbackResult.integrity.signals || typeof feedbackResult.integrity.signals !== 'object') {
+          feedbackResult.integrity.signals = {
+            level_mismatch: 0,
+            off_syllabus_vocab: 0,
+            robotic_cues: 0
+          };
+        }
         feedbackCompleted = true;
 
         console.timeEnd('🤖 Feedback Analysis Time');

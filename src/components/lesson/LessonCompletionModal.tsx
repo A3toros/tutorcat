@@ -54,9 +54,11 @@ const LessonCompletionModal: React.FC<LessonCompletionModalProps> = ({
   const [showCelebration, setShowCelebration] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResetByBackend, setIsResetByBackend] = useState(false);
+  const [backendPassed, setBackendPassed] = useState<boolean | null>(null); // Backend's passed status
 
   const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
-  const isPassed = percentage >= 60; // 60% passing threshold
+  // Use backend's passed status if available, otherwise fall back to frontend calculation
+  const isPassed = backendPassed !== null ? backendPassed : (percentage >= 60);
   const canProgress = isPassed && !isResetByBackend;
 
   // Finalize lesson (calculate scores from existing activity results and clear localStorage)
@@ -141,6 +143,7 @@ const LessonCompletionModal: React.FC<LessonCompletionModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setIsResetByBackend(false);
+      setBackendPassed(null); // Reset backend passed status
       // Automatically finalize lesson when modal opens (lesson is complete)
       const finalizeLesson = async () => {
         if (!user?.id) return;
@@ -161,6 +164,10 @@ const LessonCompletionModal: React.FC<LessonCompletionModalProps> = ({
               // 3. Clear localStorage only after successful finalization
               lessonProgressStorage.clearProgress(user.id, lessonId);
               console.log('Lesson automatically finalized when modal opened');
+              
+              // Use backend's passed status (authoritative)
+              const passed = result?.data?.passed === true;
+              setBackendPassed(passed);
               
               if (result?.data?.reset === true || result?.data?.passed === false) {
                 setIsResetByBackend(true);
@@ -441,6 +448,11 @@ const LessonCompletionModal: React.FC<LessonCompletionModalProps> = ({
                   {canProgress ? (
                     <Button
                       onClick={() => {
+                        // Safeguard: double-check canProgress before allowing navigation
+                        if (!canProgress) {
+                          console.warn('Cannot progress - lesson not passed or was reset');
+                          return;
+                        }
                         // Lesson is already auto-finalized when modal opened
                         // Just navigate - no need to save again
                         onContinue();

@@ -99,24 +99,108 @@ const VocabularyFillBlanks = memo<VocabularyFillBlanksProps>(({ lessonData, onCo
     }
   }
 
+  // Debug: Log the raw blanks data to see what we're working with
+  useEffect(() => {
+    if (blanks.length > 0) {
+      console.warn('🔍 VocabularyFillBlanks: Raw blanks data', {
+        blanksCount: blanks.length,
+        blanks: blanks.map(blank => ({
+          id: blank.id,
+          correctAnswer: blank.correctAnswer,
+          correctAnswerType: typeof blank.correctAnswer,
+          options: blank.options,
+          optionsLength: blank.options?.length,
+          correctAnswerInOptions: blank.options?.includes(blank.correctAnswer as string),
+          correctAnswerInOptionsStrict: blank.options?.some(opt => opt === blank.correctAnswer)
+        }))
+      });
+    }
+  }, [blanks]);
+
   const isSingleQuestion = blanks.length === 0 && (lessonData.sentence || lessonData.text);
   const singleSentence = lessonData.sentence || lessonData.text || '';
   const singleOptions = lessonData.options || [];
   const singleCorrect = lessonData.correct !== undefined ? lessonData.correct : -1;
 
+  // Normalize string for comparison (handles hyphens, whitespace, encoding issues)
+  const normalizeString = useCallback((str: string): string => {
+    if (!str) return '';
+    return str
+      .trim()
+      // Normalize different hyphen characters to regular hyphen
+      .replace(/[\u2011\u2013\u2014\u2212]/g, '-')
+      // Normalize multiple spaces to single space
+      .replace(/\s+/g, ' ');
+  }, []);
+
   // Shuffle options for each blank to randomize the order
   const shuffledBlanks = useMemo(() => {
     return blanks.map(blank => {
+      // Safety check: ensure options is an array and not empty
+      if (!blank.options || !Array.isArray(blank.options) || blank.options.length === 0) {
+        console.error('❌ VocabularyFillBlanks: Blank has no options', { blank });
+        return {
+          ...blank,
+          options: [],
+          correctAnswer: blank.correctAnswer
+        };
+      }
+
       const shuffledOptions = shuffleArray(blank.options);
-      // Find the index of the correct answer in the shuffled array
-      const correctAnswerIndex = shuffledOptions.findIndex(opt => opt === blank.correctAnswer);
+      // Normalize the correct answer for comparison
+      const normalizedCorrectAnswer = typeof blank.correctAnswer === 'string' 
+        ? normalizeString(blank.correctAnswer) 
+        : blank.correctAnswer;
+      
+      // Find the index of the correct answer in the shuffled array (with normalization)
+      let correctAnswerIndex = shuffledOptions.findIndex(opt => {
+        if (!opt) return false; // Skip empty/null options
+        const normalizedOpt = normalizeString(opt);
+        return normalizedOpt === normalizedCorrectAnswer || opt === blank.correctAnswer;
+      });
+      
+      // If not found with strict comparison, try normalized comparison
+      if (correctAnswerIndex === -1 && typeof blank.correctAnswer === 'string') {
+        // Try to find by normalized value
+        correctAnswerIndex = shuffledOptions.findIndex(opt => {
+          if (!opt) return false;
+          return normalizeString(opt) === normalizedCorrectAnswer;
+        });
+        
+        // Debug logging when findIndex returns -1 even after normalization
+        if (correctAnswerIndex === -1) {
+          console.warn('⚠️ VocabularyFillBlanks: correctAnswer not found in options (even after normalization)', {
+            blankId: blank.id,
+            correctAnswer: blank.correctAnswer,
+            correctAnswerLength: blank.correctAnswer.length,
+            correctAnswerCharCodes: Array.from(blank.correctAnswer).map(c => c.charCodeAt(0)),
+            normalizedCorrectAnswer,
+            options: shuffledOptions,
+            optionsCharCodes: shuffledOptions.map(opt => ({
+              value: opt,
+              length: opt?.length,
+              codes: opt ? Array.from(opt).map(c => c.charCodeAt(0)) : []
+            })),
+            normalizedOptions: shuffledOptions.map(opt => opt ? normalizeString(opt) : ''),
+            // Check if any option matches when normalized
+            anyMatchAfterNormalization: shuffledOptions.some(opt => opt && normalizeString(opt) === normalizedCorrectAnswer)
+          });
+        } else {
+          console.warn('✅ VocabularyFillBlanks: correctAnswer found after normalization (encoding issue fixed)', {
+            blankId: blank.id,
+            correctAnswer: blank.correctAnswer,
+            foundAtIndex: correctAnswerIndex
+          });
+        }
+      }
+      
       return {
         ...blank,
         options: shuffledOptions,
         correctAnswer: correctAnswerIndex >= 0 ? correctAnswerIndex : blank.correctAnswer
       };
     });
-  }, [blanks]);
+  }, [blanks, normalizeString]);
 
   // Shuffle single question options
   const shuffledSingleOptions = useMemo(() => {
@@ -168,10 +252,18 @@ const VocabularyFillBlanks = memo<VocabularyFillBlanksProps>(({ lessonData, onCo
     const answered = Object.keys(answers).length;
     const correct = shuffledBlanks.filter(blank => {
       const userAnswer = answers[blank.id];
+      if (!userAnswer) return false;
+      
       if (typeof blank.correctAnswer === 'number') {
-        return userAnswer === blank.options[blank.correctAnswer];
+        const correctOption = blank.options[blank.correctAnswer];
+        // Normalize both for comparison
+        return normalizeString(userAnswer) === normalizeString(correctOption) || userAnswer === correctOption;
       }
-      return userAnswer === blank.correctAnswer;
+      
+      // Normalize both strings for comparison (handles hyphen/whitespace differences)
+      const normalizedUserAnswer = normalizeString(userAnswer);
+      const normalizedCorrectAnswer = normalizeString(String(blank.correctAnswer));
+      return normalizedUserAnswer === normalizedCorrectAnswer || userAnswer === blank.correctAnswer;
     }).length;
 
     return {
@@ -181,7 +273,7 @@ const VocabularyFillBlanks = memo<VocabularyFillBlanksProps>(({ lessonData, onCo
       percentage: total > 0 ? Math.round((answered / total) * 100) : 0,
       isComplete: answered === total
     };
-  }, [answers, shuffledBlanks, isSingleQuestion, singleAnswer, shuffledSingleOptions]);
+  }, [answers, shuffledBlanks, isSingleQuestion, singleAnswer, shuffledSingleOptions, normalizeString]);
 
   // Handle completion - call onComplete immediately, parent handles background save
   const handleComplete = useCallback(() => {

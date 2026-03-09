@@ -120,7 +120,7 @@ Return ONLY a valid JSON object with this exact structure:
           'X-Title': 'TutorCat Language Learning'
         },
         body: JSON.stringify({
-          model: 'openai/gpt-4o-mini',
+          model: 'openai/gpt-5-mini',
           messages: [
             { role: 'system', content: systemPrompt },
             {
