@@ -70,6 +70,21 @@ export const handler: Handler = async (event) => {
 
   const row = job as JobRow;
 
+  // If job is still "processing", the initial trigger from speech-job may have failed.
+  // Re-trigger the background analysis so the job can complete. The background function
+  // uses WHERE status = 'processing', so only one runner will do the work.
+  if (row.status === 'processing') {
+    const baseUrl = process.env.URL || process.env.DEPLOY_PRIME_URL;
+    if (baseUrl) {
+      const backgroundUrl = `${String(baseUrl).replace(/\/$/, '')}/.netlify/functions/run-speech-analysis-background`;
+      fetch(backgroundUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: id }),
+      }).catch((err) => console.error('analysis-result: failed to trigger background analysis', err));
+    }
+  }
+
   const payload: Record<string, unknown> = {
     status: row.status,
     transcript: row.transcript || undefined,

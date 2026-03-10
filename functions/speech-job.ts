@@ -190,11 +190,40 @@ export const handler: Handler = async (event) => {
   const jobId = row.id;
   const baseUrl = process.env.URL || process.env.DEPLOY_PRIME_URL || 'http://localhost:8888';
   const backgroundUrl = `${baseUrl.replace(/\/$/, '')}/.netlify/functions/run-speech-analysis-background`;
-  fetch(backgroundUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ jobId }),
-  }).catch((err) => console.error('Failed to trigger background analysis:', err));
+
+  let triggerOk = false;
+  try {
+    const res = await Promise.race([
+      fetch(backgroundUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId }),
+      }),
+      new Promise<Response>((_, reject) =>
+        setTimeout(() => reject(new Error('Background trigger timeout')), 8000)
+      ),
+    ]);
+    triggerOk = res.ok;
+  } catch (err) {
+    console.error('Failed to trigger background analysis:', err);
+  }
+
+  if (!triggerOk) {
+    await sql`
+      UPDATE speech_jobs
+      SET status = 'failed', error = 'Analysis could not be started. Please try again.', updated_at = NOW()
+      WHERE id = ${jobId}
+    `;
+    return {
+      statusCode: 503,
+      headers: corsHeaders,
+      body: JSON.stringify({
+        error: 'Analysis could not be started. Please try again.',
+        jobId,
+        status: 'failed',
+      }),
+    };
+  }
 
   return {
     statusCode: 200,
