@@ -96,6 +96,7 @@ const handler: Handler = async (event, context) => {
 
     const improvementResponse = await openai.chat.completions.create({
       model: 'gpt-5-mini',
+      max_completion_tokens: 3000,
       messages: [
         {
           role: 'system',
@@ -127,17 +128,33 @@ CRITICAL: Create a CLEAN, CONDENSED, and ENHANCED version. SELECT THE BEST AND M
 Improvement instructions: ${improvementPrompt}`
         }
       ],
-      max_tokens: 1000,
-      temperature: 0.3 // Lower temperature for more consistent improvements
+      temperature: 0.3
     });
 
     console.timeEnd('✨ Text Improvement Time');
 
-    if (!improvementResponse.choices || !improvementResponse.choices[0] || !improvementResponse.choices[0].message || !improvementResponse.choices[0].message.content) {
-      throw new Error('Invalid response from OpenAI');
+    const u = improvementResponse?.usage;
+    if (u) console.log('📊 Tokens used (improve-transcription):', { prompt_tokens: u.prompt_tokens, completion_tokens: u.completion_tokens, total_tokens: u.total_tokens });
+
+    const choice = improvementResponse?.choices?.[0];
+    const content = choice?.message?.content;
+    if (!content || typeof content !== 'string') {
+      const isTokenLimit = choice?.finish_reason === 'length';
+      console.error('Invalid response from OpenAI (improve-transcription) – full choice:', JSON.stringify(choice, null, 2));
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          success: false,
+          error: isTokenLimit
+            ? 'Your text is too long. Try a shorter passage and try again.'
+            : 'Invalid response from OpenAI',
+          improved_text: null
+        })
+      } as any;
     }
 
-    const improvedText = improvementResponse.choices[0].message.content.trim();
+    const improvedText = content.trim();
     console.log(`✅ Text improvement completed - Input: ${body.text.length} chars, Output: ${improvedText.length} chars`);
 
     return {

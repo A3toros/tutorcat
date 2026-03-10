@@ -1598,7 +1598,7 @@ const SpeakingTest: React.FC<SpeakingTestProps> = ({ onComplete }) => {
                       <div className="mb-3">
                         <span className="font-medium text-red-700">Grammar:</span>
                         <div className="mt-1 space-y-1">
-                          {currentFeedback.grammar_corrections.map((correction: any, index: number) => (
+                          {currentFeedback.grammar_corrections.slice(0, 3).map((correction: any, index: number) => (
                             <div key={index} className="text-sm flex items-center space-x-2">
                               <span className="text-red-600 line-through">{correction.mistake}</span>
                               <span className="text-gray-400">→</span>
@@ -1613,7 +1613,7 @@ const SpeakingTest: React.FC<SpeakingTestProps> = ({ onComplete }) => {
                       <div className="mb-3">
                         <span className="font-medium text-blue-700">Vocabulary:</span>
                         <div className="mt-1 space-y-1">
-                          {currentFeedback.vocabulary_corrections.map((correction: any, index: number) => (
+                          {currentFeedback.vocabulary_corrections.slice(0, 3).map((correction: any, index: number) => (
                             <div key={index} className="text-sm">
                               <span className="text-blue-600 font-medium">{correction.correction}</span>
                             </div>

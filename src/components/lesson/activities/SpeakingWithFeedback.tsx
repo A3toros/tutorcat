@@ -35,6 +35,19 @@ interface SpeakingWithFeedbackProps {
 
 type ProcessingStep = 'idle' | 'recording' | 'transcribing' | 'analyzing' | 'feedback' | 'error';
 
+const MAX_RECORDING_DURATION_MS = 120 * 1000; // 2 min
+const MAX_AUDIO_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB
+const POLL_INTERVAL_MS = 2000;
+const POLL_INTERVAL_BACKGROUND_MS = 4000; // Slower when tab hidden (browser throttles timers)
+
+function getMinWordsForLevel(level?: string | null): number {
+  const l = (level || '').toUpperCase().trim();
+  if (l === 'A1' || l === 'A2') return 20;
+  if (l === 'B1' || l === 'B2') return 40;
+  if (l === 'C1' || l === 'C2') return 60;
+  return 20;
+}
+
 const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onComplete }) => {
   const { user } = useAuth();
   const { makeAuthenticatedRequest } = useApi();
@@ -57,7 +70,10 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [isMinWordsError, setIsMinWordsError] = useState(false);
   const [isAIFlaggedError, setIsAIFlaggedError] = useState(false);
+  const [isSpeechTooLongError, setIsSpeechTooLongError] = useState(false);
   const [isResending, setIsResending] = useState(false);
+
+  const [showMobileRecordingHint, setShowMobileRecordingHint] = useState(false);
 
   // Two-stage processing state
   const [transcriptionState, setTranscriptionState] = useState<'idle' | 'transcribing' | 'succeeded' | 'failed'>('idle');
@@ -148,7 +164,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         const controller = new AbortController();
-        timeoutId = setTimeout(() => controller.abort(), 30000);
+        timeoutId = setTimeout(() => controller.abort(), 45000); // 45s to match server function timeout (ai-feedback can take 30–40s)
 
         const requestOptions = {
           ...options,
@@ -219,6 +235,52 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       }
     };
   }, []);
+
+  // On mount/reload: restore transcripts and feedback from DB so we don't nullify progress
+  useEffect(() => {
+    if (!user?.id || !lessonData.lessonId) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await makeAuthenticatedRequest(
+          `/.netlify/functions/get-speech-jobs-by-lesson?lesson_id=${encodeURIComponent(lessonData.lessonId)}`,
+          { method: 'GET' }
+        );
+        if (cancelled || !res.ok) return;
+        const data = await res.json();
+        const jobs = (data.jobs || []).filter((j: any) => j.status === 'completed' && j.result);
+        if (jobs.length === 0) return;
+
+        const nextTranscripts: Record<string, string> = {};
+        const nextFeedback: Record<string, any> = {};
+        jobs.forEach((job: any) => {
+          const pid = job.prompt_id ?? `prompt-${Object.keys(nextFeedback).length}`;
+          if (nextFeedback[pid] != null) return;
+          if (job.transcript) nextTranscripts[pid] = job.transcript;
+          if (job.result) {
+            nextFeedback[pid] = {
+              overall_score: job.result.overall_score,
+              is_off_topic: job.result.is_off_topic || false,
+              feedback: job.result.feedback,
+              grammar_corrections: job.result.grammar_corrections || [],
+              vocabulary_corrections: job.result.vocabulary_corrections || [],
+              ai_feedback: job.result.ai_feedback || null,
+              improved_transcript: job.result.improved_transcript || null,
+              integrity: job.result.integrity || null,
+            };
+          }
+        });
+        if (!cancelled && (Object.keys(nextTranscripts).length > 0 || Object.keys(nextFeedback).length > 0)) {
+          setTranscripts(prev => ({ ...prev, ...nextTranscripts }));
+          setFeedback(prev => ({ ...prev, ...nextFeedback }));
+        }
+      } catch (_) {
+        // Silent: restore is best-effort
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id, lessonData.lessonId, makeAuthenticatedRequest]);
 
   // Request microphone permission
   const requestMicPermission = async () => {
@@ -295,6 +357,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
     setAnalysisState('analyzing');
     setCurrentStep('analyzing');
     setSubmissionError(null);
+    setIsSpeechTooLongError(false);
     setIsAIFlaggedError(false);
 
     try {
@@ -312,6 +375,10 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
         })
       });
 
+      if (!response.ok) {
+        throw new Error(response.status === 504 || response.status === 500 ? 'Request timed out. Please try again.' : `Server error (${response.status}). Please try again.`);
+      }
+
       let result;
       try {
         const responseText = await response.text();
@@ -321,8 +388,25 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       }
 
       if (!result.success) {
+        const isSpeechTooLong = result.error_code === 'speech_too_long' ||
+          (typeof result.error === 'string' && (
+            result.error.includes('2 minute') ||
+            result.error.includes('duration') ||
+            result.error.includes('audio') ||
+            result.error.includes('20 MB')
+          ));
+        if (isSpeechTooLong) {
+          setIsSpeechTooLongError(true);
+          setSubmissionError(result.error || 'Please speak for less than 2 minutes.');
+          setAnalysisState('failed');
+          setCurrentStep('error');
+          return;
+        }
         throw new Error(result.message || result.error || 'Analysis failed');
       }
+
+      const integrity = result.integrity || result?.feedback?.integrity;
+      console.log('🛡️ AI integrity (from API):', integrity ? { risk_score: integrity.risk_score, flagged: integrity.flagged } : 'none');
 
       // AI integrity: if backend flags the answer, block progression and force re-record.
       // Support multiple possible shapes so frontend works as soon as backend prompt is updated.
@@ -346,8 +430,16 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
         return;
       }
 
+      if (result.overall_score === undefined || typeof result.overall_score !== 'number') {
+        setSubmissionError('Something went wrong. Please try again.');
+        setAnalysisState('failed');
+        setCurrentStep('error');
+        return;
+      }
+
       setAnalysisState('succeeded');
       setSubmissionError(null);
+    setIsSpeechTooLongError(false);
 
       const mappedScores = {
         overall_score: result.overall_score,
@@ -433,6 +525,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
     } catch (error: any) {
       console.error('Analysis error:', error);
       setAnalysisState('failed');
+      setIsProcessing(false);
       let errorMessage = 'Analysis failed. Please try again.';
       if (error.message && error.message.includes('No internet connection')) {
         errorMessage = error.message;
@@ -465,62 +558,16 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
         throw new Error('Audio recording is invalid. Please record again.');
       }
 
-      checkNetworkStatus();
-      setIsAIFlaggedError(false);
-
-      const base64Audio = await blobToBase64(audioBlob);
-
-      setTranscriptionState('transcribing');
-
-      const response = await makeRequestWithRetry('/.netlify/functions/ai-speech-to-text', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            audio_blob: base64Audio,
-            audio_mime_type: audioBlob.type || 'audio/webm',
-            test_id: 'lesson_activity',
-            question_id: promptId,
-            prompt: promptText,
-            cefr_level: lessonData.level || undefined
-          })
-      });
-
-      if (!response.ok) {
-        throw new Error(`Streaming analysis request failed: ${response.status}`);
+      if (recordingDuration > MAX_RECORDING_DURATION_MS) {
+        setSubmissionError('Please speak for less than 2 minutes.');
+        setCurrentStep('error');
+        setTranscriptionState('failed');
+        setAnalysisState('failed');
+        setIsProcessing(false);
+        return;
       }
-
-      const result = await response.json();
-
-      if (!result.success) {
-        // Minimum word count: warn and force re-record (retrying same audio would fail again)
-        if (result.min_words != null && result.word_count != null) {
-          setSubmissionError(result.error || `Please speak at least ${result.min_words} words. You said ${result.word_count} word(s).`);
-          setIsMinWordsError(true);
-          setCurrentStep('error');
-          setTranscriptionState('failed');
-          setAnalysisState('failed');
-          setIsProcessing(false);
-          return;
-        }
-        throw new Error(result.error || result.message || 'Streaming analysis failed');
-      }
-
-      // AI integrity: if backend flags the answer, block progression and force re-record.
-      const flagged =
-        result?.integrity?.flagged === true ||
-        result?.ai_flagged === true ||
-        result?.flagged === true ||
-        result?.feedback?.integrity?.flagged === true;
-
-      if (flagged) {
-        const message =
-          result?.integrity?.message ||
-          result?.feedback?.integrity?.message ||
-          result?.message ||
-          'Your answer was flagged for using AI. Please try again using your own words.';
-
-        setSubmissionError(message);
-        setIsAIFlaggedError(true);
+      if (audioBlob.size > MAX_AUDIO_SIZE_BYTES) {
+        setSubmissionError('Please speak for less than 2 minutes. Max 20 MB.');
         setCurrentStep('error');
         setTranscriptionState('failed');
         setAnalysisState('failed');
@@ -528,32 +575,150 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
         return;
       }
 
-      setTranscriptionState('succeeded');
-      setAnalysisState('succeeded');
-      setCachedTranscript(result.transcript);
+      checkNetworkStatus();
+      setIsAIFlaggedError(false);
 
-      setTranscripts(prev => ({
-        ...prev,
-        [promptId]: result.transcript
-      }));
+      const base64Audio = await blobToBase64(audioBlob);
 
-      // Map feedback structure - API returns properties at top level (matching SpeakingTest.tsx)
-      if (result.overall_score !== undefined) {
-        setFeedback(prev => ({
-          ...prev,
-          [promptId]: {
-            overall_score: result.overall_score,
-            is_off_topic: result.is_off_topic || false,
-            feedback: result.feedback,
-            grammar_corrections: result.grammar_corrections || [],
-            vocabulary_corrections: result.vocabulary_corrections || [],
-            ai_feedback: result.ai_feedback || null,
-            integrity: result.integrity || result?.feedback?.integrity || null
-          }
-        }));
-        setCurrentStep('feedback');
+      setCurrentStep('transcribing');
+      setTranscriptionState('transcribing');
+
+      const speechJobRes = await makeRequestWithRetry('/.netlify/functions/speech-job', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          audio_blob: base64Audio,
+          audio_mime_type: audioBlob.type || 'audio/webm',
+          prompt: promptText,
+          prompt_id: promptId,
+          cefr_level: lessonData.level || undefined,
+          min_words: getMinWordsForLevel(lessonData.level),
+          duration_seconds: Math.round(recordingDuration / 1000),
+          user_id: user?.id || undefined,
+          lesson_id: lessonData.lessonId || undefined,
+        }),
+      });
+
+      if (!speechJobRes.ok) {
+        const errBody = await speechJobRes.json().catch(() => ({}));
+        const code = errBody?.code;
+        if (speechJobRes.status === 413 || code === 'audio_too_large' || code === 'duration_too_long') {
+          setSubmissionError(errBody?.error || 'Please speak for less than 2 minutes.');
+          setCurrentStep('error');
+          setTranscriptionState('failed');
+          setAnalysisState('failed');
+          setIsProcessing(false);
+          return;
+        }
+        throw new Error(errBody?.error || `Request failed: ${speechJobRes.status}`);
       }
 
+      const { jobId } = await speechJobRes.json();
+      if (!jobId) {
+        throw new Error('No job ID returned from server.');
+      }
+
+      const pollResult = async (): Promise<{ status: string; result?: any; error?: string; transcript?: string }> => {
+        const res = await fetch(`/.netlify/functions/analysis-result?id=${encodeURIComponent(jobId)}`);
+        if (!res.ok) throw new Error(`Poll failed: ${res.status}`);
+        return res.json();
+      };
+
+      let data = await pollResult();
+      while (data.status === 'processing' || data.status === 'analyzing') {
+        setCurrentStep(data.status === 'analyzing' ? 'analyzing' : 'transcribing');
+        const delay = (typeof document !== 'undefined' && document.visibilityState === 'visible')
+          ? POLL_INTERVAL_MS
+          : POLL_INTERVAL_BACKGROUND_MS;
+        await new Promise((r) => setTimeout(r, delay));
+        data = await pollResult();
+      }
+
+      if (data.status === 'failed') {
+        setSubmissionError(data.error || 'Analysis failed.');
+        setCurrentStep('error');
+        setAnalysisState('failed');
+        const result = data.result || {};
+        if (result.min_words != null && result.word_count != null) {
+          setIsMinWordsError(true);
+        }
+        setIsProcessing(false);
+        return;
+      }
+
+      const result = data.result || {};
+      const transcript = data.transcript ?? result.transcript ?? '';
+
+      if (result.min_words != null && result.word_count != null && result.word_count < result.min_words) {
+        setSubmissionError(result.error || `Please speak at least ${result.min_words} words. You said ${result.word_count} word(s).`);
+        setIsMinWordsError(true);
+        setCurrentStep('error');
+        setAnalysisState('failed');
+        setIsProcessing(false);
+        return;
+      }
+
+      const isSpeechTooLong = result.error_code === 'speech_too_long' ||
+        (typeof result.error === 'string' && (
+          result.error.includes('2 minute') ||
+          result.error.includes('duration') ||
+          result.error.includes('audio') ||
+          result.error.includes('20 MB')
+        ));
+      if (isSpeechTooLong) {
+        setIsSpeechTooLongError(true);
+        setSubmissionError(result.error || 'Please speak for less than 2 minutes.');
+        setCurrentStep('error');
+        setAnalysisState('failed');
+        setIsProcessing(false);
+        return;
+      }
+
+      const integrityStt = result.integrity;
+      const flagged =
+        result?.integrity?.flagged === true ||
+        result?.ai_flagged === true ||
+        result?.flagged === true;
+
+      if (flagged) {
+        const message =
+          result?.integrity?.message ||
+          result?.message ||
+          'Your answer was flagged for using AI. Please try again using your own words.';
+        setSubmissionError(message);
+        setIsAIFlaggedError(true);
+        setCurrentStep('error');
+        setAnalysisState('failed');
+        setIsProcessing(false);
+        return;
+      }
+
+      if (result.overall_score === undefined || typeof result.overall_score !== 'number') {
+        setSubmissionError('Something went wrong. Please try again.');
+        setCurrentStep('error');
+        setAnalysisState('failed');
+        setIsProcessing(false);
+        return;
+      }
+
+      setTranscriptionState('succeeded');
+      setAnalysisState('succeeded');
+      setCachedTranscript(transcript);
+
+      setTranscripts(prev => ({ ...prev, [promptId]: transcript }));
+      setFeedback(prev => ({
+        ...prev,
+        [promptId]: {
+          overall_score: result.overall_score,
+          is_off_topic: result.is_off_topic || false,
+          feedback: result.feedback,
+          grammar_corrections: result.grammar_corrections || [],
+          vocabulary_corrections: result.vocabulary_corrections || [],
+          ai_feedback: result.ai_feedback || null,
+          integrity: result.integrity || null,
+        },
+      }));
+      setCurrentStep('feedback');
     } catch (error: any) {
       console.error('Processing error:', error);
       setTranscriptionState('failed');
@@ -572,7 +737,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
     } finally {
       setIsProcessing(false);
     }
-  }, [promptText, promptId, checkNetworkStatus, makeRequestWithRetry]);
+  }, [promptText, promptId, lessonData.level, checkNetworkStatus, makeRequestWithRetry, user?.id]);
 
   // Start recording with MediaRecorder - ONLY starts recording, no API calls
   const startRecording = useCallback(async () => {
@@ -630,7 +795,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
           console.error('⚠️ Audio blob is empty!');
           setError(isIOSDevice
             ? 'No audio recorded. Try speaking for 1–2 seconds before stopping, and ensure you\'re using Safari with microphone access allowed.'
-            : 'No audio recorded. Please try again.');
+            : 'No audio recorded. Please try again. Try Chrome or Firefox if the problem continues.');
           setCurrentStep('error');
           setIsProcessing(false);
           setIsRecording(false);
@@ -677,7 +842,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
 
       mediaRecorder.onerror = (event) => {
         console.error('MediaRecorder error:', event);
-        setError('Recording error occurred. Please try again.');
+        setError('Recording error. Please try again or use Chrome/Firefox for best support.');
         setIsRecording(false);
         setIsProcessing(false);
         if (streamRef.current) {
@@ -694,6 +859,10 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       mediaRecorder.start(isIOSDevice ? 1000 : undefined);
       (window as any).recordingStartTime = Date.now();
       console.log('✅ Recording started successfully');
+      if (isIOSDevice) {
+        setShowMobileRecordingHint(true);
+        setTimeout(() => setShowMobileRecordingHint(false), 4000);
+      }
 
       if (autoStopTimeoutRef.current) {
         clearTimeout(autoStopTimeoutRef.current);
@@ -711,7 +880,11 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
 
     } catch (error) {
       console.error('Failed to start recording:', error);
-      setError('Failed to start recording. Please check your microphone permissions.');
+      const err = error as { name?: string; message?: string };
+      const isNotAllowed = err?.name === 'NotAllowedError';
+      setError(isNotAllowed
+        ? 'Microphone access was denied. Allow microphone in your browser or site settings, or try Chrome/Firefox.'
+        : 'Failed to start recording. Please check your microphone permissions.');
       setIsRecording(false);
     }
   }, [isRecording, hasMicPermission, getSupportedMimeType, handleRecordingComplete]);
@@ -764,7 +937,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
     }
   }, []);
 
-  // Retry transcription
+  // Retry transcription (re-upload same audio to speech-job, then poll)
   const handleRetryTranscription = useCallback(async () => {
     if (!audioBlob) return;
 
@@ -776,51 +949,135 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       return;
     }
 
+    const recordingDurationMs = recordingTime || 0;
+    if (recordingDurationMs > MAX_RECORDING_DURATION_MS || audioBlob.size > MAX_AUDIO_SIZE_BYTES) {
+      setSubmissionError('Please speak for less than 2 minutes. Max 20 MB.');
+      setCurrentStep('error');
+      return;
+    }
+
     setIsResending(true);
     setSubmissionError(null);
+    setIsSpeechTooLongError(false);
     setTranscriptionState('transcribing');
+    setCurrentStep('transcribing');
 
     try {
       const base64Audio = await blobToBase64(audioBlob);
 
-      const response = await makeRequestWithRetry('/.netlify/functions/ai-speech-to-text', {
+      const speechJobRes = await makeRequestWithRetry('/.netlify/functions/speech-job', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           audio_blob: base64Audio,
           audio_mime_type: audioBlob.type || 'audio/webm',
-          test_id: 'lesson_activity',
-          question_id: promptId,
-          cefr_level: lessonData.level || undefined
-        })
+          prompt: promptText,
+          prompt_id: promptId,
+          cefr_level: lessonData.level || undefined,
+          min_words: getMinWordsForLevel(lessonData.level),
+          duration_seconds: Math.round(recordingDurationMs / 1000),
+          user_id: user?.id || undefined,
+          lesson_id: lessonData.lessonId || undefined,
+        }),
       });
 
-      const result = await response.json();
+      if (!speechJobRes.ok) {
+        const errBody = await speechJobRes.json().catch(() => ({}));
+        setSubmissionError(errBody?.error || 'Request failed. Please try again.');
+        setTranscriptionState('failed');
+        setCurrentStep('error');
+        setIsResending(false);
+        return;
+      }
 
-      if (!result.success) {
-        throw new Error(result.error || result.message || 'Transcription retry failed');
+      const { jobId } = await speechJobRes.json();
+      if (!jobId) {
+        setSubmissionError('No job ID returned.');
+        setTranscriptionState('failed');
+        setCurrentStep('error');
+        setIsResending(false);
+        return;
+      }
+
+      const pollResult = async (): Promise<{ status: string; result?: any; error?: string; transcript?: string }> => {
+        const res = await fetch(`/.netlify/functions/analysis-result?id=${encodeURIComponent(jobId)}`);
+        if (!res.ok) throw new Error(`Poll failed: ${res.status}`);
+        return res.json();
+      };
+
+      let data = await pollResult();
+      while (data.status === 'processing' || data.status === 'analyzing') {
+        setCurrentStep(data.status === 'analyzing' ? 'analyzing' : 'transcribing');
+        const delay = (typeof document !== 'undefined' && document.visibilityState === 'visible')
+          ? POLL_INTERVAL_MS
+          : POLL_INTERVAL_BACKGROUND_MS;
+        await new Promise((r) => setTimeout(r, delay));
+        data = await pollResult();
+      }
+
+      if (data.status === 'failed') {
+        setSubmissionError(data.error || 'Analysis failed.');
+        setAnalysisState('failed');
+        setCurrentStep('error');
+        const result = data.result || {};
+        if (result.min_words != null && result.word_count != null) {
+          setIsMinWordsError(true);
+        }
+        setIsResending(false);
+        return;
+      }
+
+      const result = data.result || {};
+      const transcript = data.transcript ?? result.transcript ?? '';
+
+      const flagged =
+        result?.integrity?.flagged === true ||
+        result?.ai_flagged === true ||
+        result?.flagged === true;
+      if (flagged) {
+        setSubmissionError(result?.integrity?.message || result?.message || 'Your answer was flagged for using AI. Please try again using your own words.');
+        setIsAIFlaggedError(true);
+        setAnalysisState('failed');
+        setCurrentStep('error');
+        setIsResending(false);
+        return;
+      }
+
+      if (result.overall_score === undefined || typeof result.overall_score !== 'number') {
+        setSubmissionError('Something went wrong. Please try again.');
+        setAnalysisState('failed');
+        setCurrentStep('error');
+        setIsResending(false);
+        return;
       }
 
       setTranscriptionState('succeeded');
-      setCachedTranscript(result.transcript);
-
-      setTranscripts(prev => ({
+      setAnalysisState('succeeded');
+      setCachedTranscript(transcript);
+      setTranscripts(prev => ({ ...prev, [promptId]: transcript }));
+      setFeedback(prev => ({
         ...prev,
-        [promptId]: result.transcript
+        [promptId]: {
+          overall_score: result.overall_score,
+          is_off_topic: result.is_off_topic || false,
+          feedback: result.feedback,
+          grammar_corrections: result.grammar_corrections || [],
+          vocabulary_corrections: result.vocabulary_corrections || [],
+          ai_feedback: result.ai_feedback || null,
+          integrity: result.integrity || null,
+        },
       }));
-
-      setIsResending(false);
-      await handleAnalyzeTranscript(result.transcript);
-
+      setCurrentStep('feedback');
     } catch (error: any) {
-      setTranscriptionState('failed');
-      setIsResending(false);
-      setSubmissionError(error.message || 'Transcription failed. Please try again.');
+      setAnalysisState('failed');
+      setSubmissionError(error?.message || 'Request failed. Please try again.');
       setCurrentStep('error');
+    } finally {
+      setIsResending(false);
     }
-  }, [audioBlob, promptId, checkNetworkStatus, makeRequestWithRetry, handleAnalyzeTranscript]);
+  }, [audioBlob, recordingTime, promptText, promptId, lessonData.level, checkNetworkStatus, makeRequestWithRetry, user?.id]);
 
-  // Retry analysis
+  // Retry analysis (no re-upload: create new job from stored transcript, then poll)
   const handleRetryAnalysis = useCallback(async () => {
     if (!cachedTranscript) return;
 
@@ -834,13 +1091,109 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
 
     setIsResending(true);
     setSubmissionError(null);
+    setIsSpeechTooLongError(false);
+    setCurrentStep('analyzing');
+    setAnalysisState('analyzing');
+
     try {
-      await handleAnalyzeTranscript(cachedTranscript);
-      setIsResending(false);
-    } catch (error) {
+      const res = await makeRequestWithRetry('/.netlify/functions/retry-speech-analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transcript: cachedTranscript,
+          prompt: promptText,
+          prompt_id: promptId,
+          cefr_level: lessonData.level || undefined,
+          user_id: user?.id || undefined,
+          lesson_id: lessonData.lessonId || undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody?.error || `Request failed: ${res.status}`);
+      }
+
+      const { jobId } = await res.json();
+      if (!jobId) throw new Error('No job ID returned.');
+
+      const pollResult = async (): Promise<{ status: string; result?: any; error?: string; transcript?: string }> => {
+        const r = await fetch(`/.netlify/functions/analysis-result?id=${encodeURIComponent(jobId)}`);
+        if (!r.ok) throw new Error(`Poll failed: ${r.status}`);
+        return r.json();
+      };
+
+      let data = await pollResult();
+      while (data.status === 'processing' || data.status === 'analyzing') {
+        setCurrentStep(data.status === 'analyzing' ? 'analyzing' : 'transcribing');
+        const delay = (typeof document !== 'undefined' && document.visibilityState === 'visible')
+          ? POLL_INTERVAL_MS
+          : POLL_INTERVAL_BACKGROUND_MS;
+        await new Promise((r) => setTimeout(r, delay));
+        data = await pollResult();
+      }
+
+      if (data.status === 'failed') {
+        setSubmissionError(data.error || 'Analysis failed.');
+        setAnalysisState('failed');
+        setCurrentStep('error');
+        const result = data.result || {};
+        if (result.min_words != null && result.word_count != null) {
+          setIsMinWordsError(true);
+        }
+        setIsResending(false);
+        return;
+      }
+
+      const result = data.result || {};
+      const flagged =
+        result?.integrity?.flagged === true ||
+        result?.ai_flagged === true ||
+        result?.flagged === true;
+
+      if (flagged) {
+        const message =
+          result?.integrity?.message ||
+          result?.message ||
+          'Your answer was flagged for using AI. Please try again using your own words.';
+        setSubmissionError(message);
+        setIsAIFlaggedError(true);
+        setAnalysisState('failed');
+        setCurrentStep('error');
+        setIsResending(false);
+        return;
+      }
+
+      if (result.overall_score === undefined || typeof result.overall_score !== 'number') {
+        setSubmissionError('Something went wrong. Please try again.');
+        setAnalysisState('failed');
+        setCurrentStep('error');
+        setIsResending(false);
+        return;
+      }
+
+      setAnalysisState('succeeded');
+      setFeedback(prev => ({
+        ...prev,
+        [promptId]: {
+          overall_score: result.overall_score,
+          is_off_topic: result.is_off_topic || false,
+          feedback: result.feedback,
+          grammar_corrections: result.grammar_corrections || [],
+          vocabulary_corrections: result.vocabulary_corrections || [],
+          ai_feedback: result.ai_feedback || null,
+          integrity: result.integrity || null,
+        },
+      }));
+      setCurrentStep('feedback');
+    } catch (error: any) {
+      setSubmissionError(error?.message || 'Analysis failed. Please try again.');
+      setAnalysisState('failed');
+      setCurrentStep('error');
+    } finally {
       setIsResending(false);
     }
-  }, [cachedTranscript, handleAnalyzeTranscript, checkNetworkStatus]);
+  }, [cachedTranscript, promptText, promptId, lessonData.level, checkNetworkStatus, makeRequestWithRetry, user?.id]);
 
   // Handle next prompt or completion
   const handleNext = useCallback(() => {
@@ -851,6 +1204,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       setCurrentStep('idle');
       setError(null);
       setSubmissionError(null);
+    setIsSpeechTooLongError(false);
       setAudioBlob(null);
       setCachedTranscript(null);
       setTranscriptionState('idle');
@@ -877,11 +1231,11 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       const responseText = await response.text();
       const result = JSON.parse(responseText);
 
-      if (!result.success || !result.improved_text) {
-        throw new Error('Failed to improve transcription');
+      if (result.improved_text && typeof result.improved_text === 'string' && result.improved_text.trim()) {
+        return result.improved_text.trim();
       }
 
-      return result.improved_text;
+      throw new Error(result.error || 'Failed to improve transcription');
     } catch (error) {
       console.error('Error generating combined improved version:', error);
       // Fallback: combine individual improved transcripts if available
@@ -1143,31 +1497,39 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
     const isIntegrityError = isAIFlaggedError === true;
     const retryHandler = isTranscriptionError ? handleRetryTranscription :
                        isAnalysisError ? handleRetryAnalysis :
+                       isSpeechTooLongError ? () => { setSubmissionError(null); setIsSpeechTooLongError(false); setError(null); setCurrentStep('idle'); } :
                        () => { setCurrentStep('idle'); setError(null); setIsMinWordsError(false); };
 
     return (
       <Card>
         <Card.Header>
           <h3 className="text-lg md:text-xl font-semibold text-red-800">
-            {isMinWordsError ? 'Not enough words' : isIntegrityError ? 'Flagged' : '⚠️ Processing Error'}
+            {isMinWordsError ? 'Not enough words' : isIntegrityError ? 'Flagged' : isSpeechTooLongError ? 'Speech too long' : '⚠️ Processing Error'}
           </h3>
           <p className="text-sm text-red-600">
-            {submissionError || error}
+            {isIntegrityError
+              ? 'Your answer was flagged for using AI. Please re-record and answer using your own words.'
+              : (submissionError || error)}
           </p>
         </Card.Header>
         <Card.Body>
           <div className="space-y-4">
-            <p className="text-sm text-neutral-600">
-              {isMinWordsError
-                ? 'Please tap "Re-record" and speak for longer to meet the minimum word count.'
-                : isIntegrityError
-                ? 'Your answer was flagged for using AI. Please re-record and answer using your own words.'
-                : isTranscriptionError
-                ? 'Transcription failed. Click "Retry Transcription" to try again, or "Re-record" to start over.'
-                : isAnalysisError
-                ? 'Analysis failed. Your transcription was successful. Click "Retry Analysis" to try again.'
-                : 'Your recording has been saved. Click "Retry" to try again, or "Re-record" to start over.'}
-            </p>
+            {isMinWordsError && (
+              <p className="text-sm text-neutral-600">
+                Please tap "Re-record" and speak for longer to meet the minimum word count.
+              </p>
+            )}
+            {!isIntegrityError && !isMinWordsError && (
+              <p className="text-sm text-neutral-600">
+                {isSpeechTooLongError
+                  ? 'Please speak for less than 2 minutes (max 20 MB). Then tap "Re-record" to try again.'
+                  : isTranscriptionError
+                  ? 'Transcription failed. Click "Retry Transcription" to try again, or "Re-record" to start over.'
+                  : isAnalysisError
+                  ? 'Analysis failed. Your transcription was successful. Click "Retry Analysis" to try again.'
+                  : 'Your recording has been saved. Click "Retry" to try again, or "Re-record" to start over.'}
+              </p>
+            )}
             <div className="flex flex-col sm:flex-row gap-3">
               {!isMinWordsError && !isIntegrityError && (
               <Button
@@ -1177,17 +1539,20 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
               >
                 {isResending ? 'Retrying...' :
                  isTranscriptionError ? 'Retry Transcription' :
-                 isAnalysisError ? 'Retry Analysis' : 'Retry'}
+                 isAnalysisError ? 'Retry Analysis' :
+                 isSpeechTooLongError ? 'Retry' : 'Retry'}
               </Button>
               )}
-              {(!isAnalysisError || isMinWordsError || isIntegrityError) && (
+              {(!isAnalysisError || isMinWordsError || isIntegrityError || isSpeechTooLongError) && (
                 <Button
                   onClick={() => {
                     setAudioBlob(null);
                     setError(null);
                     setSubmissionError(null);
+    setIsSpeechTooLongError(false);
                     setIsMinWordsError(false);
                     setIsAIFlaggedError(false);
+                    setIsSpeechTooLongError(false);
                     setIsProcessing(false);
                     setIsResending(false);
                     setTranscriptionState('idle');
@@ -1274,16 +1639,19 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
         {!isProcessing && transcriptionState !== 'transcribing' && analysisState !== 'analyzing' && !currentFeedback && (
           <div className="mb-6 flex justify-center">
             {!isRecording ? (
-              <img 
-                src="/mic-start.png" 
-                alt="Start Recording" 
-                className="w-16 h-16 cursor-pointer hover:opacity-80 transition-opacity"
-                onClick={startRecording}
-                onError={(e) => {
-                  console.error('Failed to load mic-start.png');
-                  e.currentTarget.style.display = 'none';
-                }}
-              />
+              <div className="flex flex-col items-center">
+                <img 
+                  src="/mic-start.png" 
+                  alt="Start Recording" 
+                  className="w-16 h-16 cursor-pointer hover:opacity-80 transition-opacity"
+                  onClick={startRecording}
+                  onError={(e) => {
+                    console.error('Failed to load mic-start.png');
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+                <p className="text-xs text-neutral-500 mt-2">Allow microphone when your browser prompts.</p>
+              </div>
             ) : (
               <div className="flex flex-col items-center gap-2">
                 <img
@@ -1304,6 +1672,9 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
                   <p className="text-sm font-medium text-amber-700">Stop pressed. Processing your recording...</p>
                 ) : (
                   <p className="text-sm text-neutral-600">Recording... Click the button above to stop</p>
+                )}
+                {showMobileRecordingHint && (
+                  <p className="text-xs text-amber-700">Keep this tab open while recording.</p>
                 )}
               </div>
             )}
@@ -1359,13 +1730,14 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
 
                     {/* Grammar Corrections - filter out capitalization-only corrections for spoken responses */}
                     {currentFeedback.grammar_corrections && currentFeedback.grammar_corrections.length > 0 && (() => {
-                      // Filter out capitalization-only corrections (not relevant for spoken language)
-                      const meaningfulCorrections = currentFeedback.grammar_corrections.filter((correction: any) => {
-                        const mistake = (correction.mistake || '').toLowerCase();
-                        const correctionText = (correction.correction || '').toLowerCase();
-                        // Only show if the correction changes more than just capitalization
-                        return mistake !== correctionText;
-                      });
+                      // Filter out capitalization-only corrections (not relevant for spoken language); show max 3
+                      const meaningfulCorrections = (currentFeedback.grammar_corrections as any[])
+                        .filter((correction: any) => {
+                          const mistake = (correction.mistake || '').toLowerCase();
+                          const correctionText = (correction.correction || '').toLowerCase();
+                          return mistake !== correctionText;
+                        })
+                        .slice(0, 3);
                       
                       if (meaningfulCorrections.length === 0) return null;
                       
@@ -1390,7 +1762,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
                       <div className="mb-3">
                         <span className="font-medium text-blue-700">Vocabulary:</span>
                         <div className="mt-1 space-y-1">
-                          {currentFeedback.vocabulary_corrections.map((correction: any, index: number) => (
+                          {(currentFeedback.vocabulary_corrections as any[]).slice(0, 3).map((correction: any, index: number) => (
                             <div key={index} className="text-sm">
                               <span className="text-blue-600 font-medium">{correction.correction}</span>
                             </div>
@@ -1400,7 +1772,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
                     )}
 
                     {/* Feedback text */}
-                    {currentFeedback.feedback && currentFeedback.feedback !== 'brief summary' && (
+                    {currentFeedback.feedback && currentFeedback.feedback !== 'brief summary' && currentFeedback.feedback !== '1-2 sentence summary only' && (
                       <div className="mb-3">
                         <p className="text-green-900 text-sm italic">{currentFeedback.feedback}</p>
                       </div>
@@ -1440,9 +1812,11 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
           <div className="text-sm text-neutral-600">
             {isComplete
               ? 'All speaking prompts completed! Ready to continue.'
-              : currentFeedback
-                ? 'Great job! Ready for the next prompt.'
-                : 'Record your response to get AI feedback'
+              : currentFeedback && currentFeedback.overall_score !== undefined && currentFeedback.overall_score < 60
+                ? 'Score below 60%. Re-record this response to continue.'
+                : currentFeedback
+                  ? 'Great job! Ready for the next prompt.'
+                  : 'Record your response to get AI feedback'
             }
           </div>
 
@@ -1455,9 +1829,9 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
             </div>
           ) : (
             <div
-              onClick={currentFeedback ? handleNext : undefined}
+              onClick={currentFeedback && (currentFeedback.overall_score === undefined || currentFeedback.overall_score >= 60) ? handleNext : undefined}
               className={`px-4 md:px-6 py-2 md:py-3 rounded-lg text-white font-semibold text-center transition-opacity text-sm md:text-base ${
-                currentFeedback 
+                currentFeedback && (currentFeedback.overall_score === undefined || currentFeedback.overall_score >= 60)
                   ? 'bg-blue-500 hover:opacity-80 cursor-pointer' 
                   : 'bg-gray-400 cursor-not-allowed opacity-50'
               }`}

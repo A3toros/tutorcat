@@ -129,7 +129,7 @@ Return ONLY a valid JSON object with this exact structure:
             }
           ],
           temperature: 0.7,
-          max_tokens: 600
+          max_completion_tokens: 3000
         }),
       });
 
@@ -140,6 +140,7 @@ Return ONLY a valid JSON object with this exact structure:
 
       const result = await openRouterResponse.json();
       console.log('OpenRouter similarity response received');
+      if (result.usage) console.log('📊 Tokens used (OpenRouter similarity):', result.usage);
 
       if (!result.choices || !result.choices[0] || !result.choices[0].message) {
         throw new Error('Invalid response from OpenRouter');

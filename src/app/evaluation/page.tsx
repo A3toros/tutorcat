@@ -1055,7 +1055,7 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
             {feedback.grammar_corrections && feedback.grammar_corrections.length > 0 && (
               <div className="mt-4">
                 <h5 className="font-semibold text-green-800 mb-2">Grammar Corrections:</h5>
-                {feedback.grammar_corrections.map((correction: any, index: number) => (
+                {feedback.grammar_corrections.slice(0, 3).map((correction: any, index: number) => (
                   <p key={index} className="text-gray-700 mb-1">
                     <span className="line-through text-red-600">{correction.mistake}</span> → <span className="text-green-600">{correction.correction}</span>
                   </p>
@@ -1066,7 +1066,7 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
             {feedback.vocabulary_corrections && feedback.vocabulary_corrections.length > 0 && (
               <div className="mt-4">
                 <h5 className="font-semibold text-green-800 mb-2">Vocabulary Suggestions:</h5>
-                {feedback.vocabulary_corrections.map((correction: any, index: number) => (
+                {feedback.vocabulary_corrections.slice(0, 3).map((correction: any, index: number) => (
                   <p key={index} className="text-gray-700 mb-1">
                     <span className="line-through text-red-600">{correction.mistake}</span> → <span className="text-green-600">{correction.correction}</span>
                   </p>

@@ -7,6 +7,12 @@ const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+/**
+ * POST: Audio → transcribe (AssemblyAI or Whisper) and optionally feedback in one response.
+ * Used by: SpeakingTest, lessons page, SpeakingImprovement.
+ * For lesson speaking activity the preferred flow is speech-job + analysis-result (one request, then poll).
+ */
+
 // Environment variables
 const ASSEMBLYAI_API_KEY = process.env.ASSEMBLYAI_API_KEY;
 const ASSEMBLYAI_BASE_URL = process.env.ASSEMBLYAI_BASE_URL || 'https://api.assemblyai.com';
@@ -282,7 +288,9 @@ const streamHandler: Handler = async (event, context) => {
     let { audio_blob, audio_mime_type, test_id, question_id, cefr_level, min_words: min_words_body } = body;
     // Ensure min_words is a number (handle string "0" case)
     const minWordsOverride = typeof min_words_body === 'string' ? parseInt(min_words_body, 10) : min_words_body;
-    const minWords = getMinWordsForLevel(cefr_level, minWordsOverride);
+    const minWords = (test_id === 'lesson_speaking_improvement' || question_id === 'improvement')
+      ? 0
+      : getMinWordsForLevel(cefr_level, minWordsOverride);
     console.log(`📊 Word count check - min_words_body: ${min_words_body} (type: ${typeof min_words_body}), minWordsOverride: ${minWordsOverride}, minWords: ${minWords}`);
 
     if (!audio_blob) {
@@ -335,12 +343,16 @@ const streamHandler: Handler = async (event, context) => {
 
   } catch (error: any) {
     console.error('Streaming handler error:', error);
+    const isSpeechTooLong = error?.message === 'speech_too_long';
     return {
-      statusCode: 500,
+      statusCode: 200,
       headers,
       body: JSON.stringify({
         success: false,
-        error: error.message || 'Streaming analysis failed'
+        error: isSpeechTooLong
+          ? 'Your speech is too long. Try to speak less than 100 words.'
+          : (error.message || 'Streaming analysis failed'),
+        error_code: isSpeechTooLong ? 'speech_too_long' : undefined
       })
     };
   }
@@ -370,7 +382,9 @@ const handler: Handler = async (event, context) => {
     // Parse request body
     const body = JSON.parse(event.body || '{}');
     let { audio_blob, audio_mime_type, test_id, question_id, audio_hash, chunk_index, total_chunks, is_chunked, cefr_level, min_words: min_words_body } = body;
-    const minWords = getMinWordsForLevel(cefr_level, min_words_body);
+    const minWords = (test_id === 'lesson_speaking_improvement' || question_id === 'improvement')
+      ? 0
+      : getMinWordsForLevel(cefr_level, min_words_body);
 
     // FETCH THE ACTUAL PROMPT FROM DATABASE (at handler level)
     var questionPrompt = "Please respond to the speaking question."; // Default fallback
@@ -642,17 +656,17 @@ const handler: Handler = async (event, context) => {
 
     try {
       const feedbackResponse = await openai.chat.completions.create({
-        model: 'gpt-5-mini',
-        temperature: 0,
-        max_tokens: 500,
+        model: 'gpt-4o-mini',
+        max_completion_tokens: 3000,
         messages: [
           {
             role: 'system',
-            content: `Analyze speech for language learning. Return concise JSON:
+            content: `Analyze a student's spoken answer. Return concise JSON only.
+
 {
   "overall_score": number (0-100),
-  "is_off_topic": boolean (only if completely irrelevant),
-  "feedback": "brief summary",
+  "is_off_topic": boolean,
+  "feedback": "1-2 sentences",
   "grammar_corrections": [{"mistake": "text", "correction": "text"}],
   "vocabulary_corrections": [{"mistake": "text", "correction": "text"}],
   "integrity": {
@@ -667,14 +681,60 @@ const handler: Handler = async (event, context) => {
   }
 }
 
-Keep it brief. Only flag as off-topic if completely irrelevant to speaking practice.
+Rules:
 
-AI integrity:
-- Students may paste AI-written text into speaking practice (reading it aloud).
-- Detect *strong* signs only. Avoid false positives.
-- If integrity.risk_score >= 60 set integrity.flagged=true and set integrity.message to:
-  "Your answer was flagged for using AI. Please try again using your own words."
-- Evaluate signals using: level mismatch (relative to the prompt difficulty), off-syllabus vocabulary (overly advanced/academic words for typical learners), and robotic cues (template-y essay markers like "Moreover", "In conclusion").`
+Grammar & Vocabulary
+- List ONLY real mistakes (wrong grammar or wrong word).
+- Do NOT include stylistic suggestions (e.g. adding "I", "that", or rephrasing).
+- If the sentence is correct, return no corrections.
+- Max 3 grammar_corrections and 3 vocabulary_corrections.
+- Feedback must be 1–2 sentences.
+
+AI Integrity (main goal)
+We detect if AI text was written first and then read aloud.
+
+Typical human 1-minute speech contains:
+- small grammar mistakes
+- repetition
+- uneven phrasing
+
+AI signals:
+- perfect grammar
+- essay-like structure
+- generic phrases ("It is important to…", "Furthermore…", "In conclusion…")
+- very balanced formal wording
+- no natural mistakes
+
+Scoring rules:
+- If real grammar mistakes exist, the "0 real errors" rule cannot apply.
+- 0 real errors → risk_score ≥70
+- only stylistic suggestions → risk_score ≥65
+- very polished text → risk_score ≥50
+- 2+ AI signals → risk_score ≥60
+- risk_score <30 only if speech clearly sounds spontaneous and messy
+
+Short-answer safeguard (very important and overrides other scoring rules):
+If the response is shorter than 35 words:
+- Do NOT treat perfect grammar as an AI signal.
+- Simple sentences are normal for beginner speakers.
+- If descriptive phrasing or unnaturally polished structure appears,
+  risk_score may reach 40–70.
+
+These rules override all other scoring rules.
+
+Signals guidance:
+- level_mismatch: language much stronger than expected student level
+- off_syllabus_vocab: advanced or unusual vocabulary
+- robotic_cues: formal structure, generic phrases, essay tone
+
+Integrity result:
+If risk_score ≥60:
+flagged = true
+message = "Your answer was flagged for using AI. Please try again using your own words."
+
+Only detect AI-generated speech. Ignore plagiarism.
+Only mark is_off_topic if completely unrelated.
+Keep responses brief.`
           },
           {
             role: 'user',
@@ -687,10 +747,51 @@ Provide scores and list specific grammar mistakes with corrections, plus vocabul
         ]
       });
 
-      const feedbackText = feedbackResponse.choices[0].message.content;
-      console.log('🤖 Feedback response:', feedbackText?.substring(0, 100) + '...');
+      const u = feedbackResponse?.usage;
+      if (u) console.log('📊 Tokens used (legacy feedback):', { prompt_tokens: u.prompt_tokens, completion_tokens: u.completion_tokens, total_tokens: u.total_tokens });
 
-      const feedbackResult = JSON.parse(feedbackText || '{}');
+      const choice = feedbackResponse?.choices?.[0];
+      const feedbackText = choice?.message?.content;
+      if (!feedbackText || typeof feedbackText !== 'string') {
+        const isTokenLimit = choice?.finish_reason === 'length';
+        console.error('Invalid feedback response from OpenAI – full choice:', JSON.stringify(choice, null, 2));
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            success: false,
+            error: isTokenLimit
+              ? 'Your speech is too long. Try to speak less than 100 words.'
+              : 'Something went wrong. Please try again.',
+            error_code: isTokenLimit ? 'speech_too_long' : undefined,
+            transcript: transcriptionResult.text,
+            transcript_id: transcriptionResult.transcript_id
+          })
+        };
+      }
+      console.log('🤖 Feedback response:', feedbackText.substring(0, 100) + (feedbackText.length > 100 ? '...' : ''));
+
+      const feedbackResult = JSON.parse(feedbackText);
+      // Require a valid score so client can show feedback or a clear error
+      const hasValidScore = typeof feedbackResult.overall_score === 'number' &&
+        feedbackResult.overall_score >= 0 &&
+        feedbackResult.overall_score <= 100;
+      if (!hasValidScore) {
+        console.error('Feedback analysis returned invalid or missing overall_score. Raw response:', feedbackText);
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            success: false,
+            error: 'Something went wrong. Please try again.',
+            transcript: transcriptionResult.text,
+            transcript_id: transcriptionResult.transcript_id
+          })
+        };
+      }
+      // Enforce max 3 corrections per type
+      if (Array.isArray(feedbackResult.grammar_corrections)) feedbackResult.grammar_corrections = feedbackResult.grammar_corrections.slice(0, 3);
+      if (Array.isArray(feedbackResult.vocabulary_corrections)) feedbackResult.vocabulary_corrections = feedbackResult.vocabulary_corrections.slice(0, 3);
       // Harden integrity output: enforce flagged threshold + defaults even if model forgets.
       if (!feedbackResult.integrity || typeof feedbackResult.integrity !== 'object') {
         feedbackResult.integrity = {};
@@ -901,18 +1002,18 @@ async function streamTranscribeAndAnalyze(
 
       // FASTER FEEDBACK: Use streaming and simplified analysis
       const feedbackResponse = await openai.chat.completions.create({
-        model: 'gpt-5-mini',
-        temperature: 0,
-        max_tokens: 500, // Even smaller for speed
+        model: 'gpt-4o-mini',
+        max_completion_tokens: 3000,
         stream: false, // Keep simple for now
         messages: [
           {
             role: 'system',
-            content: `Analyze speech for language learning. Return concise JSON:
+            content: `Analyze a student's spoken answer. Return concise JSON only.
+
 {
   "overall_score": number (0-100),
-  "is_off_topic": boolean (only if completely irrelevant),
-  "feedback": "brief summary",
+  "is_off_topic": boolean,
+  "feedback": "1-2 sentences",
   "grammar_corrections": [{"mistake": "text", "correction": "text"}],
   "vocabulary_corrections": [{"mistake": "text", "correction": "text"}],
   "integrity": {
@@ -927,14 +1028,60 @@ async function streamTranscribeAndAnalyze(
   }
 }
 
-Keep it brief. Only flag as off-topic if completely irrelevant to speaking practice.
+Rules:
 
-AI integrity:
-- Students may paste AI-written text into speaking practice (reading it aloud).
-- Detect *strong* signs only. Avoid false positives.
-- If integrity.risk_score >= 60 set integrity.flagged=true and set integrity.message to:
-  "Your answer was flagged for using AI. Please try again using your own words."
-- Evaluate signals using: level mismatch (relative to the prompt difficulty), off-syllabus vocabulary (overly advanced/academic words for typical learners), and robotic cues (template-y essay markers like "Moreover", "In conclusion").`
+Grammar & Vocabulary
+- List ONLY real mistakes (wrong grammar or wrong word).
+- Do NOT include stylistic suggestions (e.g. adding "I", "that", or rephrasing).
+- If the sentence is correct, return no corrections.
+- Max 3 grammar_corrections and 3 vocabulary_corrections.
+- Feedback must be 1–2 sentences.
+
+AI Integrity (main goal)
+We detect if AI text was written first and then read aloud.
+
+Typical human 1-minute speech contains:
+- small grammar mistakes
+- repetition
+- uneven phrasing
+
+AI signals:
+- perfect grammar
+- essay-like structure
+- generic phrases ("It is important to…", "Furthermore…", "In conclusion…")
+- very balanced formal wording
+- no natural mistakes
+
+Scoring rules:
+- If real grammar mistakes exist, the "0 real errors" rule cannot apply.
+- 0 real errors → risk_score ≥70
+- only stylistic suggestions → risk_score ≥65
+- very polished text → risk_score ≥50
+- 2+ AI signals → risk_score ≥60
+- risk_score <30 only if speech clearly sounds spontaneous and messy
+
+Short-answer safeguard (very important and overrides other scoring rules):
+If the response is shorter than 35 words:
+- Do NOT treat perfect grammar as an AI signal.
+- Simple sentences are normal for beginner speakers.
+- If descriptive phrasing or unnaturally polished structure appears,
+  risk_score may reach 40–70.
+
+These rules override all other scoring rules.
+
+Signals guidance:
+- level_mismatch: language much stronger than expected student level
+- off_syllabus_vocab: advanced or unusual vocabulary
+- robotic_cues: formal structure, generic phrases, essay tone
+
+Integrity result:
+If risk_score ≥60:
+flagged = true
+message = "Your answer was flagged for using AI. Please try again using your own words."
+
+Only detect AI-generated speech. Ignore plagiarism.
+Only mark is_off_topic if completely unrelated.
+Keep responses brief.`
           },
           {
             role: 'user',
@@ -949,12 +1096,31 @@ Please analyze their speaking performance. Focus on how well they addressed the 
         ]
       });
 
-      const feedbackText = feedbackResponse.choices[0].message.content;
-      console.log('🤖 Raw feedback response:', feedbackText?.substring(0, 100) + '...');
+      const u = feedbackResponse?.usage;
+      if (u) console.log('📊 Tokens used (streaming feedback):', { prompt_tokens: u.prompt_tokens, completion_tokens: u.completion_tokens, total_tokens: u.total_tokens });
+
+      const choice = feedbackResponse?.choices?.[0];
+      const feedbackText = choice?.message?.content;
+      if (!feedbackText || typeof feedbackText !== 'string') {
+        const isTokenLimit = choice?.finish_reason === 'length';
+        console.error('Invalid feedback response from OpenAI (streaming) – full choice:', JSON.stringify(choice, null, 2));
+        throw new Error(isTokenLimit ? 'speech_too_long' : 'Invalid feedback response');
+      }
+      console.log('🤖 Raw feedback response:', feedbackText.substring(0, 100) + (feedbackText.length > 100 ? '...' : ''));
 
       // Parse feedback JSON
       try {
-        feedbackResult = JSON.parse(feedbackText || '{}');
+        feedbackResult = JSON.parse(feedbackText);
+        const hasValidScore = typeof feedbackResult.overall_score === 'number' &&
+          feedbackResult.overall_score >= 0 &&
+          feedbackResult.overall_score <= 100;
+        if (!hasValidScore) {
+          console.error('Feedback analysis returned invalid or missing overall_score. Raw:', feedbackText);
+          throw new Error('Invalid feedback response');
+        }
+        // Enforce max 3 corrections per type
+        if (Array.isArray(feedbackResult.grammar_corrections)) feedbackResult.grammar_corrections = feedbackResult.grammar_corrections.slice(0, 3);
+        if (Array.isArray(feedbackResult.vocabulary_corrections)) feedbackResult.vocabulary_corrections = feedbackResult.vocabulary_corrections.slice(0, 3);
         // Harden integrity output: enforce flagged threshold + defaults even if model forgets.
         if (!feedbackResult.integrity || typeof feedbackResult.integrity !== 'object') {
           feedbackResult.integrity = {};

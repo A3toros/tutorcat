@@ -183,6 +183,45 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
   }, [user?.id, lessonData.lessonId, lessonData.improvedText, improvedTranscript, hasTriedLoadingFromDB]);
 
   // Load improved transcript directly from database (no regeneration needed)
+  const loadFromSpeechJobsByLesson = useCallback(async (): Promise<boolean> => {
+    if (!user?.id || !lessonData.lessonId) return false;
+
+    try {
+      const response = await makeAuthenticatedRequest(
+        `/.netlify/functions/get-speech-jobs-by-lesson?lesson_id=${encodeURIComponent(lessonData.lessonId)}`,
+        { method: 'GET' }
+      );
+      if (!response.ok) return false;
+
+      const data = await response.json();
+      const jobs = data.jobs || [];
+      const completed = jobs.filter((j: any) => j.status === 'completed' && j.result?.improved_transcript);
+      if (completed.length === 0) return false;
+
+      // Use the most recent completed job's improved_transcript (or combine if multiple prompts)
+      const latest = completed[0];
+      const improvedFromJob = latest.result?.improved_transcript;
+      if (!improvedFromJob || typeof improvedFromJob !== 'string') return false;
+
+      console.log('✅ SpeakingImprovement: Loaded improved transcript from speech-jobs-by-lesson', {
+        lessonId: lessonData.lessonId,
+        jobId: latest.id,
+        improvedLength: improvedFromJob.length,
+      });
+
+      setImprovedTranscript(improvedFromJob);
+      improvedTranscriptRef.current = improvedFromJob;
+      const displayText = condenseTextForLevel(improvedFromJob, lessonData.level);
+      setCondensedDisplayText(displayText);
+      if (latest.transcript) setOriginalTranscript(latest.transcript);
+      return true;
+    } catch (e) {
+      console.warn('SpeakingImprovement: get-speech-jobs-by-lesson failed', e);
+      return false;
+    }
+  }, [user?.id, lessonData.lessonId, lessonData.level, makeAuthenticatedRequest, condenseTextForLevel]);
+
+  // Load improved transcript directly from get-lesson activity results (submitted lesson)
   const loadImprovedTranscriptFromDB = useCallback(async () => {
     if (!user?.id || !lessonData.lessonId || isLoadingFromDB) return;
 
@@ -280,12 +319,18 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
     }
   }, [user?.id, lessonData.lessonId, isLoadingFromDB, makeAuthenticatedRequest]);
 
-  // Auto-load from database if not found in localStorage
+  // Auto-load from database if not found in localStorage: try speech-jobs-by-lesson first, then get-lesson activity results
   useEffect(() => {
-    if (hasTriedLoadingFromDB && !improvedTranscript && !lessonData.improvedText) {
+    if (!hasTriedLoadingFromDB || improvedTranscript || lessonData.improvedText) return;
+
+    let cancelled = false;
+    (async () => {
+      const fromSpeechJobs = await loadFromSpeechJobsByLesson();
+      if (cancelled || fromSpeechJobs) return;
       loadImprovedTranscriptFromDB();
-    }
-  }, [hasTriedLoadingFromDB, improvedTranscript, lessonData.improvedText, loadImprovedTranscriptFromDB]);
+    })();
+    return () => { cancelled = true; };
+  }, [hasTriedLoadingFromDB, improvedTranscript, lessonData.improvedText, loadFromSpeechJobsByLesson, loadImprovedTranscriptFromDB]);
 
   // Update display text when improved transcript or level changes
   useEffect(() => {
@@ -440,15 +485,18 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
             })
           })
 
-          const result = await response.json()
+          const result = await response.json().catch(() => null)
+
+          if (!response.ok) {
+            const message = result?.error || (response.status === 500 ? 'Request timed out. Please try again.' : `Request failed: ${response.status}`)
+            throw new Error(message)
+          }
+
+          if (result == null || typeof result !== 'object') {
+            throw new Error('Request timed out or invalid response. Please try again.')
+          }
 
           if (!result.success) {
-            if (result.min_words != null && result.word_count != null) {
-              showNotification(result.error || `Please speak at least ${result.min_words} words. You said ${result.word_count} word(s).`, 'error')
-              setIsProcessing(false)
-              setCurrentStep('idle')
-              return
-            }
             throw new Error(result.error || 'Transcription failed')
           }
 
@@ -483,10 +531,14 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
           })
 
           if (!similarityResponse.ok) {
-            throw new Error('Similarity check failed')
+            const errBody = await similarityResponse.json().catch(() => ({}))
+            throw new Error(errBody?.error || `Request failed: ${similarityResponse.status}`)
           }
 
-          const similarityResult = await similarityResponse.json()
+          const similarityResult = await similarityResponse.json().catch(() => null)
+          if (similarityResult == null || typeof similarityResult !== 'object') {
+            throw new Error('Similarity check failed. Please try again.')
+          }
           
           if (similarityResult.success && similarityResult.similarity !== undefined) {
             // Convert similarity from 0-1 to 0-100 if needed

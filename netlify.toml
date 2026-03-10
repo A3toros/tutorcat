@@ -3,6 +3,26 @@
   functions = "functions"
   publish = ".next"
 
+# Increase timeout for AI functions that call OpenAI (can take 30–40+ seconds)
+[functions]
+  [functions."ai-feedback"]
+    timeout = 45
+  [functions."ai-speech-to-text"]
+    timeout = 45
+  [functions."improve-transcription"]
+    timeout = 30
+  [functions."speech-job"]
+    timeout = 45
+  [functions."analysis-result"]
+    timeout = 10
+  [functions."retry-speech-analysis"]
+    timeout = 10
+  [functions."get-speech-jobs-by-lesson"]
+    timeout = 10
+  [functions."run-speech-analysis-background"]
+    # Background functions can run up to 15 min; set explicitly if desired
+    timeout = 900
+
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 

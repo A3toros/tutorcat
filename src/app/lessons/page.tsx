@@ -107,43 +107,9 @@ const allSteps: { id: LessonStep; label: string; icon: string }[] = [
 
 // Helper function to check if a step has content
 const hasStepContent = (stepId: LessonStep, lessonData: LessonData | null): boolean => {
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/33428b2c-5290-424a-9264-2f0b67af3763', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      location: 'hasStepContent entry',
-      message: `Checking content for step: ${stepId}`,
-      data: {
-        stepId,
-        lessonDataExists: !!lessonData,
-        lessonDataKeys: lessonData ? Object.keys(lessonData) : null,
-        stepsKeys: lessonData?.steps ? Object.keys(lessonData.steps) : null
-      },
-      timestamp: Date.now(),
-      sessionId: 'debug-speaking-content',
-      runId: 'hypothesis-test',
-      hypothesisId: 'speaking-content-check'
-    })
-  }).catch(() => {});
-  // #endregion
 
   if (!lessonData) {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/33428b2c-5290-424a-9264-2f0b67af3763', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        location: 'hasStepContent null check',
-        message: 'lessonData is null',
-        data: { stepId },
-        timestamp: Date.now(),
-        sessionId: 'debug-speaking-content',
-        runId: 'hypothesis-test',
-        hypothesisId: 'speaking-content-check'
-      })
-    }).catch(() => {});
-    // #endregion
+
     return false;
   }
 
@@ -175,22 +141,6 @@ const hasStepContent = (stepId: LessonStep, lessonData: LessonData | null): bool
     default:
       result = false;
   }
-
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/33428b2c-5290-424a-9264-2f0b67af3763', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      location: 'hasStepContent result',
-      message: `Step content check result for ${stepId}`,
-      data: { stepId, result },
-      timestamp: Date.now(),
-      sessionId: 'debug-speaking-content',
-      runId: 'hypothesis-test',
-      hypothesisId: 'speaking-content-check'
-    })
-  }).catch(() => {});
-  // #endregion
 
   return result;
 }
@@ -813,27 +763,6 @@ function LessonContent() {
           } else if (nextStep && hasStepContent(nextStep, lessonData)) {
             // Crossing step boundary - only if target step has content
             console.warn(`✅ handleActivityComplete: CROSSING STEP BOUNDARY - ${currentStepFromActivity} → ${nextStep} for ${nextActivity?.activityType}`);
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/33428b2c-5290-424a-9264-2f0b67af3763', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                location: 'handleActivityComplete before setCurrentStep',
-                message: `About to call setCurrentStep(${nextStep})`,
-                data: {
-                  currentStep: currentStep,
-                  nextStep,
-                  nextActivityType: nextActivity?.activityType,
-                  isTransitioning: isTransitioning,
-                  hasStepContent: hasStepContent(nextStep, lessonData)
-                },
-                timestamp: Date.now(),
-                sessionId: 'debug-ui-transition',
-                runId: 'grammar-to-speaking',
-                hypothesisId: 'ui-rerender-issue'
-              })
-            }).catch(() => {});
-            // #endregion
             setCurrentStep(nextStep)
             // Reset isTransitioning immediately - React will handle the animation transition
             setIsTransitioning(false)
@@ -1597,30 +1526,6 @@ interface LessonStepContentProps {
 function LessonStepContent({ step, lessonData, currentActivity, onComplete, isCompleted, lessonId, handleActivityComplete, isTransitioning = false }: LessonStepContentProps) {
   const { t } = useTranslation()
 
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/33428b2c-5290-424a-9264-2f0b67af3763', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      location: 'LessonStepContent render',
-      message: `LessonStepContent rendering for step: ${step}`,
-      data: {
-        step,
-        isTransitioning,
-        currentActivityType: currentActivity?.activityType,
-        currentActivityOrder: currentActivity?.activityOrder,
-        lessonDataSteps: lessonData?.steps ? Object.keys(lessonData.steps) : null,
-        hasSpeakingStep: !!lessonData?.steps?.speaking,
-        speakingPromptsLength: lessonData?.steps?.speaking?.prompts?.length || 0
-      },
-      timestamp: Date.now(),
-      sessionId: 'debug-ui-transition',
-      runId: 'grammar-to-speaking',
-      hypothesisId: 'step-rerender-tracking'
-    })
-  }).catch(() => {});
-  // #endregion
-
   const renderStepContent = () => {
     // Provide a no-op onComplete for backward compatibility with step components
     // In the activity-based system, individual activities handle their own completion
@@ -2097,13 +2002,14 @@ function WarmupStep({ data, level, onComplete, isCompleted, isTransitioning = fa
 
                     {/* Grammar Corrections - filter out capitalization-only corrections for spoken responses */}
                     {feedback.grammar_corrections && feedback.grammar_corrections.length > 0 && (() => {
-                      // Filter out capitalization-only corrections (not relevant for spoken language)
-                      const meaningfulCorrections = feedback.grammar_corrections.filter((correction: any) => {
-                        const mistake = (correction.mistake || '').toLowerCase();
-                        const correctionText = (correction.correction || '').toLowerCase();
-                        // Only show if the correction changes more than just capitalization
-                        return mistake !== correctionText;
-                      });
+                      // Filter out capitalization-only; show max 3 corrections
+                      const meaningfulCorrections = (feedback.grammar_corrections as any[])
+                        .filter((correction: any) => {
+                          const mistake = (correction.mistake || '').toLowerCase();
+                          const correctionText = (correction.correction || '').toLowerCase();
+                          return mistake !== correctionText;
+                        })
+                        .slice(0, 3);
                       
                       if (meaningfulCorrections.length === 0) return null;
                       
@@ -2128,7 +2034,7 @@ function WarmupStep({ data, level, onComplete, isCompleted, isTransitioning = fa
                       <div className="mb-3">
                         <h5 className="font-semibold text-purple-700 mb-2 text-sm">Vocabulary Suggestions:</h5>
                         <ul className="list-disc list-inside space-y-1">
-                          {feedback.vocabulary_corrections.map((correction: any, idx: number) => (
+                          {feedback.vocabulary_corrections.slice(0, 3).map((correction: any, idx: number) => (
                             <li key={idx} className="text-sm text-purple-900">
                               <span className="line-through text-red-600">{correction.mistake}</span>
                               {' → '}
@@ -2634,30 +2540,6 @@ function GrammarStep({ data, currentActivity, onComplete, isCompleted, lessonId,
 
 function SpeakingStep({ data, level, currentActivity, onComplete, isCompleted, lessonId, handleActivityComplete, isTransitioning = false }: any) {
   const { t } = useTranslation()
-
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/33428b2c-5290-424a-9264-2f0b67af3763', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      location: 'SpeakingStep render',
-      message: 'SpeakingStep component rendering',
-      data: {
-        isTransitioning,
-        currentActivityType: currentActivity?.activityType,
-        currentActivityOrder: currentActivity?.activityOrder,
-        dataExists: !!data,
-        dataKeys: data ? Object.keys(data) : null,
-        promptsLength: data?.prompts?.length || 0,
-        hasFeedbackCriteria: !!data?.feedbackCriteria
-      },
-      timestamp: Date.now(),
-      sessionId: 'debug-ui-transition',
-      runId: 'grammar-to-speaking',
-      hypothesisId: 'speaking-step-rendering'
-    })
-  }).catch(() => {});
-  // #endregion
 
   return (
     <div className="space-y-6">

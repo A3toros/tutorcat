@@ -1,7 +1,11 @@
 import { Handler } from '@netlify/functions';
 import OpenAI from 'openai';
 
-// Initialize OpenAI client
+/**
+ * POST: Audio or transcript → feedback in one response.
+ * Used by: evaluation page, SpeakingTest, aiFeedbackHelper.
+ * For lesson speaking activity the preferred flow is speech-job + analysis-result (one request, then poll).
+ */
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const openai = new OpenAI({
   apiKey: OPENAI_API_KEY
@@ -23,8 +27,9 @@ function countWords(text: string): number {
 }
 
 interface RequestBody {
-  audio_blob: string      // Base64 encoded audio (REQUIRED)
+  audio_blob?: string      // Base64 encoded audio (optional if transcription provided)
   audio_mime_type?: string
+  transcription?: string  // Pre-existing transcript (e.g. from Retry Analysis - no need to send audio again)
   prompt: string
   cefr_level?: string
   min_words?: number
@@ -81,11 +86,14 @@ const handler: Handler = async (event, context) => {
       } as any;
     }
 
-    if (!body.audio_blob) {
+    // Require either audio (to transcribe) or pre-existing transcription (e.g. Retry Analysis)
+    const hasAudio = !!body.audio_blob;
+    const hasTranscription = typeof body.transcription === 'string' && body.transcription.trim().length > 0;
+    if (!hasAudio && !hasTranscription) {
       return {
         statusCode: 400,
         headers,
-        body: JSON.stringify({ success: false, error: 'Missing audio_blob' })
+        body: JSON.stringify({ success: false, error: 'Missing audio_blob or transcription' })
       } as any;
     }
 
@@ -95,13 +103,34 @@ const handler: Handler = async (event, context) => {
       throw new Error('OpenAI API key is required but not configured. Please set OPENAI_API_KEY in your environment.');
     }
 
-    // TRANSCRIBE AUDIO - Copy exact logic from ai-speech-to-text.ts
+    // TRANSCRIBE AUDIO (only if no transcription provided)
     let transcription: string;
+    if (hasTranscription) {
+      transcription = body.transcription!.trim();
+      console.log(`📝 Using provided transcription (${transcription.length} chars), skipping audio transcription`);
+      // Min-words check for transcript-only (e.g. Retry Analysis)
+      const minWordsOverride = typeof body.min_words === 'string' ? parseInt(body.min_words, 10) : body.min_words;
+      const minWords = getMinWordsForLevel(body.cefr_level, minWordsOverride);
+      const wordCount = countWords(transcription);
+      if (minWords > 0 && wordCount < minWords) {
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            success: false,
+            error: `Please speak at least ${minWords} words. You said ${wordCount} word(s).`,
+            transcript: transcription,
+            word_count: wordCount,
+            min_words: minWords
+          })
+        } as any;
+      }
+    } else {
     try {
       console.log('🎤 Transcribing audio with OpenAI Whisper...');
       
       // Convert base64 to buffer
-      const audioBuffer = Buffer.from(body.audio_blob, 'base64');
+      const audioBuffer = Buffer.from(body.audio_blob!, 'base64');
       const bufferSizeMB = (audioBuffer.length / (1024 * 1024)).toFixed(2);
       console.log(`🎤 Starting streaming transcription: ${bufferSizeMB}MB audio`);
 
@@ -200,6 +229,7 @@ const handler: Handler = async (event, context) => {
         })
       } as any;
     }
+    }
 
     // Now provide feedback on the transcription
     try {
@@ -219,11 +249,11 @@ const handler: Handler = async (event, context) => {
       
       console.log(`📊 Word count requirements for improved transcript - Level: ${body.cefr_level || 'unknown'}, Target: ${targetWords}, Range: ${minWordsForImproved}-${maxWordsForImproved} words`);
 
-      const systemPrompt = `Analyze speech for language learning. Return concise JSON:
+      const systemPrompt = `Analyze speech for language learning. Return concise JSON (keep response SHORT for speed):
 {
   "overall_score": number (0-100),
   "is_off_topic": boolean (only if completely irrelevant),
-  "feedback": "brief summary",
+  "feedback": "1-2 sentence summary only",
   "grammar_corrections": [{"mistake": "text", "correction": "text"}],
   "vocabulary_corrections": [{"mistake": "text", "correction": "text"}],
   "improved_transcript": "a clean, condensed, and enhanced version of the student's transcript. SELECT THE BEST AND MOST IMPORTANT PARTS of what the student said - do NOT repeat everything. Condense redundant or repetitive content. Fix all grammar and vocabulary mistakes. Enhance the language naturally while preserving the core meaning. Combine multiple sentences into one coherent, well-structured paragraph that flows naturally. Use appropriate transitions and connectors. CRITICAL: The improved_transcript must be EXACTLY between ${minWordsForImproved} and ${maxWordsForImproved} words (target: ${targetWords} words). The text must be COMPLETE and NATURAL - do NOT truncate or cut off mid-sentence. Create a full, coherent paragraph that ends naturally with proper punctuation. The text must NATURALLY fit within this exact word count range (${minWordsForImproved}-${maxWordsForImproved} words) while being a complete, finished thought. Select the best content, condense it, and enhance it - do not just copy everything. Keep it concise, polished, and appropriate for the student's level.",
@@ -252,72 +282,41 @@ CRITICAL CONTEXT: This is a 1-minute (60 second) speaking evaluation. Word count
 
 Be FAIR and GENEROUS in your assessment. Most students can barely say 50 words in 1 minute, so 100 words is truly excellent performance.
 
-CRITICAL: Assess the student's CEFR level accurately based on these specific criteria:
-
-C1 Level Indicators (Advanced):
-- Uses sophisticated, precise vocabulary (academic, abstract, nuanced terms)
-- Complex grammatical structures (subordinate clauses, conditionals, passive voice, advanced tenses)
-- Coherent, well-structured arguments with clear logical flow
-- Expresses nuanced opinions and abstract concepts
-- Natural, fluent speech with minimal hesitation
-- 100+ words with meaningful content (not just length)
-- Minor errors don't significantly impact communication
-
-B2 Level Indicators (Upper-Intermediate):
-- Good range of vocabulary with some sophisticated words
-- Generally accurate grammar with occasional errors
-- Can discuss familiar and unfamiliar topics
-- Clear expression of ideas, though may lack nuance
-- Some hesitation but generally fluent
-
-B1 Level Indicators (Intermediate):
-- Basic to intermediate vocabulary
-- Simple to moderate grammatical structures
-- Can express opinions on familiar topics
-- Noticeable errors but meaning is clear
-- Some hesitation and self-correction
-
-A1/A2 Level Indicators (Beginner/Elementary):
-- Limited vocabulary, basic words
-- Simple sentence structures
-- Frequent errors that may affect meaning
-- Difficulty expressing complex ideas
+Assess CEFR level (Pre-A1, A1, A2, B1, B2, C1, C2) from vocabulary, grammar complexity, coherence, and fluency using standard CEFR descriptors.
 
 Assessment Guidelines:
-- DO NOT penalize minor errors (typos, capitalization, small grammar mistakes) for C1/C2 candidates
-- Focus on OVERALL language ability: vocabulary sophistication, grammatical complexity, coherence, and fluency
-- A C1 speaker can have occasional minor errors but demonstrates advanced language control overall
-- If the student uses advanced vocabulary, complex structures, and coherent arguments, assess as C1 even with minor corrections
-- Word count expectations for 1-minute recording:
-  * 30-50 words: Basic/Adequate (A1-A2 level)
-  * 50-75 words: Good (B1 level)
-  * 75-100 words: Very Good (B2 level)
-  * 100+ words: Excellent (C1-C2 level)
-- Grammar constructions count: Count distinct grammar structures (simple past, present perfect, conditionals, passive voice, relative clauses, subjunctive, etc.)
-- Be GENEROUS with fluency_score: 100 words in 1 minute deserves 80-90+ fluency score
-- Be GENEROUS with vocabulary_quality: If student uses varied vocabulary appropriate to their level, score 70-90+
-- Quality and sophistication matter more than perfect grammar
+- Focus on overall ability (vocabulary, grammar complexity, coherence, fluency). Be generous: minor errors are fine for higher levels; 100 words in 1 min deserves 80-90+ fluency. Count distinct grammar structures used. Quality over perfect grammar.
 
 Scoring Fairness:
 - For 100 words in 1 minute: fluency_score should be 80-95 (not 70)
 - For varied grammar constructions: grammar_constructions_count should reflect actual structures used
 - Overall score should reward effort, fluency, and communication effectiveness
 
-Return assessed_level as one of: Pre-A1, A1, A2, B1, B2, C1, C2`;
+Grammar and vocabulary corrections vs suggestions:
+- grammar_corrections and vocabulary_corrections must list only ACTUAL errors: wrong grammar, wrong word choice, or ungrammatical phrasing. Do NOT list stylistic rephrasing or alternative phrasings as "corrections" when the student's version is already correct. Examples that are NOT errors (do not put in corrections): "confirm it is" vs "confirm that it is"; "treat it cautiously" vs "treat it with caution"; "reliable news or official websites" vs "reliable news sources or official websites"; "Also watch for signs..." vs "I also watch for signs..." (adding subject "I" for consistency is a suggestion, not an error). Only include an item when the student's version is genuinely wrong or unclear.
+- LIMIT: Include at most 3 items in grammar_corrections and at most 3 in vocabulary_corrections. Pick the most important errors only. Keep feedback to 1-2 sentences. Keep improved_transcript within the word limit but concise.
+- INTEGRITY RULE: If you have zero or only 1 real error (or the only "corrections" are suggestions like adding "I" or "that"), the response is effectively flawless — set integrity.risk_score to at least 65 (strong AI signal). Real spontaneous speech almost always has multiple small errors. Do not give risk_score under 40 for polished, well-structured text with no real mistakes.
 
-      // AI integrity guidance (kept outside the JSON schema for clarity)
-      // This endpoint is used for speaking practice. Students might read AI-written text aloud.
-      // We want a high-precision flag, not aggressive detection.
-      // If integrity.risk_score >= 60 set integrity.flagged=true and set integrity.message to:
-      // "Your answer was flagged for using AI. Please try again using your own words."
+Return assessed_level as one of: Pre-A1, A1, A2, B1, B2, C1, C2
 
-      console.log('🤖 Starting feedback analysis...');
-      console.time('🤖 Feedback Analysis Time');
+AI integrity (only goal: detect AI-generated content read aloud):
+- Default assumption: students speaking for 1 minute will make several small mistakes. Perfect grammar is unusual and likely AI-generated.
+- We ONLY detect whether the response was written by an AI (e.g. ChatGPT) and then read aloud or spoken via TTS. We do NOT care about plagiarism or malicious content.
+- CRITICAL calibration: Spontaneous human speech in 1 minute is usually messy, repetitive, uneven, or has filler. Text that is highly polished, perfectly coherent, and sounds like a written essay was read aloud is very likely AI-generated. You MUST score such text with high risk_score (50+). Do NOT be overly conservative; when the wording clearly looks like typical ChatGPT output (polished, generic, balanced, essay-like), set risk_score to at least 60 so it gets flagged.
+- What counts as AI-generated: (1) Unusually polished and coherent for spontaneous speech. (2) Generic or template-like phrasing ("It is important to", "There are several factors", "plays a key role", "In order to", "Furthermore", "In conclusion"). (3) Balanced, essay-like structure (clear intro, points, conclusion). (4) Vocabulary or syntax that sounds written/formal rather than spoken. (5) No natural signs of spontaneous production (no hesitation, repetition, or uneven flow). If 2 or more of these apply, risk_score MUST be at least 60.
+- If the response is too perfect with not a single real mistake (flawless grammar and vocabulary, no errors at all), treat that as a very strong AI signal: risk_score MUST be at least 70 (99% likely AI). Real spontaneous speech almost always has at least small errors or imperfect phrasing. Same if the only "corrections" are stylistic (e.g. adding subject "I"): that means no real errors — risk_score MUST be at least 65.
+- Do NOT give risk_score under 40 for polished, well-structured text with no or almost no real mistakes.
+- Before setting risk_score, ask: "Could this plausibly be improvised in 1 minute, or does it look like written text (e.g. from ChatGPT) read aloud?" If it looks like written/AI text, risk_score must be 60 or higher. Only give risk_score under 30 when it clearly sounds like spontaneous human speech (imperfect, personal, or messy).
+- Short-answer safeguard (very important): If the response is shorter than 35 words, do NOT treat perfect grammar as an AI signal; simple sentences are normal for beginners. risk_score must stay ≤30 unless strong AI signals appear (essay structure, formal connectors, advanced vocabulary).
+- integrity.risk_score (0-100) = likelihood the content was AI-generated then spoken. Use signals: level_mismatch, off_syllabus_vocab, robotic_cues (include generic AI phrasing and essay-like structure).
+- If integrity.risk_score >= 60 set integrity.flagged=true and integrity.message to: "Your answer was flagged for using AI. Please try again using your own words."
+- Do NOT mention plagiarism in integrity.message. Focus only on AI-generated content.`;
+      const feedbackTimeLabel = 'FeedbackAnalysis_' + Date.now();
+      console.time(feedbackTimeLabel);
 
       const feedbackResponse = await openai.chat.completions.create({
         model: 'gpt-5-mini',
-        temperature: 0.7,
-        max_tokens: 800,
+        max_completion_tokens: 3000,
         messages: [
           { role: 'system', content: systemPrompt },
           {
@@ -327,25 +326,49 @@ Return assessed_level as one of: Pre-A1, A1, A2, B1, B2, C1, C2`;
         ]
       });
 
-      if (!feedbackResponse.choices || !feedbackResponse.choices[0] || !feedbackResponse.choices[0].message || !feedbackResponse.choices[0].message.content) {
-        throw new Error('Invalid response from OpenAI');
+      const u = feedbackResponse?.usage;
+      if (u) console.log('📊 Tokens used:', { prompt_tokens: u.prompt_tokens, completion_tokens: u.completion_tokens, total_tokens: u.total_tokens });
+
+      const choice = feedbackResponse?.choices?.[0];
+      const content = choice?.message?.content;
+      if (!content || typeof content !== 'string') {
+        console.timeEnd(feedbackTimeLabel);
+        console.error('Invalid response from OpenAI – full choice:', JSON.stringify(choice, null, 2));
+        console.error('Invalid response from OpenAI – full response (choices only):', JSON.stringify(feedbackResponse?.choices, null, 2));
+        const isTokenLimit = choice?.finish_reason === 'length';
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            success: false,
+            error: isTokenLimit
+              ? 'Your speech is too long. Try to speak less than 100 words.'
+              : 'Something went wrong. Please try again.',
+            error_code: isTokenLimit ? 'speech_too_long' : undefined,
+            transcript: transcription
+          })
+        } as any;
       }
 
-      const aiResponse = feedbackResponse.choices[0].message.content;
+      const aiResponse = content;
+      console.timeEnd(feedbackTimeLabel);
       console.log('🤖 Raw feedback response:', aiResponse?.substring(0, 100) + '...');
 
       // Parse the JSON response
       let feedback;
       try {
         feedback = JSON.parse(aiResponse);
-        console.timeEnd('🤖 Feedback Analysis Time');
         console.log(`✅ Feedback analysis completed - Score: ${feedback.overall_score}/100`);
       } catch (parseError) {
         console.error('❌ Failed to parse feedback JSON:', aiResponse);
         throw new Error('AI returned invalid JSON response');
       }
 
-      // Harden integrity output: enforce flagged threshold + defaults even if model forgets.
+      // Enforce max 3 corrections per type (keep response small and fast)
+      if (Array.isArray(feedback.grammar_corrections)) feedback.grammar_corrections = feedback.grammar_corrections.slice(0, 3);
+      if (Array.isArray(feedback.vocabulary_corrections)) feedback.vocabulary_corrections = feedback.vocabulary_corrections.slice(0, 3);
+
+      // Harden integrity output:
       if (!feedback.integrity || typeof feedback.integrity !== 'object') {
         feedback.integrity = {};
       }
@@ -365,6 +388,12 @@ Return assessed_level as one of: Pre-A1, A1, A2, B1, B2, C1, C2`;
           robotic_cues: 0
         };
       }
+
+      console.log('🛡️ AI integrity:', {
+        risk_score: feedback.integrity.risk_score,
+        flagged: feedback.integrity.flagged,
+        message: feedback.integrity.message || '(none)'
+      });
 
       // Validate the response structure (simplified)
       if (typeof feedback.overall_score !== 'number' || typeof feedback.feedback !== 'string') {
