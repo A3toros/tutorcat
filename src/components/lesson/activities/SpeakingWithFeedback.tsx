@@ -1230,6 +1230,29 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
 
   // Generate combined improved version from all transcripts
   const generateCombinedImprovedVersion = useCallback(async (allTranscripts: string[]): Promise<string> => {
+    // Local helper: target word count by CEFR level
+    const getTargetWordCount = (level?: string): number => {
+      if (!level) return 20
+      const normalized = level.toUpperCase().trim()
+      if (normalized === 'A1' || normalized === 'A2') return 20
+      if (normalized === 'B1' || normalized === 'B2') return 40
+      if (normalized === 'C1' || normalized === 'C2') return 60
+      return 20
+    }
+
+    // Local helper: condense text to CEFR-based range (target ±20, hard cap)
+    const condenseTextForLevel = (text: string, level?: string): string => {
+      if (!text || !text.trim()) return ''
+      const target = getTargetWordCount(level)
+      const maxWords = target + 20
+      const words = text.trim().split(/\s+/)
+      if (words.length <= maxWords) return text.trim()
+      const sliced = words.slice(0, maxWords).join(' ')
+      // Ensure it ends cleanly
+      if (/[.!?]$/.test(sliced)) return sliced
+      return sliced + '...'
+    }
+
     try {
       const response = await makeRequestWithRetry('/.netlify/functions/improve-transcription', {
         method: 'POST',
@@ -1252,15 +1275,16 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       throw new Error(result.error || 'Failed to improve transcription');
     } catch (error) {
       console.error('Error generating combined improved version:', error);
-      // Fallback: combine individual improved transcripts if available
+      // Fallback: prefer individual improved transcripts, then raw transcripts – but always condense
       const individualImproved = Object.values(feedback)
         .map((f: any) => f?.improved_transcript)
         .filter(Boolean)
         .join(' ');
-      
-      return individualImproved || allTranscripts.join(' ');
+
+      const rawCombined = (individualImproved || allTranscripts.join(' ')).trim()
+      return condenseTextForLevel(rawCombined, lessonData.level || user?.level)
     }
-  }, [feedback, lessonData.feedbackCriteria, makeRequestWithRetry]);
+  }, [feedback, lessonData.feedbackCriteria, lessonData.level, user?.level, makeRequestWithRetry]);
 
   // Handle completion
   const handleComplete = useCallback(async () => {
