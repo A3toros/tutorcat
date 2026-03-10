@@ -73,17 +73,24 @@ export const handler: Handler = async (event) => {
   const row = job as JobRow;
 
   // If job is still "processing", the initial trigger from speech-job may have failed.
-  // Re-trigger the background analysis so the job can complete. The background function
-  // uses WHERE status = 'processing', so only one runner will do the work.
+  // Re-trigger the background analysis and await the request (short timeout) so it's
+  // actually sent before we return – avoids mobile/server freezing before fire-and-forget completes.
   if (row.status === 'processing') {
     const baseUrl = process.env.URL || process.env.DEPLOY_PRIME_URL;
     if (baseUrl) {
       const backgroundUrl = `${String(baseUrl).replace(/\/$/, '')}/.netlify/functions/run-speech-analysis-background`;
-      fetch(backgroundUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId: id }),
-      }).catch((err) => console.error('analysis-result: failed to trigger background analysis', err));
+      try {
+        await Promise.race([
+          fetch(backgroundUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ jobId: id }),
+          }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('trigger_timeout')), 5000)),
+        ]);
+      } catch (err) {
+        console.error('analysis-result: failed to trigger background analysis', err);
+      }
     }
   }
 

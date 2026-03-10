@@ -3,6 +3,7 @@
  * Invoked by speech-job and retry-speech-analysis after creating a job.
  * POST body: { jobId: string }
  */
+import { Handler } from '@netlify/functions';
 import OpenAI from 'openai';
 import { neon } from '@neondatabase/serverless';
 
@@ -128,27 +129,29 @@ async function runFeedbackAnalysis(
   return { success: true, feedback };
 }
 
-export default async (req: Request): Promise<void> => {
-  if (req.method !== 'POST') return;
+const handler: Handler = async (event) => {
+  if (event.httpMethod !== 'POST') {
+    return { statusCode: 405, body: '' };
+  }
 
   let jobId: string;
   try {
-    const body = await req.json();
+    const body = JSON.parse(event.body || '{}');
     jobId = body?.jobId;
     if (!jobId || typeof jobId !== 'string' || !jobId.trim()) {
       console.error('run-speech-analysis-background: missing or invalid jobId');
-      return;
+      return { statusCode: 400, body: '' };
     }
     jobId = jobId.trim();
   } catch {
     console.error('run-speech-analysis-background: invalid JSON body');
-    return;
+    return { statusCode: 400, body: '' };
   }
 
   const databaseUrl = process.env.NEON_DATABASE_URL;
   if (!databaseUrl) {
     console.error('run-speech-analysis-background: NEON_DATABASE_URL not configured');
-    return;
+    return { statusCode: 500, body: '' };
   }
 
   const sql = neon(databaseUrl);
@@ -161,11 +164,11 @@ export default async (req: Request): Promise<void> => {
   const job = jobRows[0] as { id: string; transcript: string; status: string; prompt: string | null; cefr_level: string | null; min_words: number | null } | undefined;
   if (!job) {
     console.error('run-speech-analysis-background: job not found', jobId);
-    return;
+    return { statusCode: 404, body: '' };
   }
 
   if (job.status !== 'processing') {
-    return;
+    return { statusCode: 200, body: JSON.stringify({ ok: true, status: job.status }) };
   }
 
   const wordCount = job.transcript.trim().split(/\s+/).filter(Boolean).length;
@@ -177,7 +180,7 @@ export default async (req: Request): Promise<void> => {
       SET status = 'failed', error = ${errorMsg}, result_json = ${JSON.stringify({ min_words: minWords, word_count: wordCount, error: errorMsg })}::jsonb, updated_at = NOW()
       WHERE id = ${jobId}
     `;
-    return;
+    return { statusCode: 200, body: JSON.stringify({ ok: true, status: 'failed' }) };
   }
 
   const updatedRows = await sql`
@@ -187,7 +190,7 @@ export default async (req: Request): Promise<void> => {
     RETURNING id
   `;
   if (updatedRows.length === 0) {
-    return;
+    return { statusCode: 200, body: JSON.stringify({ ok: true }) };
   }
 
   try {
@@ -218,4 +221,8 @@ export default async (req: Request): Promise<void> => {
       WHERE id = ${jobId}
     `;
   }
+
+  return { statusCode: 200, body: JSON.stringify({ ok: true }) };
 };
+
+export { handler };
