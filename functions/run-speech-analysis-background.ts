@@ -1,43 +1,25 @@
 /**
- * Background function: runs speech feedback analysis (up to 15 min).
- * Invoked by speech-job and retry-speech-analysis after creating a job.
- * POST body: { jobId: string }
+ * Netlify Background Function: runs speech feedback analysis (up to 15 min).
+ * Filename suffix -background makes Netlify return 202 immediately and run this async.
+ * Invoke with POST body: { jobId: string }
+ * @see https://docs.netlify.com/build/functions/background-functions/
  */
-import { Handler } from '@netlify/functions';
 import OpenAI from 'openai';
 import { neon } from '@neondatabase/serverless';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const openai = OPENAI_API_KEY ? new OpenAI({ apiKey: OPENAI_API_KEY }) : null;
 
-function getMinWordsForLevel(cefrLevel?: string | null, minWordsOverride?: number | null): number {
-  if (typeof minWordsOverride === 'number') return Math.max(0, minWordsOverride);
-  const level = (cefrLevel || '').toUpperCase().trim();
-  if (level === 'A1' || level === 'A2') return 20;
-  if (level === 'B1' || level === 'B2') return 40;
-  if (level === 'C1' || level === 'C2') return 60;
-  return 20;
-}
+// Same system prompt as ai-speech-to-text.ts (feedback analysis) + improved_transcript for UI display.
+const FEEDBACK_SYSTEM_PROMPT = `Analyze a student's spoken answer. Return concise JSON only.
 
-function buildSystemPrompt(
-  targetWords: number,
-  minWordsForImproved: number,
-  maxWordsForImproved: number,
-  cefrLevel: string
-): string {
-  return `Analyze speech for language learning. Return concise JSON (keep response SHORT for speed):
 {
   "overall_score": number (0-100),
-  "is_off_topic": boolean (only if completely irrelevant),
-  "feedback": "1-2 sentence summary only",
+  "is_off_topic": boolean,
+  "feedback": "1-2 sentences",
   "grammar_corrections": [{"mistake": "text", "correction": "text"}],
   "vocabulary_corrections": [{"mistake": "text", "correction": "text"}],
-  "improved_transcript": "a clean, condensed, and enhanced version of the student's transcript. SELECT THE BEST AND MOST IMPORTANT PARTS of what the student said - do NOT repeat everything. Condense redundant or repetitive content. Fix all grammar and vocabulary mistakes. Enhance the language naturally while preserving the core meaning. Combine multiple sentences into one coherent, well-structured paragraph that flows naturally. Use appropriate transitions and connectors. CRITICAL: The improved_transcript must be EXACTLY between ${minWordsForImproved} and ${maxWordsForImproved} words (target: ${targetWords} words). The text must be COMPLETE and NATURAL - do NOT truncate or cut off mid-sentence. Create a full, coherent paragraph that ends naturally with proper punctuation. The text must NATURALLY fit within this exact word count range (${minWordsForImproved}-${maxWordsForImproved} words) while being a complete, finished thought. Select the best content, condense it, and enhance it - do not just copy everything. Keep it concise, polished, and appropriate for the student's level.",
-  "assessed_level": "Pre-A1" | "A1" | "A2" | "B1" | "B2" | "C1" | "C2",
-  "word_count": number,
-  "grammar_constructions_count": number (count of distinct grammar structures used: simple past, present perfect, conditionals, passive voice, relative clauses, etc.),
-  "vocabulary_quality": number (0-100),
-  "fluency_score": number (0-100),
+  "improved_transcript": "a short, corrected and natural version of the student's transcript (1-2 sentences or a brief paragraph). Fix grammar and word choice; keep their meaning.",
   "integrity": {
     "risk_score": number (0-100),
     "flagged": boolean,
@@ -50,21 +32,60 @@ function buildSystemPrompt(
   }
 }
 
-CRITICAL CONTEXT: This is a 1-minute (60 second) speaking evaluation. Word count expectations:
-- 50 words in 1 minute = GOOD (average student performance)
-- 75 words in 1 minute = VERY GOOD (above average)
-- 100 words in 1 minute = EXCELLENT (fantastic performance, most students struggle to reach this)
-- 120+ words in 1 minute = OUTSTANDING (exceptional fluency)
+Rules:
 
-Be FAIR and GENEROUS in your assessment. Most students can barely say 50 words in 1 minute, so 100 words is truly excellent performance.
+Grammar & Vocabulary
+- List ONLY real mistakes (wrong grammar or wrong word).
+- Do NOT include stylistic suggestions (e.g. adding "I", "that", or rephrasing).
+- If the sentence is correct, return no corrections.
+- Max 3 grammar_corrections and 3 vocabulary_corrections.
+- Feedback must be 1–2 sentences.
 
-Assess CEFR level (Pre-A1, A1, A2, B1, B2, C1, C2) from vocabulary, grammar complexity, coherence, and fluency using standard CEFR descriptors.
+AI Integrity (main goal)
+We detect if AI text was written first and then read aloud.
 
-Grammar and vocabulary corrections: list only ACTUAL errors. LIMIT: at most 3 grammar_corrections and 3 vocabulary_corrections. Keep feedback to 1-2 sentences.
-Short-answer safeguard (very important): If the response is shorter than 35 words, do NOT treat perfect grammar as an AI signal; simple sentences are normal for beginners. risk_score must stay ≤30 unless strong AI signals appear (essay structure, formal connectors, advanced vocabulary).
-INTEGRITY RULE: If you have zero or only 1 real error, set integrity.risk_score to at least 65. If integrity.risk_score >= 60 set integrity.flagged=true and integrity.message to: "Your answer was flagged for using AI. Please try again using your own words."
-Return assessed_level as one of: Pre-A1, A1, A2, B1, B2, C1, C2`;
-}
+Typical human 1-minute speech contains:
+- small grammar mistakes
+- repetition
+- uneven phrasing
+
+AI signals:
+- perfect grammar
+- essay-like structure
+- generic phrases ("It is important to…", "Furthermore…", "In conclusion…")
+- very balanced formal wording
+- no natural mistakes
+
+Scoring rules:
+- If real grammar mistakes exist, the "0 real errors" rule cannot apply.
+- 0 real errors → risk_score ≥70
+- only stylistic suggestions → risk_score ≥65
+- very polished text → risk_score ≥50
+- 2+ AI signals → risk_score ≥60
+- risk_score <30 only if speech clearly sounds spontaneous and messy
+
+Short-answer safeguard (very important and overrides other scoring rules):
+If the response is shorter than 35 words:
+- Do NOT treat perfect grammar as an AI signal.
+- Simple sentences are normal for beginner speakers.
+- If descriptive phrasing or unnaturally polished structure appears,
+  risk_score may reach 40–70.
+
+These rules override all other scoring rules.
+
+Signals guidance:
+- level_mismatch: language much stronger than expected student level
+- off_syllabus_vocab: advanced or unusual vocabulary
+- robotic_cues: formal structure, generic phrases, essay tone
+
+Integrity result:
+If risk_score ≥60:
+flagged = true
+message = "Your answer was flagged for using AI. Please try again using your own words."
+
+Only detect AI-generated speech. Ignore plagiarism.
+Only mark is_off_topic if completely unrelated.
+Keep responses brief.`;
 
 async function runFeedbackAnalysis(
   transcription: string,
@@ -73,19 +94,20 @@ async function runFeedbackAnalysis(
 ): Promise<{ success: true; feedback: Record<string, unknown> } | { success: false; error: string }> {
   if (!openai) return { success: false, error: 'OpenAI not configured' };
 
-  const targetWords = getMinWordsForLevel(cefrLevel, null);
-  const minWordsForImproved = Math.max(0, targetWords - 20);
-  const maxWordsForImproved = targetWords + 20;
-  const systemPrompt = buildSystemPrompt(targetWords, minWordsForImproved, maxWordsForImproved, cefrLevel || 'unknown');
-
   const feedbackResponse = await openai.chat.completions.create({
-    model: 'gpt-5-mini',
-    max_completion_tokens: 4000,
+    model: 'gpt-4o-mini',
+    max_completion_tokens: 3000,
     messages: [
-      { role: 'system', content: systemPrompt },
+      { role: 'system', content: FEEDBACK_SYSTEM_PROMPT },
       {
         role: 'user',
-        content: `Recording Duration: 1 minute (60 seconds)\nPrompt: "${prompt}"\n\nStudent's spoken response: "${transcription}"\n\nPlease analyze their speaking performance fairly. The improved_transcript must be EXACTLY between ${minWordsForImproved} and ${maxWordsForImproved} words (target: ${targetWords} words).`,
+        content: `Prompt: "${prompt}"
+
+Expected CEFR level: ${cefrLevel || 'unknown'}
+
+Student's spoken response: "${transcription}"
+
+Please analyze their speaking performance. Focus on how well they addressed the prompt, their grammar accuracy, vocabulary usage, and fluency.`,
       },
     ],
   });
@@ -119,9 +141,6 @@ async function runFeedbackAnalysis(
     integrity.signals = { level_mismatch: 0, off_syllabus_vocab: 0, robotic_cues: 0 };
   }
 
-  const validLevels = ['Pre-A1', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
-  if (feedback.assessed_level && !validLevels.includes(feedback.assessed_level as string)) delete feedback.assessed_level;
-
   if (typeof feedback.overall_score !== 'number' || typeof feedback.feedback !== 'string') {
     return { success: false, error: 'AI response missing required fields' };
   }
@@ -129,29 +148,28 @@ async function runFeedbackAnalysis(
   return { success: true, feedback };
 }
 
-const handler: Handler = async (event) => {
-  if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: '' };
-  }
+/** Netlify background function: default export with (req, context) → client gets 202 immediately, execution runs in background. */
+export default async (req: Request, _context?: unknown): Promise<void> => {
+  if (req.method !== 'POST') return;
 
   let jobId: string;
   try {
-    const body = JSON.parse(event.body || '{}');
-    jobId = body?.jobId;
-    if (!jobId || typeof jobId !== 'string' || !jobId.trim()) {
+    const body = await req.json() as { jobId?: string };
+    const raw = body?.jobId;
+    if (!raw || typeof raw !== 'string' || !raw.trim()) {
       console.error('run-speech-analysis-background: missing or invalid jobId');
-      return { statusCode: 400, body: '' };
+      return;
     }
-    jobId = jobId.trim();
+    jobId = raw.trim();
   } catch {
     console.error('run-speech-analysis-background: invalid JSON body');
-    return { statusCode: 400, body: '' };
+    return;
   }
 
   const databaseUrl = process.env.NEON_DATABASE_URL;
   if (!databaseUrl) {
     console.error('run-speech-analysis-background: NEON_DATABASE_URL not configured');
-    return { statusCode: 500, body: '' };
+    return;
   }
 
   const sql = neon(databaseUrl);
@@ -164,12 +182,10 @@ const handler: Handler = async (event) => {
   const job = jobRows[0] as { id: string; transcript: string; status: string; prompt: string | null; cefr_level: string | null; min_words: number | null } | undefined;
   if (!job) {
     console.error('run-speech-analysis-background: job not found', jobId);
-    return { statusCode: 404, body: '' };
+    return;
   }
 
-  if (job.status !== 'processing') {
-    return { statusCode: 200, body: JSON.stringify({ ok: true, status: job.status }) };
-  }
+  if (job.status !== 'processing') return;
 
   const wordCount = job.transcript.trim().split(/\s+/).filter(Boolean).length;
   const minWords = job.min_words != null && typeof job.min_words === 'number' ? job.min_words : 0;
@@ -180,7 +196,7 @@ const handler: Handler = async (event) => {
       SET status = 'failed', error = ${errorMsg}, result_json = ${JSON.stringify({ min_words: minWords, word_count: wordCount, error: errorMsg })}::jsonb, updated_at = NOW()
       WHERE id = ${jobId}
     `;
-    return { statusCode: 200, body: JSON.stringify({ ok: true, status: 'failed' }) };
+    return;
   }
 
   const updatedRows = await sql`
@@ -189,9 +205,7 @@ const handler: Handler = async (event) => {
     WHERE id = ${jobId} AND status = 'processing'
     RETURNING id
   `;
-  if (updatedRows.length === 0) {
-    return { statusCode: 200, body: JSON.stringify({ ok: true }) };
-  }
+  if (updatedRows.length === 0) return;
 
   try {
     const result = await runFeedbackAnalysis(
@@ -221,8 +235,4 @@ const handler: Handler = async (event) => {
       WHERE id = ${jobId}
     `;
   }
-
-  return { statusCode: 200, body: JSON.stringify({ ok: true }) };
 };
-
-export { handler };

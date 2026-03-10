@@ -20,7 +20,7 @@
   [functions."get-speech-jobs-by-lesson"]
     timeout = 10
   [functions."run-speech-analysis-background"]
-    # Background functions can run up to 15 min; set explicitly if desired
+    # Netlify background function (filename -background): callers get 202 immediately, runs up to 15 min
     timeout = 900
 
 [[plugins]]

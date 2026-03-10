@@ -188,28 +188,9 @@ export const handler: Handler = async (event) => {
   }
 
   const jobId = row.id;
-  const baseUrl = process.env.URL || process.env.DEPLOY_PRIME_URL || 'http://localhost:8888';
-  const backgroundUrl = `${baseUrl.replace(/\/$/, '')}/.netlify/functions/run-speech-analysis-background`;
 
-  // Trigger background analysis. Use long timeout (25s) so cold start on mobile/server can respond.
-  // If this fails, we still return 200 with status 'processing' – the client will poll
-  // analysis-result, which re-triggers the background when it sees processing (so no user-facing error).
-  const triggerTimeoutMs = 25000;
-  try {
-    const res = await Promise.race([
-      fetch(backgroundUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId }),
-      }),
-      new Promise<Response>((_, reject) =>
-        setTimeout(() => reject(new Error('Background trigger timeout')), triggerTimeoutMs)
-      ),
-    ]);
-    if (!res.ok) console.error('Background trigger returned', res.status);
-  } catch (err) {
-    console.error('Failed to trigger background analysis:', err);
-  }
+  // Do NOT trigger background here. Client triggers it after getting jobId so it works
+  // on all devices (server-to-server fetch can fail when request comes from mobile).
 
   return {
     statusCode: 200,

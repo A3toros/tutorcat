@@ -48,6 +48,15 @@ function getMinWordsForLevel(level?: string | null): number {
   return 20;
 }
 
+/** Trigger background analysis from the client so it works on all devices (avoids flaky server-to-server trigger). */
+function triggerSpeechAnalysisBackground(jobId: string): void {
+  fetch('/.netlify/functions/run-speech-analysis-background', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jobId }),
+  }).catch(() => {});
+}
+
 const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onComplete }) => {
   const { user } = useAuth();
   const { makeAuthenticatedRequest } = useApi();
@@ -618,6 +627,8 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
         throw new Error('No job ID returned from server.');
       }
 
+      triggerSpeechAnalysisBackground(jobId);
+
       const pollResult = async (): Promise<{ status: string; result?: any; error?: string; transcript?: string }> => {
         const res = await fetch(`/.netlify/functions/analysis-result?id=${encodeURIComponent(jobId)}`, { cache: 'no-store' });
         if (!res.ok) throw new Error(`Poll failed: ${res.status}`);
@@ -999,6 +1010,8 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
         return;
       }
 
+      triggerSpeechAnalysisBackground(jobId);
+
       const pollResult = async (): Promise<{ status: string; result?: any; error?: string; transcript?: string }> => {
         const res = await fetch(`/.netlify/functions/analysis-result?id=${encodeURIComponent(jobId)}`, { cache: 'no-store' });
         if (!res.ok) throw new Error(`Poll failed: ${res.status}`);
@@ -1116,6 +1129,8 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
 
       const { jobId } = await res.json();
       if (!jobId) throw new Error('No job ID returned.');
+
+      triggerSpeechAnalysisBackground(jobId);
 
       const pollResult = async (): Promise<{ status: string; result?: any; error?: string; transcript?: string }> => {
         const r = await fetch(`/.netlify/functions/analysis-result?id=${encodeURIComponent(jobId)}`, { cache: 'no-store' });
