@@ -181,11 +181,14 @@ export default async (req: Request, _context?: unknown): Promise<void> => {
   `;
   const job = jobRows[0] as { id: string; transcript: string; status: string; prompt: string | null; cefr_level: string | null; min_words: number | null } | undefined;
   if (!job) {
-    console.error('run-speech-analysis-background: job not found', jobId);
+    console.warn('run-speech-analysis-background: job not found (may be replication delay)', { jobId });
     return;
   }
 
-  if (job.status !== 'processing') return;
+  if (job.status !== 'processing') {
+    console.log('run-speech-analysis-background: another worker won the race', { jobId, status: job.status });
+    return;
+  }
 
   const wordCount = job.transcript.trim().split(/\s+/).filter(Boolean).length;
   const minWords = job.min_words != null && typeof job.min_words === 'number' ? job.min_words : 0;
@@ -205,7 +208,10 @@ export default async (req: Request, _context?: unknown): Promise<void> => {
     WHERE id = ${jobId} AND status = 'processing'
     RETURNING id
   `;
-  if (updatedRows.length === 0) return;
+  if (updatedRows.length === 0) {
+    console.log('run-speech-analysis-background: lost race, another poll already started analysis', { jobId, status: job.status, rows_updated: 0 });
+    return;
+  }
 
   try {
     const result = await runFeedbackAnalysis(

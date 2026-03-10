@@ -39,6 +39,14 @@ const MAX_RECORDING_DURATION_MS = 120 * 1000; // 2 min
 const MAX_AUDIO_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB
 const POLL_INTERVAL_MS = 2000;
 const POLL_INTERVAL_BACKGROUND_MS = 4000; // Slower when tab hidden (browser throttles timers)
+const POLL_JITTER_MS = 500; // 0–500ms jitter to reduce thundering herd when many polls fire together
+
+function getPollDelayMs(): number {
+  const base = typeof document !== 'undefined' && document.visibilityState === 'visible'
+    ? POLL_INTERVAL_MS
+    : POLL_INTERVAL_BACKGROUND_MS;
+  return base + Math.floor(Math.random() * (POLL_JITTER_MS + 1));
+}
 
 function getMinWordsForLevel(level?: string | null): number {
   const l = (level || '').toUpperCase().trim();
@@ -638,10 +646,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       let data = await pollResult();
       while (data.status === 'processing' || data.status === 'analyzing') {
         setCurrentStep(data.status === 'analyzing' ? 'analyzing' : 'transcribing');
-        const delay = (typeof document !== 'undefined' && document.visibilityState === 'visible')
-          ? POLL_INTERVAL_MS
-          : POLL_INTERVAL_BACKGROUND_MS;
-        await new Promise((r) => setTimeout(r, delay));
+        await new Promise((r) => setTimeout(r, getPollDelayMs()));
         data = await pollResult();
       }
 
@@ -1021,10 +1026,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       let data = await pollResult();
       while (data.status === 'processing' || data.status === 'analyzing') {
         setCurrentStep(data.status === 'analyzing' ? 'analyzing' : 'transcribing');
-        const delay = (typeof document !== 'undefined' && document.visibilityState === 'visible')
-          ? POLL_INTERVAL_MS
-          : POLL_INTERVAL_BACKGROUND_MS;
-        await new Promise((r) => setTimeout(r, delay));
+        await new Promise((r) => setTimeout(r, getPollDelayMs()));
         data = await pollResult();
       }
 
@@ -1141,10 +1143,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       let data = await pollResult();
       while (data.status === 'processing' || data.status === 'analyzing') {
         setCurrentStep(data.status === 'analyzing' ? 'analyzing' : 'transcribing');
-        const delay = (typeof document !== 'undefined' && document.visibilityState === 'visible')
-          ? POLL_INTERVAL_MS
-          : POLL_INTERVAL_BACKGROUND_MS;
-        await new Promise((r) => setTimeout(r, delay));
+        await new Promise((r) => setTimeout(r, getPollDelayMs()));
         data = await pollResult();
       }
 
