@@ -619,7 +619,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       }
 
       const pollResult = async (): Promise<{ status: string; result?: any; error?: string; transcript?: string }> => {
-        const res = await fetch(`/.netlify/functions/analysis-result?id=${encodeURIComponent(jobId)}`);
+        const res = await fetch(`/.netlify/functions/analysis-result?id=${encodeURIComponent(jobId)}`, { cache: 'no-store' });
         if (!res.ok) throw new Error(`Poll failed: ${res.status}`);
         return res.json();
       };
@@ -1000,7 +1000,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       }
 
       const pollResult = async (): Promise<{ status: string; result?: any; error?: string; transcript?: string }> => {
-        const res = await fetch(`/.netlify/functions/analysis-result?id=${encodeURIComponent(jobId)}`);
+        const res = await fetch(`/.netlify/functions/analysis-result?id=${encodeURIComponent(jobId)}`, { cache: 'no-store' });
         if (!res.ok) throw new Error(`Poll failed: ${res.status}`);
         return res.json();
       };
@@ -1118,7 +1118,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       if (!jobId) throw new Error('No job ID returned.');
 
       const pollResult = async (): Promise<{ status: string; result?: any; error?: string; transcript?: string }> => {
-        const r = await fetch(`/.netlify/functions/analysis-result?id=${encodeURIComponent(jobId)}`);
+        const r = await fetch(`/.netlify/functions/analysis-result?id=${encodeURIComponent(jobId)}`, { cache: 'no-store' });
         if (!r.ok) throw new Error(`Poll failed: ${r.status}`);
         return r.json();
       };
