@@ -19,7 +19,7 @@ const FEEDBACK_SYSTEM_PROMPT = `Analyze a student's spoken answer. Return concis
   "feedback": "1-2 sentences",
   "grammar_corrections": [{"mistake": "text", "correction": "text"}],
   "vocabulary_corrections": [{"mistake": "text", "correction": "text"}],
-  "improved_transcript": "a short, corrected and natural version of the student's transcript (1-2 sentences or a brief paragraph). Fix grammar and word choice; keep their meaning.",
+  "improved_transcript": "a concise, corrected and natural version of the student's transcript. Combine the BEST and MOST IMPORTANT parts of what they said into ONE coherent paragraph. Fix grammar and word choice; keep their meaning. Use level-based word ranges: A1/A2 ≈ 20 words (±20), B1/B2 ≈ 40 (±20), C1/C2 ≈ 60 (±20). Never exceed 80 words total.",
   "integrity": {
     "risk_score": number (0-100),
     "flagged": boolean,
@@ -41,6 +41,16 @@ Grammar & Vocabulary
 - Max 3 grammar_corrections and 3 vocabulary_corrections.
 - Feedback must be 1–2 sentences.
 
+Improved transcript (very important)
+- SELECT THE BEST AND MOST IMPORTANT PARTS of what the student said - do NOT repeat everything.
+- Condense redundant or repetitive content naturally.
+- Output exactly ONE coherent paragraph.
+- Respect level-based word ranges:
+  - A1/A2 → about 20 words (between 0 and 40 words).
+  - B1/B2 → about 40 words (between 20 and 60 words).
+  - C1/C2 → about 60 words (between 40 and 80 words).
+- Under NO circumstances exceed 80 words in improved_transcript.
+
 AI Integrity (main goal)
 We detect if AI text was written first and then read aloud.
 
@@ -58,8 +68,8 @@ AI signals:
 
 Scoring rules:
 - If real grammar mistakes exist, the "0 real errors" rule cannot apply.
-- 0 real errors → risk_score ≥70
-- only stylistic suggestions → risk_score ≥65
+- 0 real errors → risk_score ≥50
+- only stylistic suggestions → risk_score ≥45
 - very polished text → risk_score ≥50
 - 2+ AI signals → risk_score ≥60
 - risk_score <30 only if speech clearly sounds spontaneous and messy
@@ -95,7 +105,7 @@ async function runFeedbackAnalysis(
   if (!openai) return { success: false, error: 'OpenAI not configured' };
 
   const feedbackResponse = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: 'gpt-5-mini',
     max_completion_tokens: 3000,
     messages: [
       { role: 'system', content: FEEDBACK_SYSTEM_PROMPT },

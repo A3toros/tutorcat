@@ -861,6 +861,17 @@ export default function AdminDashboardContent() {
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold">{t('userManagement', 'User Management')}</h2>
               <div className="flex items-center space-x-4">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    // Navigate to a dedicated transcripts view or open modal (first step: route)
+                    router.push('/admin/transcripts');
+                  }}
+                  className="bg-red-50 text-red-700 border border-red-200 hover:bg-red-100"
+                >
+                  {t('transcripts', 'Transcripts')}
+                </Button>
                 <Input
                   placeholder={t('searchUsers', 'Search users...')}
                   value={searchTerm}
@@ -969,12 +980,13 @@ export default function AdminDashboardContent() {
                     </div>
                   </Head>
                   <Head className="text-slate-600 bg-purple-100">{t('actions', 'Actions')}</Head>
+                  <Head className="text-slate-600 bg-purple-100">{t('transcripts', 'Transcripts')}</Head>
                 </Row>
               </Header>
               <Body>
                 {isLoadingUsers ? (
                   <Row>
-                    <Cell colSpan={7} className="text-center py-8">
+                    <Cell colSpan={8} className="text-center py-8">
                       <div className="flex items-center justify-center">
                         <div className="animate-spin w-6 h-6 border-3 border-purple-500 border-t-transparent rounded-full mr-3"></div>
                         <span className="text-slate-600">{t('loading', 'Loading...')}</span>
@@ -983,7 +995,7 @@ export default function AdminDashboardContent() {
                   </Row>
                 ) : users.length === 0 ? (
                   <Row>
-                    <Cell colSpan={7} className="text-center py-8 text-slate-600">
+                    <Cell colSpan={8} className="text-center py-8 text-slate-600">
                       {t('noUsers', 'No users found')}
                     </Cell>
                   </Row>
@@ -1037,6 +1049,20 @@ export default function AdminDashboardContent() {
                           {t('delete', 'Delete')}
                         </Button>
                       </div>
+                    </Cell>
+                    <Cell>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="bg-red-50 text-red-700 border border-red-200 hover:bg-red-100"
+                        onClick={() => {
+                          // Go to transcripts view filtered by this user
+                          router.push(`/admin/transcripts?userId=${encodeURIComponent(user.id)}`)
+                        }}
+                        disabled={isLoadingUsers}
+                      >
+                        {t('view', 'View')}
+                      </Button>
                     </Cell>
                   </Row>
                   ))
