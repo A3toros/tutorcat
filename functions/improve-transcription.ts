@@ -137,16 +137,16 @@ Input:
 
 Output (one paragraph only, ${minWordsForImproved}-${maxWordsForImproved} words):`;
 
-    const runOnce = async (inputText: string, model: 'gpt-5-mini' | 'gpt-4o-mini', attemptLabel: string) => {
+    const runOnce = async (inputText: string, attemptLabel: string) => {
       console.log('📝 improve-transcription request (preview):', {
         attempt: attemptLabel,
-        model,
+        model: 'gpt-4o-mini',
         inputLength: inputText.length,
         systemPreview: systemPrompt.slice(0, 300),
         userPreview: makeUserPrompt(inputText).slice(0, 300),
       });
       return await openai.chat.completions.create({
-        model,
+        model: 'gpt-4o-mini',
         max_completion_tokens: 250,
         messages: [
           { role: 'system', content: systemPrompt },
@@ -155,8 +155,9 @@ Output (one paragraph only, ${minWordsForImproved}-${maxWordsForImproved} words)
       });
     };
 
-    // First attempt with full input
-    let improvementResponse = await runOnce(body.text, 'gpt-5-mini', 'primary');
+    // Single attempt (stable model) with shrunk input
+    const inputText = shrinkCombinedInput(body.text) || body.text;
+    let improvementResponse = await runOnce(inputText, 'primary');
 
     console.timeEnd('✨ Text Improvement Time');
 
@@ -167,32 +168,14 @@ Output (one paragraph only, ${minWordsForImproved}-${maxWordsForImproved} words)
     let content = choice?.message?.content;
     let finishReason = choice?.finish_reason;
 
-    // Some GPT-5 responses can hit token limit and return empty content; retry with shrunk input once.
+    // If we somehow get empty content, retry once with the same stable model and the already-shrunk input.
     if ((!content || typeof content !== 'string' || !content.trim()) && finishReason === 'length') {
-      const shrunk = shrinkCombinedInput(body.text);
-      if (shrunk && shrunk !== body.text) {
-        console.warn('⚠️ improve-transcription: empty content at length limit; retrying with shrunk input', {
-          originalLength: body.text.length,
-          shrunkLength: shrunk.length,
-        });
-        console.time('✨ Text Improvement Time (retry)');
-        improvementResponse = await runOnce(shrunk, 'gpt-5-mini', 'retry_shrunk');
-        console.timeEnd('✨ Text Improvement Time (retry)');
-        choice = improvementResponse?.choices?.[0];
-        content = choice?.message?.content;
-        finishReason = choice?.finish_reason;
-      }
-    }
-
-    // If GPT-5-mini still yields empty content, fall back to a stable model for this endpoint.
-    if ((!content || typeof content !== 'string' || !content.trim()) && finishReason === 'length') {
-      const shrunk = shrinkCombinedInput(body.text) || body.text;
-      console.warn('⚠️ improve-transcription: GPT-5-mini returned empty content at length limit; falling back to gpt-4o-mini', {
-        inputLength: shrunk.length,
+      console.warn('⚠️ improve-transcription: empty content at length limit; retrying once', {
+        inputLength: inputText.length,
       });
-      console.time('✨ Text Improvement Time (fallback model)');
-      improvementResponse = await runOnce(shrunk, 'gpt-4o-mini', 'fallback_model');
-      console.timeEnd('✨ Text Improvement Time (fallback model)');
+      console.time('✨ Text Improvement Time (retry)');
+      improvementResponse = await runOnce(inputText, 'retry');
+      console.timeEnd('✨ Text Improvement Time (retry)');
       choice = improvementResponse?.choices?.[0];
       content = choice?.message?.content;
       finishReason = choice?.finish_reason;
