@@ -17,6 +17,24 @@ function getMinWordsForLevel(cefrLevel?: string | null): number {
   return 20;
 }
 
+function shrinkCombinedInput(raw: string): string {
+  const text = (raw || '').trim();
+  if (!text) return '';
+
+  // Prefer only the [Answer N] lines to reduce prompt tokens.
+  const answerLines = text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith('[Answer'));
+
+  const base = answerLines.length > 0 ? answerLines.join('\n') : text;
+
+  // Cap total characters so the model can always respond.
+  const MAX_CHARS = 800;
+  if (base.length <= MAX_CHARS) return base;
+  return base.slice(0, MAX_CHARS);
+}
+
 interface RequestBody {
   text: string;
   prompt?: string;
@@ -24,6 +42,7 @@ interface RequestBody {
   level: string;
   maxWords?: number;
   minWords?: number;
+  segmentCount?: number;
 }
 
 const handler: Handler = async (event, context) => {
@@ -84,45 +103,103 @@ const handler: Handler = async (event, context) => {
     const maxWordsForImproved = body.maxWords ?? targetWords + 20;
     const minWordsForImproved = body.minWords ?? Math.max(0, targetWords - 20);
 
-    console.log(`📊 Word count - Level: ${level}, Max: ${maxWordsForImproved}, Min: ${minWordsForImproved}`);
+    const segmentCount = typeof body.segmentCount === 'number' ? body.segmentCount : null;
 
-    const improvementResponse = await openai.chat.completions.create({
-      model: 'gpt-5-mini',
-      max_completion_tokens: 2500,
-      messages: [
-        {
-          role: 'system',
-          content: `You are an expert English teacher. The user will paste SEVERAL separate spoken answers from a student (each was a different question). Your job is to output ONE short, improved paragraph that MERGES and CONDENSES what they said.
+    console.log('📊 improve-transcription input:', {
+      level,
+      maxWords: maxWordsForImproved,
+      minWords: minWordsForImproved,
+      segmentCount: segmentCount ?? undefined,
+      textLength: body.text.length
+    });
+
+    const segmentRule =
+      segmentCount && segmentCount > 1
+        ? `\n- The input contains exactly ${segmentCount} separate answers (from ${segmentCount} different questions). You MUST use ideas from ALL ${segmentCount} answers to build ONE merged paragraph. Do NOT output only the first answer. Do NOT list each answer; merge and shorten.`
+        : '';
+
+    console.time('✨ Text Improvement Time');
+
+    const systemPrompt = `You are an expert English teacher. The user will paste SEVERAL separate spoken answers from a student (each was a different question). Your job is to output ONE short, improved paragraph that MERGES and CONDENSES what they said.
 
 STRICT RULES:
 - Do NOT list or concatenate each answer one after another. Do NOT write "First... Second... Then...".
 - Do NOT include every detail from every answer. SELECT the best 1–2 main ideas and express them in one flowing paragraph.
-- MERGE: one coherent paragraph (2–4 sentences), as if the student had said one short summary. Fix grammar and word choice; keep their meaning.
+- MERGE: one coherent paragraph (2–4 sentences), as if the student had said one short summary. Fix grammar and word choice; keep their meaning.${segmentRule}
 - Word limit is CRITICAL: output MUST be between ${minWordsForImproved} and ${maxWordsForImproved} words (target ${targetWords}) for level ${level}. Never exceed ${maxWordsForImproved} words.
 - If the input is long, you MUST condense heavily. One short paragraph only. Return only the improved text, nothing else.`
-        },
-        {
-          role: 'user',
-            content: `The following text is several separate spoken answers from a student (different questions), pasted one after another. Turn this into ONE short, improved paragraph: correct grammar, fix vocabulary, merge the main ideas. Do NOT list each answer. Output one flowing paragraph of between ${minWordsForImproved} and ${maxWordsForImproved} words (level ${level}).
+
+    const makeUserPrompt = (inputText: string) => `The following text is ${segmentCount && segmentCount > 1 ? `${segmentCount} separate spoken answers from a student (different questions), pasted one after another. You MUST use content from ALL ${segmentCount} answers.` : 'several separate spoken answers from a student (different questions), pasted one after another.'}
+Turn this into ONE short, improved paragraph: correct grammar, fix vocabulary, merge the main ideas. Do NOT list each answer. Do NOT output only the first answer. Output one flowing paragraph of between ${minWordsForImproved} and ${maxWordsForImproved} words (level ${level}).
 
 Input:
-"${body.text}"
+"${inputText}"
 
-Output (one paragraph only, ${minWordsForImproved}-${maxWordsForImproved} words):`
-        }
-      ],
-      temperature: 0.3
-    });
+Output (one paragraph only, ${minWordsForImproved}-${maxWordsForImproved} words):`;
+
+    const runOnce = async (inputText: string, model: 'gpt-5-mini' | 'gpt-4o-mini', attemptLabel: string) => {
+      console.log('📝 improve-transcription request (preview):', {
+        attempt: attemptLabel,
+        model,
+        inputLength: inputText.length,
+        systemPreview: systemPrompt.slice(0, 300),
+        userPreview: makeUserPrompt(inputText).slice(0, 300),
+      });
+      return await openai.chat.completions.create({
+        model,
+        max_completion_tokens: 250,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: makeUserPrompt(inputText) },
+        ],
+      });
+    };
+
+    // First attempt with full input
+    let improvementResponse = await runOnce(body.text, 'gpt-5-mini', 'primary');
 
     console.timeEnd('✨ Text Improvement Time');
 
     const u = improvementResponse?.usage;
     if (u) console.log('📊 Tokens used (improve-transcription):', { prompt_tokens: u.prompt_tokens, completion_tokens: u.completion_tokens, total_tokens: u.total_tokens });
 
-    const choice = improvementResponse?.choices?.[0];
-    const content = choice?.message?.content;
-    if (!content || typeof content !== 'string') {
-      const isTokenLimit = choice?.finish_reason === 'length';
+    let choice = improvementResponse?.choices?.[0];
+    let content = choice?.message?.content;
+    let finishReason = choice?.finish_reason;
+
+    // Some GPT-5 responses can hit token limit and return empty content; retry with shrunk input once.
+    if ((!content || typeof content !== 'string' || !content.trim()) && finishReason === 'length') {
+      const shrunk = shrinkCombinedInput(body.text);
+      if (shrunk && shrunk !== body.text) {
+        console.warn('⚠️ improve-transcription: empty content at length limit; retrying with shrunk input', {
+          originalLength: body.text.length,
+          shrunkLength: shrunk.length,
+        });
+        console.time('✨ Text Improvement Time (retry)');
+        improvementResponse = await runOnce(shrunk, 'gpt-5-mini', 'retry_shrunk');
+        console.timeEnd('✨ Text Improvement Time (retry)');
+        choice = improvementResponse?.choices?.[0];
+        content = choice?.message?.content;
+        finishReason = choice?.finish_reason;
+      }
+    }
+
+    // If GPT-5-mini still yields empty content, fall back to a stable model for this endpoint.
+    if ((!content || typeof content !== 'string' || !content.trim()) && finishReason === 'length') {
+      const shrunk = shrinkCombinedInput(body.text) || body.text;
+      console.warn('⚠️ improve-transcription: GPT-5-mini returned empty content at length limit; falling back to gpt-4o-mini', {
+        inputLength: shrunk.length,
+      });
+      console.time('✨ Text Improvement Time (fallback model)');
+      improvementResponse = await runOnce(shrunk, 'gpt-4o-mini', 'fallback_model');
+      console.timeEnd('✨ Text Improvement Time (fallback model)');
+      choice = improvementResponse?.choices?.[0];
+      content = choice?.message?.content;
+      finishReason = choice?.finish_reason;
+    }
+
+    if (!content || typeof content !== 'string' || !content.trim()) {
+      const isTokenLimit = finishReason === 'length';
       console.error('Invalid response from OpenAI (improve-transcription) – full choice:', JSON.stringify(choice, null, 2));
       return {
         statusCode: 200,
@@ -130,14 +207,22 @@ Output (one paragraph only, ${minWordsForImproved}-${maxWordsForImproved} words)
         body: JSON.stringify({
           success: false,
           error: isTokenLimit
-            ? 'Your text is too long. Try a shorter passage and try again.'
+            ? 'Model output was too long to return a result. Please shorten the inputs and try again.'
             : 'Invalid response from OpenAI',
+          error_code: isTokenLimit ? 'response_too_long_empty' : 'invalid_response',
           improved_text: null
         })
       } as any;
     }
 
     const improvedText = content.trim();
+    if (finishReason === 'length') {
+      console.warn('⚠️ improve-transcription: model output hit length limit; will trim to word band', {
+        level,
+        maxWords: maxWordsForImproved,
+        segmentCount: segmentCount ?? undefined
+      });
+    }
     console.log(`✅ Text improvement completed - Input: ${body.text.length} chars, Output: ${improvedText.length} chars`);
 
     // Enforce word limit server-side: if model returned too much, trim to last full sentence (no mid-sentence "...")
@@ -173,7 +258,11 @@ Output (one paragraph only, ${minWordsForImproved}-${maxWordsForImproved} words)
     console.error('❌ Error in improve-transcription:', error);
 
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-    const statusCode = errorMessage.includes('API key') ? 500 : 500;
+    const statusCode = 500;
+    const errorCode =
+      errorMessage.toLowerCase().includes('api key') ? 'missing_api_key'
+      : errorMessage.toLowerCase().includes('rate') ? 'rate_limited'
+      : 'server_error';
 
     return {
       statusCode,
@@ -181,6 +270,7 @@ Output (one paragraph only, ${minWordsForImproved}-${maxWordsForImproved} words)
       body: JSON.stringify({
         success: false,
         error: errorMessage,
+        error_code: errorCode,
         improved_text: null
       })
     } as any;

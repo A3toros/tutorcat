@@ -110,11 +110,39 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
         }))
       });
 
-      // Try each speaking activity until we find one with improved transcript
+      const mergeImprovedTranscripts = (improvedTranscripts: Record<string, string>): string => {
+        const keys = Object.keys(improvedTranscripts || {});
+        const sorted = keys.sort((a, b) => {
+          const ai = parseInt((a.match(/\d+/)?.[0] || '0'), 10);
+          const bi = parseInt((b.match(/\d+/)?.[0] || '0'), 10);
+          return ai - bi;
+        });
+        const pickFirstSentence = (text: string): string => {
+          const s = (text || '').trim();
+          if (!s) return '';
+          const m = s.match(/^.*?[.!?](\s|$)/);
+          return (m?.[0] || s).trim();
+        };
+        return sorted
+          .map((k) => improvedTranscripts[k])
+          .filter(Boolean)
+          .map(pickFirstSentence)
+          .filter(Boolean)
+          .join(' ');
+      };
+
+      // Try each speaking activity until we find a combined improved transcript
       for (const speakingActivity of speakingActivities) {
         const answers = speakingActivity.result?.answers || {};
-        const improved = answers.improvedTranscript ||
-                        answers.improvedTranscripts?.[Object.keys(answers.improvedTranscripts || {})[0]];
+        // Prefer the combined summary
+        const improved =
+          (typeof answers.improvedTranscript === 'string' && answers.improvedTranscript.trim()
+            ? answers.improvedTranscript
+            : null) ||
+          // If only per-prompt improvements exist, merge them into a short combined summary
+          (answers.improvedTranscripts && typeof answers.improvedTranscripts === 'object'
+            ? mergeImprovedTranscripts(answers.improvedTranscripts)
+            : null);
         
         if (improved) {
           console.log('🔍 SpeakingImprovement: Improved transcript found', {
@@ -195,13 +223,13 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
 
       const data = await response.json();
       const jobs = data.jobs || [];
-      const completed = jobs.filter((j: any) => j.status === 'completed' && j.result?.improved_transcript);
+      const completed = jobs.filter((j: any) => j.status === 'completed' && typeof j.result?.improved_transcript === 'string');
       if (completed.length === 0) return false;
 
-      // Use the most recent completed job's improved_transcript (or combine if multiple prompts)
+      // speech_jobs.improved_transcript is per-prompt, not a combined summary.
+      // Only use it if we have nothing else (DB/localStorage combined summary missing).
       const latest = completed[0];
-      const improvedFromJob = latest.result?.improved_transcript;
-      if (!improvedFromJob || typeof improvedFromJob !== 'string') return false;
+      const improvedFromJob = latest.result?.improved_transcript as string;
 
       console.log('✅ SpeakingImprovement: Loaded improved transcript from speech-jobs-by-lesson', {
         lessonId: lessonData.lessonId,
@@ -209,9 +237,9 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
         improvedLength: improvedFromJob.length,
       });
 
-      setImprovedTranscript(improvedFromJob);
-      improvedTranscriptRef.current = improvedFromJob;
       const displayText = condenseTextForLevel(improvedFromJob, lessonData.level);
+      setImprovedTranscript(displayText);
+      improvedTranscriptRef.current = displayText;
       setCondensedDisplayText(displayText);
       if (latest.transcript) setOriginalTranscript(latest.transcript);
       return true;

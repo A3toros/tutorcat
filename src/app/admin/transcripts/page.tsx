@@ -132,6 +132,9 @@ export default function AdminTranscriptsPage() {
             <Button variant="secondary" size="sm" onClick={() => router.push('/admin/dashboard')}>
               ← Back to Dashboard
             </Button>
+            <Button variant="secondary" size="sm" onClick={() => router.push('/admin/improve-transcript-test')}>
+              Test
+            </Button>
             <div>
               <h1 className="text-2xl font-bold text-slate-800">Speaking Transcripts</h1>
               <p className="text-slate-600 text-sm">

@@ -502,8 +502,9 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
                     ...(existingAnswers.improvedTranscripts || {}),
                     [promptId]: result.improved_transcript
                   },
-                  // Store the most recent improved transcript for easy access
-                  improvedTranscript: result.improved_transcript
+                  // Do NOT overwrite combined improvedTranscript here.
+                  // Reserve answers.improvedTranscript for the combined summary generated on completion.
+                  lastImprovedTranscript: result.improved_transcript
                 }
               }
             };
@@ -520,7 +521,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
                   improvedTranscripts: {
                     [promptId]: result.improved_transcript
                   },
-                  improvedTranscript: result.improved_transcript
+                  lastImprovedTranscript: result.improved_transcript
                 }
               }
             });
@@ -1256,13 +1257,27 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
     }
 
     try {
+      const level = lessonData.level || user?.level || 'A1'
+      const expectedCount = lessonData.prompts?.length || allTranscripts.length
+      const promptOrder = lessonData.prompts || []
+
+      // Build a structured input so the backend can reliably merge ALL answers.
+      const structuredText =
+        promptOrder.length > 0
+          ? promptOrder.map((p, idx) => {
+              const answer = transcripts[p.id] || ''
+              return `[Prompt ${idx + 1}] ${p.text}\n[Answer ${idx + 1}] ${answer}`
+            }).join('\n\n')
+          : allTranscripts.map((t, idx) => `[Answer ${idx + 1}] ${t}`).join('\n\n')
+
       const response = await makeRequestWithRetry('/.netlify/functions/improve-transcription', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          text: allTranscripts.join(' '),
-          level: lessonData.level || user?.level || 'A1',
-          maxWords: getTargetWordCount(lessonData.level || user?.level) + 20,
+          text: structuredText,
+          level,
+          maxWords: getTargetWordCount(level) + 20,
+          segmentCount: expectedCount,
         })
       });
 
@@ -1276,13 +1291,21 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       throw new Error(result.error || 'Failed to improve transcription');
     } catch (error) {
       console.error('Error generating combined improved version:', error);
-      // Fallback: prefer individual improved transcripts, then raw transcripts – but always condense
-      const individualImproved = Object.values(feedback)
-        .map((f: any) => f?.improved_transcript)
-        .filter(Boolean)
-        .join(' ');
+      // Fallback: build a short merged summary across prompts (avoid “prompt 1 only”)
+      const orderedPromptIds = (lessonData.prompts || []).map(p => p.id)
+      const orderedPerPromptImproved = (orderedPromptIds.length > 0 ? orderedPromptIds : Object.keys(feedback))
+        .map((id) => feedback?.[id]?.improved_transcript)
+        .filter(Boolean) as string[]
 
-      const rawCombined = (individualImproved || allTranscripts.join(' ')).trim()
+      const pickFirstSentence = (text: string): string => {
+        const s = (text || '').trim()
+        if (!s) return ''
+        const m = s.match(/^.*?[.!?](\s|$)/)
+        return (m?.[0] || s).trim()
+      }
+
+      const mergedFromImproved = orderedPerPromptImproved.map(pickFirstSentence).filter(Boolean).join(' ')
+      const rawCombined = (mergedFromImproved || allTranscripts.join(' ')).trim()
       return condenseTextForLevel(rawCombined, lessonData.level || user?.level)
     }
   }, [feedback, lessonData.level, user?.level, makeRequestWithRetry]);
@@ -1300,6 +1323,22 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       
       if (allTranscripts.length === 0) {
         throw new Error('No transcripts available');
+      }
+
+      // If some transcripts are missing (unexpected), proceed with what we have.
+      // This avoids blocking completion due to a transient state/localStorage mismatch.
+      if (lessonData.prompts?.length) {
+        const missing = lessonData.prompts
+          .map(p => p.id)
+          .filter(id => !(transcripts[id] && transcripts[id].trim()));
+        if (missing.length > 0) {
+          console.warn('SpeakingWithFeedback: missing transcripts during completion, proceeding with available', {
+            missingCount: missing.length,
+            missing,
+            availableCount: allTranscripts.length,
+            expectedCount: lessonData.prompts.length,
+          });
+        }
       }
 
       // Generate combined improved version from all transcripts
