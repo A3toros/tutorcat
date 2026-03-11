@@ -19,6 +19,8 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://tutorcat.online'
 const siteName = 'TutorCat'
 const siteDescription = 'Master English with AI-powered lessons, gamification, and your adorable cat companion. An innovative language learning platform designed for students at Mathayomwatsing School, combining gamified learning with intelligent feedback to make language acquisition engaging and effective.'
 const siteImage = `${siteUrl}/favicon/android-chrome-512x512.png`
+const ogDesktop = `${siteUrl}/og/og-cover-1200x630.png`
+const ogMobile = `${siteUrl}/og/og-cover-1200x1200.png`
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -67,18 +69,18 @@ export const metadata: Metadata = {
     description: 'An interactive English learning platform that uses game-based tasks, visual prompts, and speaking-focused activities to build learner confidence and fluency.',
     images: [
       {
-        url: `${siteUrl}/og-cover.webp`,
+        url: ogDesktop,
         width: 1200,
         height: 630,
         alt: 'TutorCat – Interactive English Learning',
-        type: 'image/webp',
+        type: 'image/png',
       },
       {
-        url: `${siteUrl}/logo.webp`,
+        url: ogMobile,
         width: 1200,
-        height: 630,
-        alt: `${siteName} - AI Language Learning Platform`,
-        type: 'image/webp',
+        height: 1200,
+        alt: 'TutorCat – Interactive English Learning (Square)',
+        type: 'image/png',
       },
       {
         url: siteImage,
@@ -93,7 +95,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'TutorCat – Interactive English Learning',
     description: 'An interactive English learning platform that uses game-based tasks, visual prompts, and speaking-focused activities to build learner confidence and fluency.',
-    images: [`${siteUrl}/og-cover.webp`],
+    images: [ogDesktop, ogMobile],
     creator: '@tutorcat',
   },
   alternates: {

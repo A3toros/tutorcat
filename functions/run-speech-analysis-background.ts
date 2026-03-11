@@ -68,7 +68,7 @@ AI signals:
 
 Scoring rules:
 - If real grammar mistakes exist, the "0 real errors" rule cannot apply.
-- 0 real errors → risk_score ≥50
+- 0 errors AND essay structure AND formal phrases → risk_score ≥50
 - only stylistic suggestions → risk_score ≥45
 - very polished text → risk_score ≥50
 - 2+ AI signals → risk_score ≥50
