@@ -1240,7 +1240,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       return 20
     }
 
-    // Local helper: condense text to CEFR-based range (target ±20, hard cap)
+    // Local helper: condense text to CEFR-based range; end at last full sentence, never mid-sentence "..."
     const condenseTextForLevel = (text: string, level?: string): string => {
       if (!text || !text.trim()) return ''
       const target = getTargetWordCount(level)
@@ -1248,9 +1248,11 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       const words = text.trim().split(/\s+/)
       if (words.length <= maxWords) return text.trim()
       const sliced = words.slice(0, maxWords).join(' ')
-      // Ensure it ends cleanly
-      if (/[.!?]$/.test(sliced)) return sliced
-      return sliced + '...'
+      const lastDot = sliced.lastIndexOf('.')
+      const lastExcl = sliced.lastIndexOf('!')
+      const lastQ = sliced.lastIndexOf('?')
+      const lastEnd = Math.max(lastDot, lastExcl, lastQ)
+      return lastEnd >= 0 ? sliced.substring(0, lastEnd + 1).trim() : sliced
     }
 
     try {
@@ -1258,10 +1260,9 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          text: allTranscripts.join(' '), // Combine all transcripts
-          prompt: `Combine and improve all the student's responses into one coherent, well-structured paragraph. Use appropriate transitions and connectors to create a unified text that flows naturally. Fix all grammar and vocabulary mistakes while maintaining the student's original meaning and intent.`,
-          criteria: lessonData.feedbackCriteria,
-          level: lessonData.level || user?.level || 'A1'
+          text: allTranscripts.join(' '),
+          level: lessonData.level || user?.level || 'A1',
+          maxWords: getTargetWordCount(lessonData.level || user?.level) + 20,
         })
       });
 
@@ -1284,7 +1285,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       const rawCombined = (individualImproved || allTranscripts.join(' ')).trim()
       return condenseTextForLevel(rawCombined, lessonData.level || user?.level)
     }
-  }, [feedback, lessonData.feedbackCriteria, lessonData.level, user?.level, makeRequestWithRetry]);
+  }, [feedback, lessonData.level, user?.level, makeRequestWithRetry]);
 
   // Handle completion
   const handleComplete = useCallback(async () => {

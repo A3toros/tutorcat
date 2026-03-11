@@ -272,7 +272,7 @@ export default function AdminTranscriptsPage() {
                             {risk > 0 ? (
                               <span
                                 className={
-                                  risk >= 60
+                                  risk >= 50
                                     ? 'px-2 py-1 rounded-full bg-red-100 text-red-800 text-xs font-semibold'
                                     : risk >= 40
                                     ? 'px-2 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold'

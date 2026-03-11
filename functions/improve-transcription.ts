@@ -18,13 +18,12 @@ function getMinWordsForLevel(cefrLevel?: string | null): number {
 }
 
 interface RequestBody {
-  text: string;              // Raw student transcription text
-  prompt?: string;           // Improvement instructions
-  criteria?: {               // Optional feedback criteria
-    grammar?: boolean;
-    vocabulary?: boolean;
-  }
-  level: string;             // Required student level (e.g., A1, A2, B1...)
+  text: string;
+  prompt?: string;
+  criteria?: { grammar?: boolean; vocabulary?: boolean };
+  level: string;
+  maxWords?: number;
+  minWords?: number;
 }
 
 const handler: Handler = async (event, context) => {
@@ -80,52 +79,36 @@ const handler: Handler = async (event, context) => {
 
     console.log('✨ Improving transcription text...');
 
-    // Calculate target word count for improved transcript (level-based with ±20 tolerance)
-    const targetWords = getMinWordsForLevel(body.level);
-    const maxWordsForImproved = targetWords + 20; // Allow up to target + 20 words
-    const minWordsForImproved = Math.max(0, targetWords - 20); // Minimum target - 20 words
-    
-    console.log(`📊 Word count requirements for improved transcript - Level: ${body.level}, Target: ${targetWords}, Range: ${minWordsForImproved}-${maxWordsForImproved} words`);
+    const level = (body.level || '').trim();
+    const targetWords = body.maxWords != null ? body.maxWords - 20 : getMinWordsForLevel(level);
+    const maxWordsForImproved = body.maxWords ?? targetWords + 20;
+    const minWordsForImproved = body.minWords ?? Math.max(0, targetWords - 20);
 
-    // Use the same improvement logic from ai-feedback.ts, but include level guidance if provided
-    const levelHint = `Target the difficulty for level ${body.level}. Keep vocabulary and structures appropriate for that level.`;
-    const wordCountGuidance = `CRITICAL: The improved text MUST be between ${minWordsForImproved} and ${maxWordsForImproved} words (target: ${targetWords} words). This is essential for the student's level (${body.level}). IMPORTANT: The text must be COMPLETE and NATURAL - do NOT truncate or cut off mid-sentence. Create a full, coherent paragraph that ends naturally with proper punctuation. The text must fit within this exact word count range (${minWordsForImproved}-${maxWordsForImproved} words) while being a complete, finished thought. Prioritize clarity and correctness while staying within the word limit.`;
-    const improvementPrompt = body.prompt || `Combine and improve all the student's responses into one coherent, well-structured paragraph. Use appropriate transitions and connectors to create a unified text that flows naturally. Fix all grammar and vocabulary mistakes while maintaining the student's original meaning and intent. ${levelHint} ${wordCountGuidance}`;
-
-    console.time('✨ Text Improvement Time');
+    console.log(`📊 Word count - Level: ${level}, Max: ${maxWordsForImproved}, Min: ${minWordsForImproved}`);
 
     const improvementResponse = await openai.chat.completions.create({
       model: 'gpt-5-mini',
-      max_completion_tokens: 3000,
+      max_completion_tokens: 2500,
       messages: [
         {
           role: 'system',
-          content: `You are an expert English language teacher. Your task is to improve student transcriptions by correcting grammar, enhancing vocabulary, and improving overall structure while preserving the student's original meaning and intent. Adapt your output to the student's level.
+          content: `You are an expert English teacher. The user will paste SEVERAL separate spoken answers from a student (each was a different question). Your job is to output ONE short, improved paragraph that MERGES and CONDENSES what they said.
 
-Guidelines for improvement:
-- SELECT THE BEST AND MOST IMPORTANT PARTS of what the student said - do NOT repeat everything
-- Condense redundant or repetitive content naturally
-- Fix all grammar mistakes
-- Use more appropriate vocabulary where suitable
-- Improve sentence structure and flow
-- Combine multiple sentences into coherent paragraphs when appropriate
-- Maintain the student's core meaning and intent (but condense and enhance)
-- Keep the same level of formality
-- Use natural, fluent English expressions
-- Keep vocabulary and complexity suitable for a ${body.level} learner
-- CRITICAL: The improved text must be EXACTLY between ${minWordsForImproved} and ${maxWordsForImproved} words (target: ${targetWords} words). The text must be COMPLETE and NATURAL - do NOT truncate or cut off mid-sentence. Create a full, coherent paragraph that ends naturally with proper punctuation. The text must NATURALLY fit within this exact word count range (${minWordsForImproved}-${maxWordsForImproved} words) while being a complete, finished thought. Select the best content, condense it, enhance it - create a clean, polished version that fits naturally within the limit.
-
-Return only the improved text, nothing else.`
+STRICT RULES:
+- Do NOT list or concatenate each answer one after another. Do NOT write "First... Second... Then...".
+- Do NOT include every detail from every answer. SELECT the best 1–2 main ideas and express them in one flowing paragraph.
+- MERGE: one coherent paragraph (2–4 sentences), as if the student had said one short summary. Fix grammar and word choice; keep their meaning.
+- Word limit is CRITICAL: output MUST be between ${minWordsForImproved} and ${maxWordsForImproved} words (target ${targetWords}) for level ${level}. Never exceed ${maxWordsForImproved} words.
+- If the input is long, you MUST condense heavily. One short paragraph only. Return only the improved text, nothing else.`
         },
         {
           role: 'user',
-            content: `Please improve this text: "${body.text}"
+            content: `The following text is several separate spoken answers from a student (different questions), pasted one after another. Turn this into ONE short, improved paragraph: correct grammar, fix vocabulary, merge the main ideas. Do NOT list each answer. Output one flowing paragraph of between ${minWordsForImproved} and ${maxWordsForImproved} words (level ${level}).
 
-Student level: ${body.level}. Match vocabulary and complexity to this level.
+Input:
+"${body.text}"
 
-CRITICAL: Create a CLEAN, CONDENSED, and ENHANCED version. SELECT THE BEST AND MOST IMPORTANT PARTS - do NOT repeat everything. Condense redundant or repetitive content. Fix all grammar and vocabulary mistakes. Enhance the language naturally while preserving the core meaning. The improved text MUST be EXACTLY between ${minWordsForImproved} and ${maxWordsForImproved} words (target: ${targetWords} words). This is essential for the student's level (${body.level}). IMPORTANT: The text must be COMPLETE and NATURAL - do NOT truncate or cut off mid-sentence. Create a full, coherent paragraph that ends naturally with proper punctuation. The text must NATURALLY fit within this exact word count range (${minWordsForImproved}-${maxWordsForImproved} words) while being a complete, finished thought. Select the best content, condense it, enhance it - do not just copy everything. Prioritize clarity, correctness, and natural flow while staying within the word limit.
-
-Improvement instructions: ${improvementPrompt}`
+Output (one paragraph only, ${minWordsForImproved}-${maxWordsForImproved} words):`
         }
       ],
       temperature: 0.3
@@ -156,6 +139,26 @@ Improvement instructions: ${improvementPrompt}`
 
     const improvedText = content.trim();
     console.log(`✅ Text improvement completed - Input: ${body.text.length} chars, Output: ${improvedText.length} chars`);
+
+    // Enforce word limit server-side: if model returned too much, trim to last full sentence (no mid-sentence "...")
+    const words = improvedText.split(/\s+/).filter(Boolean);
+    if (words.length > maxWordsForImproved) {
+      const truncated = words.slice(0, maxWordsForImproved).join(' ');
+      const lastDot = truncated.lastIndexOf('.');
+      const lastExcl = truncated.lastIndexOf('!');
+      const lastQ = truncated.lastIndexOf('?');
+      const lastSentenceEnd = Math.max(lastDot, lastExcl, lastQ);
+      const finalText = lastSentenceEnd >= 0 ? truncated.substring(0, lastSentenceEnd + 1).trim() : truncated;
+      console.log(`⚠️ Improved text exceeded ${maxWordsForImproved} words (got ${words.length}); trimmed to last full sentence.`);
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          success: true,
+          improved_text: finalText
+        })
+      } as any;
+    }
 
     return {
       statusCode: 200,

@@ -71,7 +71,7 @@ Scoring rules:
 - 0 real errors → risk_score ≥50
 - only stylistic suggestions → risk_score ≥45
 - very polished text → risk_score ≥50
-- 2+ AI signals → risk_score ≥60
+- 2+ AI signals → risk_score ≥50
 - risk_score <30 only if speech clearly sounds spontaneous and messy
 
 Short-answer safeguard (very important and overrides other scoring rules):
@@ -89,7 +89,7 @@ Signals guidance:
 - robotic_cues: formal structure, generic phrases, essay tone
 
 Integrity result:
-If risk_score ≥60:
+If risk_score ≥50:
 flagged = true
 message = "Your answer was flagged for using AI. Please try again using your own words."
 
@@ -143,7 +143,7 @@ Please analyze their speaking performance. Focus on how well they addressed the 
   if (!feedback.integrity || typeof feedback.integrity !== 'object') feedback.integrity = {};
   const integrity = feedback.integrity as Record<string, unknown>;
   if (typeof integrity.risk_score !== 'number') integrity.risk_score = 0;
-  integrity.flagged = (integrity.risk_score as number) >= 60;
+  integrity.flagged = (integrity.risk_score as number) >= 50;
   if (typeof integrity.message !== 'string' || !integrity.message) {
     integrity.message = integrity.flagged ? 'Your answer was flagged for using AI. Please try again using your own words.' : '';
   }

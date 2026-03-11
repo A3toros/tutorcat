@@ -710,7 +710,7 @@ Scoring rules:
 - 0 real errors → risk_score ≥70
 - only stylistic suggestions → risk_score ≥65
 - very polished text → risk_score ≥50
-- 2+ AI signals → risk_score ≥60
+- 2+ AI signals → risk_score ≥50
 - risk_score <30 only if speech clearly sounds spontaneous and messy
 
 Short-answer safeguard (very important and overrides other scoring rules):
@@ -728,7 +728,7 @@ Signals guidance:
 - robotic_cues: formal structure, generic phrases, essay tone
 
 Integrity result:
-If risk_score ≥60:
+If risk_score ≥50:
 flagged = true
 message = "Your answer was flagged for using AI. Please try again using your own words."
 
@@ -799,7 +799,7 @@ Provide scores and list specific grammar mistakes with corrections, plus vocabul
       if (typeof feedbackResult.integrity.risk_score !== 'number') {
         feedbackResult.integrity.risk_score = 0;
       }
-      feedbackResult.integrity.flagged = feedbackResult.integrity.risk_score >= 60;
+      feedbackResult.integrity.flagged = feedbackResult.integrity.risk_score >= 50;
       if (typeof feedbackResult.integrity.message !== 'string' || !feedbackResult.integrity.message) {
         feedbackResult.integrity.message = feedbackResult.integrity.flagged
           ? 'Your answer was flagged for using AI. Please try again using your own words.'
@@ -1057,7 +1057,7 @@ Scoring rules:
 - 0 real errors → risk_score ≥70
 - only stylistic suggestions → risk_score ≥65
 - very polished text → risk_score ≥50
-- 2+ AI signals → risk_score ≥60
+- 2+ AI signals → risk_score ≥50
 - risk_score <30 only if speech clearly sounds spontaneous and messy
 
 Short-answer safeguard (very important and overrides other scoring rules):
@@ -1075,7 +1075,7 @@ Signals guidance:
 - robotic_cues: formal structure, generic phrases, essay tone
 
 Integrity result:
-If risk_score ≥60:
+If risk_score ≥50:
 flagged = true
 message = "Your answer was flagged for using AI. Please try again using your own words."
 
@@ -1128,7 +1128,7 @@ Please analyze their speaking performance. Focus on how well they addressed the 
         if (typeof feedbackResult.integrity.risk_score !== 'number') {
           feedbackResult.integrity.risk_score = 0;
         }
-        feedbackResult.integrity.flagged = feedbackResult.integrity.risk_score >= 60;
+        feedbackResult.integrity.flagged = feedbackResult.integrity.risk_score >= 50;
         if (typeof feedbackResult.integrity.message !== 'string' || !feedbackResult.integrity.message) {
           feedbackResult.integrity.message = feedbackResult.integrity.flagged
             ? 'Your answer was flagged for using AI. Please try again using your own words.'

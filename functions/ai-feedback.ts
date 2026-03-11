@@ -302,14 +302,14 @@ Return assessed_level as one of: Pre-A1, A1, A2, B1, B2, C1, C2
 AI integrity (only goal: detect AI-generated content read aloud):
 - Default assumption: students speaking for 1 minute will make several small mistakes. Perfect grammar is unusual and likely AI-generated.
 - We ONLY detect whether the response was written by an AI (e.g. ChatGPT) and then read aloud or spoken via TTS. We do NOT care about plagiarism or malicious content.
-- CRITICAL calibration: Spontaneous human speech in 1 minute is usually messy, repetitive, uneven, or has filler. Text that is highly polished, perfectly coherent, and sounds like a written essay was read aloud is very likely AI-generated. You MUST score such text with high risk_score (50+). Do NOT be overly conservative; when the wording clearly looks like typical ChatGPT output (polished, generic, balanced, essay-like), set risk_score to at least 60 so it gets flagged.
-- What counts as AI-generated: (1) Unusually polished and coherent for spontaneous speech. (2) Generic or template-like phrasing ("It is important to", "There are several factors", "plays a key role", "In order to", "Furthermore", "In conclusion"). (3) Balanced, essay-like structure (clear intro, points, conclusion). (4) Vocabulary or syntax that sounds written/formal rather than spoken. (5) No natural signs of spontaneous production (no hesitation, repetition, or uneven flow). If 2 or more of these apply, risk_score MUST be at least 60.
+- CRITICAL calibration: Spontaneous human speech in 1 minute is usually messy, repetitive, uneven, or has filler. Text that is highly polished, perfectly coherent, and sounds like a written essay was read aloud is very likely AI-generated. You MUST score such text with high risk_score (50+). Do NOT be overly conservative; when the wording clearly looks like typical ChatGPT output (polished, generic, balanced, essay-like), set risk_score to at least 50 so it gets flagged.
+- What counts as AI-generated: (1) Unusually polished and coherent for spontaneous speech. (2) Generic or template-like phrasing ("It is important to", "There are several factors", "plays a key role", "In order to", "Furthermore", "In conclusion"). (3) Balanced, essay-like structure (clear intro, points, conclusion). (4) Vocabulary or syntax that sounds written/formal rather than spoken. (5) No natural signs of spontaneous production (no hesitation, repetition, or uneven flow). If 2 or more of these apply, risk_score MUST be at least 50.
 - If the response is too perfect with not a single real mistake (flawless grammar and vocabulary, no errors at all), treat that as a very strong AI signal: risk_score MUST be at least 70 (99% likely AI). Real spontaneous speech almost always has at least small errors or imperfect phrasing. Same if the only "corrections" are stylistic (e.g. adding subject "I"): that means no real errors — risk_score MUST be at least 65.
 - Do NOT give risk_score under 40 for polished, well-structured text with no or almost no real mistakes.
-- Before setting risk_score, ask: "Could this plausibly be improvised in 1 minute, or does it look like written text (e.g. from ChatGPT) read aloud?" If it looks like written/AI text, risk_score must be 60 or higher. Only give risk_score under 30 when it clearly sounds like spontaneous human speech (imperfect, personal, or messy).
+- Before setting risk_score, ask: "Could this plausibly be improvised in 1 minute, or does it look like written text (e.g. from ChatGPT) read aloud?" If it looks like written/AI text, risk_score must be 50 or higher. Only give risk_score under 30 when it clearly sounds like spontaneous human speech (imperfect, personal, or messy).
 - Short-answer safeguard (very important): If the response is shorter than 35 words, do NOT treat perfect grammar as an AI signal; simple sentences are normal for beginners. risk_score must stay ≤30 unless strong AI signals appear (essay structure, formal connectors, advanced vocabulary).
 - integrity.risk_score (0-100) = likelihood the content was AI-generated then spoken. Use signals: level_mismatch, off_syllabus_vocab, robotic_cues (include generic AI phrasing and essay-like structure).
-- If integrity.risk_score >= 60 set integrity.flagged=true and integrity.message to: "Your answer was flagged for using AI. Please try again using your own words."
+- If integrity.risk_score >= 50 set integrity.flagged=true and integrity.message to: "Your answer was flagged for using AI. Please try again using your own words."
 - Do NOT mention plagiarism in integrity.message. Focus only on AI-generated content.`;
       const feedbackTimeLabel = 'FeedbackAnalysis_' + Date.now();
       console.time(feedbackTimeLabel);
@@ -375,7 +375,7 @@ AI integrity (only goal: detect AI-generated content read aloud):
       if (typeof feedback.integrity.risk_score !== 'number') {
         feedback.integrity.risk_score = 0;
       }
-      feedback.integrity.flagged = feedback.integrity.risk_score >= 60;
+      feedback.integrity.flagged = feedback.integrity.risk_score >= 50;
       if (typeof feedback.integrity.message !== 'string' || !feedback.integrity.message) {
         feedback.integrity.message = feedback.integrity.flagged
           ? 'Your answer was flagged for using AI. Please try again using your own words.'
