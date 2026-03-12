@@ -29,7 +29,8 @@ const FEEDBACK_SYSTEM_PROMPT = `Analyze a student's spoken answer. Return concis
       "off_syllabus_vocab": number (0-100),
       "robotic_cues": number (0-100)
     }
-  }
+  },
+  "question_repetition": boolean
 }
 
 Rules:
@@ -95,7 +96,11 @@ message = "Your answer was flagged for using AI. Please try again using your own
 
 Only detect AI-generated speech. Ignore plagiarism.
 Only mark is_off_topic if completely unrelated.
-Keep responses brief.`;
+Keep responses brief.
+
+Question repetition:
+- If the student repeats the question text inside their answer, set question_repetition = true.
+- Otherwise (no clear repetition of the question text), set question_repetition = false.`;
 
 async function runFeedbackAnalysis(
   transcription: string,
@@ -153,6 +158,10 @@ Please analyze their speaking performance. Focus on how well they addressed the 
 
   if (typeof feedback.overall_score !== 'number' || typeof feedback.feedback !== 'string') {
     return { success: false, error: 'AI response missing required fields' };
+  }
+
+  if (typeof (feedback as any).question_repetition !== 'boolean') {
+    (feedback as any).question_repetition = false;
   }
 
   return { success: true, feedback };
@@ -230,11 +239,28 @@ export default async (req: Request, _context?: unknown): Promise<void> => {
       job.cefr_level
     );
     if (result.success) {
-      await sql`
-        UPDATE speech_jobs
-        SET status = 'completed', result_json = ${JSON.stringify(result.feedback)}::jsonb, error = NULL, updated_at = NOW()
-        WHERE id = ${jobId}
-      `;
+      const feedback = result.feedback as any;
+
+      if (feedback.question_repetition === true) {
+        const errorMsg =
+          'It sounds like you repeated the question instead of answering it. Please re-record your answer using your own words.';
+        await sql`
+          UPDATE speech_jobs
+          SET status = 'failed',
+              error = ${errorMsg},
+              result_json = ${JSON.stringify({
+                reason: 'question_repetition',
+              })}::jsonb,
+              updated_at = NOW()
+          WHERE id = ${jobId}
+        `;
+      } else {
+        await sql`
+          UPDATE speech_jobs
+          SET status = 'completed', result_json = ${JSON.stringify(feedback)}::jsonb, error = NULL, updated_at = NOW()
+          WHERE id = ${jobId}
+        `;
+      }
     } else {
       await sql`
         UPDATE speech_jobs

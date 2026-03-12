@@ -39,6 +39,9 @@ interface RequestBody {
     pronunciation?: boolean
     topic_validation?: boolean
   }
+  // When true, backend will detect if the student mostly repeats the question instead of answering
+  // and return an explicit question_repetition error instead of normal feedback.
+  detect_question_repetition?: boolean
 }
 
 const handler: Handler = async (event, context) => {
@@ -102,6 +105,8 @@ const handler: Handler = async (event, context) => {
       console.error('❌ CRITICAL: OpenAI API key is missing or empty!');
       throw new Error('OpenAI API key is required but not configured. Please set OPENAI_API_KEY in your environment.');
     }
+
+    const detectQuestionRepetition = body.detect_question_repetition === true;
 
     // TRANSCRIBE AUDIO (only if no transcription provided)
     let transcription: string;
@@ -314,6 +319,10 @@ AI integrity (only goal: detect AI-generated content read aloud):
       const feedbackTimeLabel = 'FeedbackAnalysis_' + Date.now();
       console.time(feedbackTimeLabel);
 
+      const questionRepetitionInstruction = detectQuestionRepetition
+        ? '\n\nIn addition, if the student repeats or paraphrases the question text inside their answer (including meta-phrases like "I am going to answer your question what time do you get up on weekdays and on weekends"), set "question_repetition" = true. Otherwise, set "question_repetition" = false.'
+        : '';
+
       const feedbackResponse = await openai.chat.completions.create({
         model: 'gpt-5-mini',
         max_completion_tokens: 3000,
@@ -321,7 +330,7 @@ AI integrity (only goal: detect AI-generated content read aloud):
           { role: 'system', content: systemPrompt },
           {
             role: 'user',
-            content: `Recording Duration: 1 minute (60 seconds)\nPrompt: "${body.prompt}"\n\nStudent's spoken response: "${transcription}"\n\nPlease analyze their speaking performance fairly. Remember: 100 words in 1 minute is EXCELLENT performance. Count grammar constructions (simple past, present perfect, conditionals, passive voice, relative clauses, etc.) and be generous with fluency and vocabulary scores.\n\nCRITICAL: For the improved_transcript, you MUST create a CLEAN, CONDENSED, and ENHANCED version. SELECT THE BEST AND MOST IMPORTANT PARTS - do NOT repeat everything the student said. Condense redundant or repetitive content. Fix all grammar and vocabulary mistakes. Enhance the language naturally while preserving the core meaning. The improved_transcript must be EXACTLY between ${minWordsForImproved} and ${maxWordsForImproved} words (target: ${targetWords} words). This is essential for the student's level (${body.cefr_level || 'unknown'}). IMPORTANT: The text must be COMPLETE and NATURAL - do NOT truncate or cut off mid-sentence. Create a full, coherent paragraph that ends naturally with proper punctuation. The text must NATURALLY fit within this exact word count range (${minWordsForImproved}-${maxWordsForImproved} words) while being a complete, finished thought. Select the best content, condense it, enhance it - do not just copy everything. Prioritize clarity, correctness, and natural flow while staying within the word limit.`
+            content: `Recording Duration: 1 minute (60 seconds)\nPrompt: "${body.prompt}"\n\nStudent's spoken response: "${transcription}"\n\nPlease analyze their speaking performance fairly. Remember: 100 words in 1 minute is EXCELLENT performance. Count grammar constructions (simple past, present perfect, conditionals, passive voice, relative clauses, etc.) and be generous with fluency and vocabulary scores.${questionRepetitionInstruction}\n\nCRITICAL: For the improved_transcript, you MUST create a CLEAN, CONDENSED, and ENHANCED version. SELECT THE BEST AND MOST IMPORTANT PARTS - do NOT repeat everything the student said. Condense redundant or repetitive content. Fix all grammar and vocabulary mistakes. Enhance the language naturally while preserving the core meaning. The improved_transcript must be EXACTLY between ${minWordsForImproved} and ${maxWordsForImproved} words (target: ${targetWords} words). This is essential for the student's level (${body.cefr_level || 'unknown'}). IMPORTANT: The text must be COMPLETE and NATURAL - do NOT truncate or cut off mid-sentence. Create a full, coherent paragraph that ends naturally with proper punctuation. The text must NATURALLY fit within this exact word count range (${minWordsForImproved}-${maxWordsForImproved} words) while being a complete, finished thought. Select the best content, condense it, enhance it - do not just copy everything. Prioritize clarity, correctness, and natural flow while staying within the word limit.`
           }
         ]
       });
@@ -389,6 +398,14 @@ AI integrity (only goal: detect AI-generated content read aloud):
         };
       }
 
+      if (typeof feedback.question_repetition !== 'boolean') {
+        feedback.question_repetition = false;
+      }
+
+      if (typeof (feedback as any).question_repetition !== 'boolean') {
+        (feedback as any).question_repetition = false;
+      }
+
       console.log('🛡️ AI integrity:', {
         risk_score: feedback.integrity.risk_score,
         flagged: feedback.integrity.flagged,
@@ -411,6 +428,20 @@ AI integrity (only goal: detect AI-generated content read aloud):
         if (feedback[field] && !Array.isArray(feedback[field])) {
           console.warn(`AI response: ${field} should be an array but got ${typeof feedback[field]}`);
         }
+      }
+
+      // Question repetition: if true, treat as invalid attempt and force re-record.
+      if (detectQuestionRepetition && feedback.question_repetition === true) {
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            success: false,
+            error: 'It sounds like you repeated the question instead of answering it. Please re-record your answer using your own words.',
+            error_code: 'question_repetition',
+            transcript: transcription,
+          }),
+        } as any;
       }
 
       // Validate assessed_level if present

@@ -88,6 +88,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
   const [isMinWordsError, setIsMinWordsError] = useState(false);
   const [isAIFlaggedError, setIsAIFlaggedError] = useState(false);
   const [isSpeechTooLongError, setIsSpeechTooLongError] = useState(false);
+  const [isQuestionRepetitionError, setIsQuestionRepetitionError] = useState(false);
   const [isResending, setIsResending] = useState(false);
 
   const [showMobileRecordingHint, setShowMobileRecordingHint] = useState(false);
@@ -376,6 +377,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
     setSubmissionError(null);
     setIsSpeechTooLongError(false);
     setIsAIFlaggedError(false);
+    setIsQuestionRepetitionError(false);
 
     try {
       checkNetworkStatus();
@@ -388,7 +390,8 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
           prompt: promptText,
           criteria: lessonData.feedbackCriteria,
           // Use lesson level as the expected baseline; fallback to user level.
-          cefr_level: lessonData.level || user?.level || undefined
+          cefr_level: lessonData.level || user?.level || undefined,
+          detect_question_repetition: true,
         })
       });
 
@@ -405,6 +408,20 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       }
 
       if (!result.success) {
+        const isQuestionRepetition =
+          result.error_code === 'question_repetition' ||
+          result.reason === 'question_repetition';
+        if (isQuestionRepetition) {
+          setIsQuestionRepetitionError(true);
+          setSubmissionError(
+            result.error ||
+            'It sounds like you repeated the question instead of answering it. Please re-record your answer using your own words.'
+          );
+          setAnalysisState('failed');
+          setCurrentStep('error');
+          return;
+        }
+
         const isSpeechTooLong = result.error_code === 'speech_too_long' ||
           (typeof result.error === 'string' && (
             result.error.includes('2 minute') ||
@@ -544,6 +561,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       console.error('Analysis error:', error);
       setAnalysisState('failed');
       setIsProcessing(false);
+      setIsQuestionRepetitionError(false);
       let errorMessage = 'Analysis failed. Please try again.';
       if (error.message && error.message.includes('No internet connection')) {
         errorMessage = error.message;
@@ -595,6 +613,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
 
       checkNetworkStatus();
       setIsAIFlaggedError(false);
+      setIsQuestionRepetitionError(false);
 
       const base64Audio = await blobToBase64(audioBlob);
 
@@ -656,7 +675,9 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
         setCurrentStep('error');
         setAnalysisState('failed');
         const result = data.result || {};
-        if (result.min_words != null && result.word_count != null) {
+        if (result.reason === 'question_repetition') {
+          setIsQuestionRepetitionError(true);
+        } else if (result.min_words != null && result.word_count != null) {
           setIsMinWordsError(true);
         }
         setIsProcessing(false);
@@ -751,6 +772,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       }
       setSubmissionError(errorMessage);
       setCurrentStep('error');
+      setIsQuestionRepetitionError(false);
     } finally {
       setIsProcessing(false);
     }
@@ -976,6 +998,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
     setIsResending(true);
     setSubmissionError(null);
     setIsSpeechTooLongError(false);
+    setIsQuestionRepetitionError(false);
     setTranscriptionState('transcribing');
     setCurrentStep('transcribing');
 
@@ -1036,7 +1059,9 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
         setAnalysisState('failed');
         setCurrentStep('error');
         const result = data.result || {};
-        if (result.min_words != null && result.word_count != null) {
+        if (result.reason === 'question_repetition') {
+          setIsQuestionRepetitionError(true);
+        } else if (result.min_words != null && result.word_count != null) {
           setIsMinWordsError(true);
         }
         setIsResending(false);
@@ -1108,6 +1133,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
     setIsResending(true);
     setSubmissionError(null);
     setIsSpeechTooLongError(false);
+    setIsQuestionRepetitionError(false);
     setCurrentStep('analyzing');
     setAnalysisState('analyzing');
 
@@ -1153,7 +1179,9 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
         setAnalysisState('failed');
         setCurrentStep('error');
         const result = data.result || {};
-        if (result.min_words != null && result.word_count != null) {
+        if (result.reason === 'question_repetition') {
+          setIsQuestionRepetitionError(true);
+        } else if (result.min_words != null && result.word_count != null) {
           setIsMinWordsError(true);
         }
         setIsResending(false);
@@ -1572,7 +1600,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
   if (currentStep === 'error') {
     const isTranscriptionError = !isMinWordsError && transcriptionState === 'failed';
     const isAnalysisError = analysisState === 'failed';
-    const isIntegrityError = isAIFlaggedError === true;
+    const isIntegrityError = isAIFlaggedError === true || isQuestionRepetitionError === true;
     const retryHandler = isTranscriptionError ? handleRetryTranscription :
                        isAnalysisError ? handleRetryAnalysis :
                        isSpeechTooLongError ? () => { setSubmissionError(null); setIsSpeechTooLongError(false); setError(null); setCurrentStep('idle'); } :
@@ -1582,11 +1610,21 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       <Card>
         <Card.Header>
           <h3 className="text-lg md:text-xl font-semibold text-red-800">
-            {isMinWordsError ? 'Not enough words' : isIntegrityError ? 'Flagged' : isSpeechTooLongError ? 'Speech too long' : '⚠️ Processing Error'}
+            {isMinWordsError
+              ? 'Not enough words'
+              : isQuestionRepetitionError
+                ? 'Please re-record'
+                : isIntegrityError
+                  ? 'Flagged'
+                  : isSpeechTooLongError
+                    ? 'Speech too long'
+                    : '⚠️ Processing Error'}
           </h3>
           <p className="text-sm text-red-600">
             {isIntegrityError
-              ? 'Your answer was flagged for using AI. Please re-record and answer using your own words.'
+              ? isQuestionRepetitionError
+                ? 'It sounds like you repeated the question instead of answering it. Please re-record your answer using your own words.'
+                : 'Your answer was flagged for using AI. Please re-record and answer using your own words.'
               : (submissionError || error)}
           </p>
         </Card.Header>
@@ -1627,10 +1665,11 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
                     setAudioBlob(null);
                     setError(null);
                     setSubmissionError(null);
-    setIsSpeechTooLongError(false);
+                    setIsSpeechTooLongError(false);
                     setIsMinWordsError(false);
                     setIsAIFlaggedError(false);
                     setIsSpeechTooLongError(false);
+                    setIsQuestionRepetitionError(false);
                     setIsProcessing(false);
                     setIsResending(false);
                     setTranscriptionState('idle');
