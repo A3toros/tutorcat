@@ -89,7 +89,12 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
   const [isAIFlaggedError, setIsAIFlaggedError] = useState(false);
   const [isSpeechTooLongError, setIsSpeechTooLongError] = useState(false);
   const [isQuestionRepetitionError, setIsQuestionRepetitionError] = useState(false);
+  const [isDeliveryReadError, setIsDeliveryReadError] = useState(false);
   const [isResending, setIsResending] = useState(false);
+
+  /** Minimum spoken_pct (0–100) to allow; below this we prompt re-record (reading instead of speaking). */
+  const DELIVERY_SPOKEN_PCT_MIN = 70;
+  const RHYTHM_SAMPLE_INTERVAL_MS = 100;
 
   const [showMobileRecordingHint, setShowMobileRecordingHint] = useState(false);
 
@@ -103,6 +108,10 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
   const autoStopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const rhythmSamplesRef = useRef<{ energy: number; silent: boolean; zeroCrossRate: number }[]>([]);
+  const rhythmIntervalRef = useRef<number | null>(null);
 
   // Handle prompts - can be array of strings or array of objects with {id, text}
   const prompts = lessonData.prompts || [];
@@ -128,6 +137,103 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       reader.onerror = reject;
       reader.readAsDataURL(blob);
     });
+  };
+
+  // Compute simple browser-side rhythm features from sampled energy over time.
+  const computeBrowserRhythmFeatures = (recordingDurationMs: number) => {
+    const samples = rhythmSamplesRef.current;
+    if (!samples.length || recordingDurationMs <= 0) return undefined;
+
+    const energies = samples.map((s) => s.energy);
+    const zcrs = samples.map((s) => s.zeroCrossRate);
+    const n = energies.length;
+    const meanEnergy = energies.reduce((sum, e) => sum + e, 0) / n;
+    const meanZcr = zcrs.reduce((sum, z) => sum + z, 0) / n;
+    const energyVariance =
+      energies.reduce((sum, e) => {
+        const diff = e - meanEnergy;
+        return sum + diff * diff;
+      }, 0) / n;
+    const pitchVariance =
+      zcrs.reduce((sum, z) => {
+        const diff = z - meanZcr;
+        return sum + diff * diff;
+      }, 0) / n;
+
+    let silentSamples = 0;
+    let silentRuns = 0;
+    let currentRun = 0;
+    for (const s of samples) {
+      if (s.silent) {
+        silentSamples += 1;
+        currentRun += 1;
+      } else if (currentRun > 0) {
+        silentRuns += 1;
+        currentRun = 0;
+      }
+    }
+    if (currentRun > 0) silentRuns += 1;
+
+    const totalSamples = samples.length;
+    const pauseRatio = totalSamples ? silentSamples / totalSamples : 0;
+    const avgPauseSeconds =
+      silentRuns > 0 ? (silentSamples / silentRuns) * (RHYTHM_SAMPLE_INTERVAL_MS / 1000) : 0;
+
+    // Pause variance: variance of silent run lengths (in seconds).
+    const pauseLengths: number[] = [];
+    currentRun = 0;
+    for (const s of samples) {
+      if (s.silent) {
+        currentRun += 1;
+      } else if (currentRun > 0) {
+        pauseLengths.push(currentRun * (RHYTHM_SAMPLE_INTERVAL_MS / 1000));
+        currentRun = 0;
+      }
+    }
+    if (currentRun > 0) {
+      pauseLengths.push(currentRun * (RHYTHM_SAMPLE_INTERVAL_MS / 1000));
+    }
+    let pauseVariance = 0;
+    let pauseEntropy = 0;
+    if (pauseLengths.length > 0) {
+      const meanPause =
+        pauseLengths.reduce((sum, v) => sum + v, 0) / pauseLengths.length;
+      pauseVariance =
+        pauseLengths.reduce((sum, v) => {
+          const diff = v - meanPause;
+          return sum + diff * diff;
+        }, 0) / pauseLengths.length;
+
+      // Simple entropy over binned pause lengths.
+      const bins = new Map<number, number>();
+      for (const v of pauseLengths) {
+        const key = Math.round(v * 10); // bin to 0.1s
+        bins.set(key, (bins.get(key) || 0) + 1);
+      }
+      const total = pauseLengths.length;
+      let h = 0;
+      bins.forEach((count) => {
+        const p = count / total;
+        h += -p * Math.log2(p);
+      });
+      pauseEntropy = h;
+    }
+
+    // Very rough speech-rate proxy from voiced vs unvoiced fraction.
+    const speechFraction = 1 - pauseRatio;
+    const approxSpeechRate = speechFraction * (1000 / RHYTHM_SAMPLE_INTERVAL_MS);
+
+    const voicedRatio = speechFraction;
+
+    return {
+      // Matches plan: what we need from browser
+      speech_rate: approxSpeechRate,
+      pause_variance: pauseVariance,
+      pause_entropy: pauseEntropy,
+      pitch_variance: pitchVariance,
+      energy_variance: energyVariance,
+      voiced_ratio: voicedRatio,
+    };
   };
 
   // Helper function to check network status
@@ -378,6 +484,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
     setIsSpeechTooLongError(false);
     setIsAIFlaggedError(false);
     setIsQuestionRepetitionError(false);
+    setIsDeliveryReadError(false);
 
     try {
       checkNetworkStatus();
@@ -459,6 +566,16 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
 
         setSubmissionError(message);
         setIsAIFlaggedError(true);
+        setAnalysisState('failed');
+        setCurrentStep('error');
+        return;
+      }
+
+      const delivery = result?.delivery ?? result?.feedback?.delivery;
+      const spokenPct = typeof delivery?.spoken_pct === 'number' ? delivery.spoken_pct : 100;
+      if (spokenPct < DELIVERY_SPOKEN_PCT_MIN) {
+        setSubmissionError('Please speak in your own words instead of reading. Re-record your answer.');
+        setIsDeliveryReadError(true);
         setAnalysisState('failed');
         setCurrentStep('error');
         return;
@@ -562,6 +679,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       setAnalysisState('failed');
       setIsProcessing(false);
       setIsQuestionRepetitionError(false);
+      setIsDeliveryReadError(false);
       let errorMessage = 'Analysis failed. Please try again.';
       if (error.message && error.message.includes('No internet connection')) {
         errorMessage = error.message;
@@ -614,6 +732,15 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       checkNetworkStatus();
       setIsAIFlaggedError(false);
       setIsQuestionRepetitionError(false);
+      setIsDeliveryReadError(false);
+
+      // Compute browser-side rhythm features (if available) from the captured samples.
+      let browserRhythm: ReturnType<typeof computeBrowserRhythmFeatures> | undefined;
+      try {
+        browserRhythm = computeBrowserRhythmFeatures(recordingDuration);
+      } catch (err) {
+        console.warn('Failed to compute browser rhythm features:', err);
+      }
 
       const base64Audio = await blobToBase64(audioBlob);
 
@@ -635,6 +762,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
           duration_seconds: Math.round(recordingDuration / 1000),
           user_id: user?.id || undefined,
           lesson_id: lessonData.lessonId || undefined,
+          browser_rhythm: browserRhythm || undefined,
         }),
       });
 
@@ -714,7 +842,6 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
         return;
       }
 
-      const integrityStt = result.integrity;
       const flagged =
         result?.integrity?.flagged === true ||
         result?.ai_flagged === true ||
@@ -727,6 +854,17 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
           'Your answer was flagged for using AI. Please try again using your own words.';
         setSubmissionError(message);
         setIsAIFlaggedError(true);
+        setCurrentStep('error');
+        setAnalysisState('failed');
+        setIsProcessing(false);
+        return;
+      }
+
+      const deliveryPoll = result?.delivery ?? result?.feedback?.delivery;
+      const spokenPctPoll = typeof deliveryPoll?.spoken_pct === 'number' ? deliveryPoll.spoken_pct : 100;
+      if (spokenPctPoll < DELIVERY_SPOKEN_PCT_MIN) {
+        setSubmissionError('Please speak in your own words instead of reading. Re-record your answer.');
+        setIsDeliveryReadError(true);
         setCurrentStep('error');
         setAnalysisState('failed');
         setIsProcessing(false);
@@ -775,6 +913,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       setSubmissionError(errorMessage);
       setCurrentStep('error');
       setIsQuestionRepetitionError(false);
+      setIsDeliveryReadError(false);
     } finally {
       setIsProcessing(false);
     }
@@ -806,6 +945,57 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       const stream = await navigator.mediaDevices.getUserMedia(audioConstraints);
 
       streamRef.current = stream;
+
+      // Set up Web Audio analysis for simple rhythm features (energy / pauses).
+      try {
+        const AudioContextClass =
+          (window as any).AudioContext || (window as any).webkitAudioContext;
+        if (AudioContextClass) {
+          const audioContext = new AudioContextClass();
+          const source = audioContext.createMediaStreamSource(stream);
+          const analyser = audioContext.createAnalyser();
+          analyser.fftSize = 2048;
+          source.connect(analyser);
+
+          audioContextRef.current = audioContext;
+          analyserRef.current = analyser;
+          rhythmSamplesRef.current = [];
+
+          const data = new Uint8Array(analyser.fftSize);
+          const energyThreshold = 0.02;
+
+          rhythmIntervalRef.current = window.setInterval(() => {
+            if (!analyserRef.current) return;
+            analyserRef.current.getByteTimeDomainData(data);
+            let sumSquares = 0;
+            let zeroCrossings = 0;
+            let lastSign = 0;
+            for (let i = 0; i < data.length; i++) {
+              const v = (data[i] - 128) / 128; // center around 0
+              sumSquares += v * v;
+              const sign = v > 0 ? 1 : v < 0 ? -1 : 0;
+              if (sign !== 0 && lastSign !== 0 && sign !== lastSign) {
+                zeroCrossings += 1;
+              }
+              if (sign !== 0) lastSign = sign;
+            }
+            const rms = Math.sqrt(sumSquares / data.length);
+            const energy = rms;
+            const silent = energy < energyThreshold;
+            const zeroCrossRate = zeroCrossings / data.length;
+            rhythmSamplesRef.current.push({ energy, silent, zeroCrossRate });
+          }, RHYTHM_SAMPLE_INTERVAL_MS);
+        }
+      } catch (err) {
+        console.warn('Browser rhythm analysis unavailable:', err);
+        audioContextRef.current = null;
+        analyserRef.current = null;
+        rhythmSamplesRef.current = [];
+        if (rhythmIntervalRef.current != null) {
+          window.clearInterval(rhythmIntervalRef.current);
+          rhythmIntervalRef.current = null;
+        }
+      }
 
       const mimeType = getSupportedMimeType();
 
@@ -856,6 +1046,21 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
         const recordingDuration = (window as any).recordingStartTime ?
           Date.now() - (window as any).recordingStartTime : 0;
         
+        // Stop the rhythm sampling and audio context
+        if (rhythmIntervalRef.current != null) {
+          window.clearInterval(rhythmIntervalRef.current);
+          rhythmIntervalRef.current = null;
+        }
+        if (audioContextRef.current) {
+          try {
+            audioContextRef.current.close();
+          } catch {
+            // ignore
+          }
+          audioContextRef.current = null;
+          analyserRef.current = null;
+        }
+
         // Stop the stream tracks
         if (streamRef.current) {
           streamRef.current.getTracks().forEach(track => track.stop());
@@ -1001,6 +1206,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
     setSubmissionError(null);
     setIsSpeechTooLongError(false);
     setIsQuestionRepetitionError(false);
+    setIsDeliveryReadError(false);
     setTranscriptionState('transcribing');
     setCurrentStep('transcribing');
 
@@ -1086,6 +1292,17 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
         return;
       }
 
+      const deliveryResend = result?.delivery ?? result?.feedback?.delivery;
+      const spokenPctResend = typeof deliveryResend?.spoken_pct === 'number' ? deliveryResend.spoken_pct : 100;
+      if (spokenPctResend < DELIVERY_SPOKEN_PCT_MIN) {
+        setSubmissionError('Please speak in your own words instead of reading. Re-record your answer.');
+        setIsDeliveryReadError(true);
+        setAnalysisState('failed');
+        setCurrentStep('error');
+        setIsResending(false);
+        return;
+      }
+
       if (result.overall_score === undefined || typeof result.overall_score !== 'number') {
         setSubmissionError('Something went wrong. Please try again.');
         setAnalysisState('failed');
@@ -1136,6 +1353,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
     setSubmissionError(null);
     setIsSpeechTooLongError(false);
     setIsQuestionRepetitionError(false);
+    setIsDeliveryReadError(false);
     setCurrentStep('analyzing');
     setAnalysisState('analyzing');
 
@@ -1602,7 +1820,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
   if (currentStep === 'error') {
     const isTranscriptionError = !isMinWordsError && transcriptionState === 'failed';
     const isAnalysisError = analysisState === 'failed';
-    const isIntegrityError = isAIFlaggedError === true || isQuestionRepetitionError === true;
+    const isIntegrityError = isAIFlaggedError === true || isQuestionRepetitionError === true || isDeliveryReadError === true;
     const retryHandler = isTranscriptionError ? handleRetryTranscription :
                        isAnalysisError ? handleRetryAnalysis :
                        isSpeechTooLongError ? () => { setSubmissionError(null); setIsSpeechTooLongError(false); setError(null); setCurrentStep('idle'); } :
@@ -1616,9 +1834,11 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
               ? 'Not enough words'
               : isQuestionRepetitionError
                 ? 'Please re-record'
-                : isIntegrityError
-                  ? 'Flagged'
-                  : isSpeechTooLongError
+                : isDeliveryReadError
+                  ? 'Speak, don\'t read'
+                  : isIntegrityError
+                    ? 'Flagged'
+                    : isSpeechTooLongError
                     ? 'Speech too long'
                     : '⚠️ Processing Error'}
           </h3>
@@ -1626,7 +1846,9 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
             {isIntegrityError
               ? isQuestionRepetitionError
                 ? 'It sounds like you repeated the question instead of answering it. Please re-record your answer using your own words.'
-                : 'Your answer was flagged for using AI. Please re-record and answer using your own words.'
+                : isDeliveryReadError
+                  ? 'Please speak in your own words instead of reading. Re-record your answer.'
+                  : 'Your answer was flagged for using AI. Please re-record and answer using your own words.'
               : (submissionError || error)}
           </p>
         </Card.Header>
@@ -1670,6 +1892,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
                     setIsSpeechTooLongError(false);
                     setIsMinWordsError(false);
                     setIsAIFlaggedError(false);
+                    setIsDeliveryReadError(false);
                     setIsSpeechTooLongError(false);
                     setIsQuestionRepetitionError(false);
                     setIsProcessing(false);

@@ -1,6 +1,9 @@
 import { Handler } from '@netlify/functions';
 import OpenAI from 'openai';
 import { neon } from '@neondatabase/serverless';
+import { createClient } from '@supabase/supabase-js';
+
+const SUPABASE_BUCKET = 'tutorcat';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
@@ -18,6 +21,15 @@ interface SpeechJobBody {
   user_id?: string;
   duration_seconds?: number;
   lesson_id?: string;
+  browser_rhythm?: {
+    speech_rate?: number;
+    pause_variance?: number;
+    pause_entropy?: number;
+    pitch_variance?: number;
+    energy_variance?: number;
+    voiced_ratio?: number;
+    [key: string]: unknown;
+  };
 }
 
 const corsHeaders = {
@@ -126,16 +138,20 @@ export const handler: Handler = async (event) => {
   const audioFile = new File([new Uint8Array(audioBuffer)], `audio.${fileExtension}`, { type: mimeType });
 
   let transcript: string;
+  let whisperVerboseRaw: any | null = null;
   try {
     const result = await openai.audio.transcriptions.create({
       file: audioFile,
       model: 'whisper-1',
       language: 'en',
-      response_format: 'json',
+      // Use verbose_json so we can later use segments, timing, and confidence signals
+      // for read-vs-speak and delivery analysis.
+      response_format: 'verbose_json',
       temperature: 0,
     });
     // Log raw Whisper API response (terminal/console)
     console.log('speech-job: [Whisper raw output]', JSON.stringify(result, null, 2));
+    whisperVerboseRaw = result;
     transcript = (result as { text?: string }).text?.trim() || '';
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Transcription failed';
@@ -192,6 +208,61 @@ export const handler: Handler = async (event) => {
   }
 
   const jobId = row.id;
+
+  // Helper: trim Whisper verbose_json to minimal structure for read-vs-speak and analysis.
+  const buildMinimalWhisperVerbose = (raw: any) => {
+    if (!raw || typeof raw !== 'object') return null;
+    const segments = Array.isArray(raw.segments)
+      ? raw.segments.map((s: any) => ({
+          start: s.start,
+          end: s.end,
+          text: s.text,
+          avg_logprob: s.avg_logprob,
+          no_speech_prob: s.no_speech_prob,
+          compression_ratio: s.compression_ratio,
+        }))
+      : undefined;
+    return {
+      text: (raw as any).text,
+      duration: (raw as any).duration,
+      language: (raw as any).language,
+      segments,
+    };
+  };
+
+  // Upload audio (and sidecar JSON with Whisper + browser rhythm features) to Supabase Storage.
+  const supabaseUrl = process.env.SUPABASE_URL?.trim();
+  const supabaseSecret = process.env.SUPABASE_SECRET_KEY?.trim();
+  if (supabaseUrl && supabaseSecret) {
+    try {
+      const supabase = createClient(supabaseUrl, supabaseSecret);
+      const audioPath = `${jobId}.${fileExtension}`;
+      const { error } = await supabase.storage.from(SUPABASE_BUCKET).upload(audioPath, audioBuffer, {
+        contentType: mimeType,
+        upsert: true,
+      });
+      if (error) console.error('speech-job: Supabase audio upload failed', error);
+
+       // Sidecar JSON with Whisper minimal verbose output + browser rhythm features for this job.
+       const minimalWhisper = buildMinimalWhisperVerbose(whisperVerboseRaw);
+       const featuresPayload = {
+         jobId,
+         whisper_verbose: minimalWhisper,
+         browser_rhythm: body.browser_rhythm || null,
+         created_at: new Date().toISOString(),
+       };
+       const featuresPath = `${jobId}.features.JSON`;
+       const { error: featuresError } = await supabase.storage
+         .from(SUPABASE_BUCKET)
+         .upload(featuresPath, Buffer.from(JSON.stringify(featuresPayload), 'utf-8'), {
+           contentType: 'application/json',
+           upsert: true,
+         });
+       if (featuresError) console.error('speech-job: Supabase features JSON upload failed', featuresError);
+    } catch (e) {
+      console.error('speech-job: Supabase audio upload error', e);
+    }
+  }
 
   // Do NOT trigger background here. Client triggers it after getting jobId so it works
   // on all devices (server-to-server fetch can fail when request comes from mobile).

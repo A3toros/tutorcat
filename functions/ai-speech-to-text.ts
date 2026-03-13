@@ -3,9 +3,10 @@ import * as crypto from 'crypto';
 import OpenAI from 'openai';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY!;
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+// Supabase client is optional here: if not configured, we fall back to a default prompt.
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_KEY;
+const supabase = supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
 /**
  * POST: Audio → transcribe (AssemblyAI or Whisper) and optionally feedback in one response.
@@ -389,7 +390,7 @@ const handler: Handler = async (event, context) => {
     // FETCH THE ACTUAL PROMPT FROM DATABASE (at handler level)
     var questionPrompt = "Please respond to the speaking question."; // Default fallback
 
-    if (test_id && question_id) {
+    if (test_id && question_id && supabase) {
       try {
         console.log('🔍 Fetching prompt from database for test:', test_id, 'question:', question_id);
         const { data: testData, error: testError } = await supabase
@@ -409,6 +410,8 @@ const handler: Handler = async (event, context) => {
       } catch (error) {
         console.error('❌ Error fetching prompt:', error);
       }
+    } else if (test_id && question_id && !supabase) {
+      console.warn('Supabase not configured; using default question prompt for ai-speech-to-text.');
     }
 
 

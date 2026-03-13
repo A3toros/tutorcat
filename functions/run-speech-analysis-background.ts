@@ -6,6 +6,9 @@
  */
 import OpenAI from 'openai';
 import { neon } from '@neondatabase/serverless';
+import { createClient } from '@supabase/supabase-js';
+
+const SUPABASE_BUCKET = 'tutorcat';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const openai = OPENAI_API_KEY ? new OpenAI({ apiKey: OPENAI_API_KEY }) : null;
@@ -164,7 +167,42 @@ Please analyze their speaking performance. Focus on how well they addressed the 
     (feedback as any).question_repetition = false;
   }
 
+  // Read vs speak: probability of spoken (spontaneous) vs reading in %. High = allow, low = prompt re-record. Stub: 100% until classifier is trained.
+  feedback.delivery = {
+    spoken_pct: 100,
+    mode: 'spoken',
+    confidence: 0,
+    signals: {},
+    _note: 'Classifier not yet trained; all responses treated as spoken.',
+  };
+
   return { success: true, feedback };
+}
+
+/** Upload result JSON to Supabase Storage (tutorcat bucket) as {jobId}.JSON, same base name as the audio file. */
+async function uploadResultToSupabase(
+  jobId: string,
+  payload: { status: string; result_json?: unknown; delivery?: unknown; error?: string }
+): Promise<void> {
+  const url = process.env.SUPABASE_URL?.trim();
+  const key = process.env.SUPABASE_SECRET_KEY?.trim();
+  if (!url || !key) return;
+  try {
+    const body = {
+      jobId,
+      ...payload,
+      written_at: new Date().toISOString(),
+    };
+    const supabase = createClient(url, key);
+    const path = `${jobId}.JSON`;
+    const { error } = await supabase.storage.from(SUPABASE_BUCKET).upload(path, Buffer.from(JSON.stringify(body), 'utf-8'), {
+      contentType: 'application/json',
+      upsert: true,
+    });
+    if (error) console.error('run-speech-analysis-background: Supabase JSON upload failed', error);
+  } catch (e) {
+    console.error('run-speech-analysis-background: Supabase JSON upload error', e);
+  }
 }
 
 /** Netlify background function: default export with (req, context) → client gets 202 immediately, execution runs in background. */
@@ -216,11 +254,13 @@ export default async (req: Request, _context?: unknown): Promise<void> => {
   const minWords = job.min_words != null && typeof job.min_words === 'number' ? job.min_words : 0;
   if (minWords > 0 && wordCount < minWords) {
     const errorMsg = `Please speak at least ${minWords} words. You said ${wordCount} word(s).`;
+    const resultPayload = { min_words: minWords, word_count: wordCount, error: errorMsg };
     await sql`
       UPDATE speech_jobs
-      SET status = 'failed', error = ${errorMsg}, result_json = ${JSON.stringify({ min_words: minWords, word_count: wordCount, error: errorMsg })}::jsonb, updated_at = NOW()
+      SET status = 'failed', error = ${errorMsg}, result_json = ${JSON.stringify(resultPayload)}::jsonb, updated_at = NOW()
       WHERE id = ${jobId}
     `;
+    await uploadResultToSupabase(jobId, { status: 'failed', result_json: resultPayload, error: errorMsg });
     return;
   }
 
@@ -247,22 +287,23 @@ export default async (req: Request, _context?: unknown): Promise<void> => {
       if (feedback.question_repetition === true) {
         const errorMsg =
           'It sounds like you repeated the question instead of answering it. Please re-record your answer using your own words.';
+        const resultPayload = { reason: 'question_repetition' };
         await sql`
           UPDATE speech_jobs
           SET status = 'failed',
               error = ${errorMsg},
-              result_json = ${JSON.stringify({
-                reason: 'question_repetition',
-              })}::jsonb,
+              result_json = ${JSON.stringify(resultPayload)}::jsonb,
               updated_at = NOW()
           WHERE id = ${jobId}
         `;
+        await uploadResultToSupabase(jobId, { status: 'failed', result_json: resultPayload, error: errorMsg });
       } else {
         await sql`
           UPDATE speech_jobs
           SET status = 'completed', result_json = ${JSON.stringify(feedback)}::jsonb, error = NULL, updated_at = NOW()
           WHERE id = ${jobId}
         `;
+        await uploadResultToSupabase(jobId, { status: 'completed', result_json: feedback, delivery: feedback?.delivery });
       }
     } else {
       await sql`
@@ -270,6 +311,7 @@ export default async (req: Request, _context?: unknown): Promise<void> => {
         SET status = 'failed', error = ${result.error}, updated_at = NOW()
         WHERE id = ${jobId}
       `;
+      await uploadResultToSupabase(jobId, { status: 'failed', error: result.error });
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Analysis failed';
@@ -279,5 +321,6 @@ export default async (req: Request, _context?: unknown): Promise<void> => {
       SET status = 'failed', error = ${message}, updated_at = NOW()
       WHERE id = ${jobId}
     `;
+    await uploadResultToSupabase(jobId, { status: 'failed', error: message });
   }
 };
