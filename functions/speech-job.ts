@@ -67,6 +67,8 @@ export const handler: Handler = async (event) => {
     };
   }
 
+  console.log('speech-job: received audio, calling Whisper... (raw output will follow)');
+
   // Enforce duration if client sends it (e.g. from MediaRecorder)
   if (typeof body.duration_seconds === 'number' && body.duration_seconds > MAX_DURATION_SECONDS) {
     return {
@@ -132,6 +134,8 @@ export const handler: Handler = async (event) => {
       response_format: 'json',
       temperature: 0,
     });
+    // Log raw Whisper API response (terminal/console)
+    console.log('speech-job: [Whisper raw output]', JSON.stringify(result, null, 2));
     transcript = (result as { text?: string }).text?.trim() || '';
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Transcription failed';

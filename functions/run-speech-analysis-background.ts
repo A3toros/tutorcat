@@ -99,7 +99,7 @@ Only mark is_off_topic if completely unrelated.
 Keep responses brief.
 
 Question repetition:
-- If the student repeats the question text inside their answer, set question_repetition = true.
+- If the student repeats the exact question text inside their answer,  set question_repetition = true. Note thatusing some words from question is ok
 - Otherwise (no clear repetition of the question text), set question_repetition = false.`;
 
 async function runFeedbackAnalysis(
@@ -203,6 +203,9 @@ export default async (req: Request, _context?: unknown): Promise<void> => {
     console.warn('run-speech-analysis-background: job not found (may be replication delay)', { jobId });
     return;
   }
+
+  // Log Whisper transcript (raw output used for analysis)
+  console.log('run-speech-analysis-background: [Whisper transcript]', job.transcript);
 
   if (job.status !== 'processing') {
     console.log('run-speech-analysis-background: another worker won the race', { jobId, status: job.status });

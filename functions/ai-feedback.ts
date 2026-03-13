@@ -171,6 +171,9 @@ const handler: Handler = async (event, context) => {
         temperature: 0
       });
 
+      // Log raw Whisper API response (terminal/console)
+      console.log('ai-feedback: [Whisper raw output]', JSON.stringify(transcriptionResult, null, 2));
+
       transcription = transcriptionResult.text || '';
       transcription = transcription.trim();
 

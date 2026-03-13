@@ -938,6 +938,9 @@ async function streamTranscribeAndAnalyze(
         temperature: 0
       });
 
+      // Log raw Whisper API response (terminal/console)
+      console.log('ai-speech-to-text: [Whisper raw output]', JSON.stringify(transcription, null, 2));
+
       finalTranscript = transcription.text || '';
       transcriptionCompleted = true;
 

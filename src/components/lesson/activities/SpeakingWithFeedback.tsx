@@ -620,6 +620,8 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       setCurrentStep('transcribing');
       setTranscriptionState('transcribing');
 
+      // Whisper runs in speech-job on the server; logs appear in the terminal running "netlify dev", not in browser console
+      console.log('📡 Sending audio to speech-job (Whisper runs on server → check terminal for [Whisper raw output])');
       const speechJobRes = await makeRequestWithRetry('/.netlify/functions/speech-job', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
