@@ -73,6 +73,7 @@ export const handler: Handler = async (event) => {
     const scope = (event.queryStringParameters?.scope || 'lessons').toLowerCase();
     const lessonId = event.queryStringParameters?.lessonId || null;
     const userId = event.queryStringParameters?.userId || null;
+    const userSearch = (event.queryStringParameters?.userSearch || '').trim() || null;
     const testId = event.queryStringParameters?.testId || null;
 
     const page = Math.max(1, parseInt(event.queryStringParameters?.page || '1', 10) || 1);
@@ -108,6 +109,7 @@ export const handler: Handler = async (event) => {
           1 = 1
           ${lessonId ? sql`AND sj.lesson_id = ${lessonId}` : sql``}
           ${userId ? sql`AND sj.user_id = ${userId}` : sql``}
+          ${userSearch ? sql`AND (u.email ILIKE ${'%' + userSearch + '%'} OR u.username ILIKE ${'%' + userSearch + '%'})` : sql``}
           ${
             scope === 'evaluation' && testId
               ? sql`AND (sj.lesson_id = ${testId} OR sj.prompt_id ILIKE ${'%' + testId + '%'})`
@@ -120,10 +122,12 @@ export const handler: Handler = async (event) => {
       sql`
         SELECT COUNT(*) as total
         FROM speech_jobs sj
+        LEFT JOIN users u ON sj.user_id = u.id
         WHERE
           1 = 1
           ${lessonId ? sql`AND sj.lesson_id = ${lessonId}` : sql``}
           ${userId ? sql`AND sj.user_id = ${userId}` : sql``}
+          ${userSearch ? sql`AND (u.email ILIKE ${'%' + userSearch + '%'} OR u.username ILIKE ${'%' + userSearch + '%'})` : sql``}
           ${
             scope === 'evaluation' && testId
               ? sql`AND (sj.lesson_id = ${testId} OR sj.prompt_id ILIKE ${'%' + testId + '%'})`
