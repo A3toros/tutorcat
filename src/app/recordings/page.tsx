@@ -210,19 +210,6 @@ export default function PublicRecordingsPage() {
     }
   }
 
-  async function ensureWhisperLogIngested(baseKey: string) {
-    // best-effort; not required for UI
-    try {
-      await fetch('/.netlify/functions/public-sync-whisper-log', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ baseKey }),
-      })
-    } catch {
-      // ignore
-    }
-  }
-
   async function togglePlayer(filename: string) {
     if (openPlayerFilename === filename) {
       setOpenPlayerFilename(null)
@@ -259,8 +246,6 @@ export default function PublicRecordingsPage() {
 
   useEffect(() => {
     refreshStats(baseKeysForPage)
-    // best-effort whisper log ingestion for visible items
-    baseKeysForPage.slice(0, 50).forEach((k) => ensureWhisperLogIngested(k))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [baseKeysForPage.join(',')])
 
