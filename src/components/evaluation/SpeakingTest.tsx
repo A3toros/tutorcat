@@ -1374,6 +1374,7 @@ const SpeakingTest: React.FC<SpeakingTestProps> = ({ onComplete }) => {
                     setSubmissionError(null);
                     setIsMinWordsError(false);
                     setFailedPayload(null);
+                    setIsRecording(false);
                     setIsProcessing(false);
                     setIsResending(false);
                     setTranscriptionState('idle');

@@ -735,6 +735,38 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
     throw lastError
   }, [])
 
+  const resetForReRecord = useCallback(() => {
+    setError(null)
+    setIsMinWordsError(false)
+    setIsStopping(false)
+    setIsRecording(false)
+    setIsProcessing(false)
+    setCurrentStep('idle')
+    setRecordingTime(0)
+    setAudioBlob(null)
+    setShowStopConfirmation(false)
+    chunksRef.current = []
+    if (recordingIntervalRef.current) {
+      clearInterval(recordingIntervalRef.current)
+      recordingIntervalRef.current = null
+    }
+    if (autoStopTimeoutRef.current) {
+      clearTimeout(autoStopTimeoutRef.current)
+      autoStopTimeoutRef.current = null
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop())
+      streamRef.current = null
+    }
+    mediaRecorderRef.current = null
+  }, [])
+
+  const clearRecordingActiveState = useCallback(() => {
+    setIsStopping(false)
+    setIsRecording(false)
+    setIsProcessing(false)
+  }, [])
+
   // Check microphone permission
   useEffect(() => {
     const checkPermission = async () => {
@@ -819,6 +851,11 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
   const startRecording = async () => {
     if (isRecording || disabled) return;
 
+    setIsStopping(false)
+    setIsProcessing(false)
+    setError(null)
+    setIsMinWordsError(false)
+
     try {
       // Platform-specific audio constraints
       const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
@@ -869,6 +906,9 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
           // Auto-stop at 60 seconds
           if (newTime >= 60 && mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
             console.log('⏰ Auto-stopping recording after 1 minute');
+            setIsRecording(false);
+            setIsProcessing(true);
+            setCurrentStep('transcribing');
             mediaRecorderRef.current.requestData();
             mediaRecorderRef.current.stop();
             if (recordingIntervalRef.current) {
@@ -890,6 +930,9 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
         autoStopTimeoutRef.current = null;
         if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
           console.log('⏰ Auto-stopping recording after 1 minute (timeout)');
+          setIsRecording(false);
+          setIsProcessing(true);
+          setCurrentStep('transcribing');
           mediaRecorderRef.current.requestData();
           mediaRecorderRef.current.stop();
         }
@@ -947,7 +990,8 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
   const handleRecordingComplete = async (audioBlob: Blob) => {
     if (!audioBlob || audioBlob.size < 1000) {
       setError('Audio recording is invalid. Please record again.');
-      setIsProcessing(false);
+      clearRecordingActiveState();
+      setCurrentStep('idle');
       return;
     }
 
@@ -1006,14 +1050,15 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
         const result = data.result || {}
         if (result.reason === 'question_repetition') {
           setError(data.error || 'It sounds like you repeated the question. Please answer in your own words.')
+          clearRecordingActiveState()
         } else if (result.min_words != null && result.word_count != null) {
           setError(data.error || `Please speak at least ${result.min_words} words. You said ${result.word_count} word(s).`)
           setIsMinWordsError(true)
         } else {
           setError(data.error || 'Analysis failed')
         }
+        clearRecordingActiveState()
         setCurrentStep('idle')
-        setIsProcessing(false)
         return
       }
 
@@ -1023,8 +1068,8 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
       if (result.min_words != null && result.word_count != null && result.word_count < result.min_words) {
         setError(result.error || `Please speak at least ${result.min_words} words. You said ${result.word_count} word(s).`)
         setIsMinWordsError(true)
+        clearRecordingActiveState()
         setCurrentStep('idle')
-        setIsProcessing(false)
         return
       }
 
@@ -1037,8 +1082,8 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
           result?.integrity?.message ||
             'Your answer was flagged for using AI. Please try again using your own words.'
         )
+        clearRecordingActiveState()
         setCurrentStep('idle')
-        setIsProcessing(false)
         return
       }
 
@@ -1060,14 +1105,14 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
 
       setFeedback(feedbackData)
       setCurrentStep('feedback')
-      setIsProcessing(false)
+      clearRecordingActiveState()
 
       // Don't call onComplete here - wait for user to click "Continue" button
     } catch (err: any) {
       console.error('Error processing recording:', err);
       setError(err.message || 'Failed to process recording. Please try again.');
+      clearRecordingActiveState()
       setCurrentStep('idle');
-      setIsProcessing(false);
     }
   };
 
@@ -1196,7 +1241,7 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
                   onClick={() => {
                     setFeedback(null);
                     setTranscript('');
-                    setCurrentStep('idle');
+                    resetForReRecord();
                   }}
                   variant="secondary"
                   size="sm"
@@ -1231,7 +1276,7 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
       )}
 
       {/* Min-words error: show Re-record card (same pattern as speaking practice) */}
-      {isMinWordsError && !isRecording && !feedback && (
+      {isMinWordsError && !feedback && (
         <Card className="border-2 border-amber-300 bg-amber-50">
           <Card.Header>
             <h3 className="text-lg font-semibold text-amber-800">
@@ -1246,10 +1291,7 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
               Please tap &quot;Re-record&quot; and speak for longer to meet the minimum word count.
             </p>
             <Button
-              onClick={() => {
-                setError(null);
-                setIsMinWordsError(false);
-              }}
+              onClick={resetForReRecord}
               variant="secondary"
               className="bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-400"
             >
