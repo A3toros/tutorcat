@@ -654,6 +654,39 @@ function EvaluationContent() {
   )
 }
 
+const EVAL_SPEAKING_POLL_MS = 2000
+const EVAL_SPEAKING_POLL_BACKGROUND_MS = 4000
+
+function getEvalSpeakingPollDelayMs(): number {
+  const base = typeof document !== 'undefined' && document.visibilityState === 'visible'
+    ? EVAL_SPEAKING_POLL_MS
+    : EVAL_SPEAKING_POLL_BACKGROUND_MS
+  return base
+}
+
+function triggerSpeechAnalysisBackground(jobId: string): void {
+  fetch('/.netlify/functions/run-speech-analysis-background', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jobId }),
+  }).catch(() => {})
+}
+
+async function parseSpeechApiJson(res: Response): Promise<any> {
+  const text = await res.text()
+  const contentType = res.headers.get('content-type') || ''
+  if ((!contentType.includes('application/json') && text.trimStart().startsWith('<')) || text.trimStart().startsWith('<!')) {
+    throw new Error(
+      'Speech API returned a web page instead of JSON. Use "npm run dev:netlify" (http://localhost:8888), not "npm run dev" alone.'
+    )
+  }
+  try {
+    return text ? JSON.parse(text) : {}
+  } catch {
+    throw new Error('Invalid response from speech API. Check that Netlify functions are running.')
+  }
+}
+
 // Speaking Question Component for evaluation test (single question, not multiple prompts like SpeakingTest)
 function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
   question: any;
@@ -662,6 +695,7 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
   savedAnswer?: any;
 }) {
   const { t } = useTranslation();
+  const { user } = useUser();
   const { makeAuthenticatedRequest } = useApi();
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -681,6 +715,25 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
   const streamRef = useRef<MediaStream | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const autoStopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const makeRequestWithRetry = useCallback(async (url: string, options: RequestInit, maxRetries = 2) => {
+    let lastError: unknown
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 45000)
+        const response = await fetch(url, { ...options, signal: controller.signal })
+        clearTimeout(timeoutId)
+        return response
+      } catch (err) {
+        lastError = err
+        if (attempt < maxRetries) {
+          await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)))
+        }
+      }
+    }
+    throw lastError
+  }, [])
 
   // Check microphone permission
   useEffect(() => {
@@ -904,59 +957,110 @@ function SpeakingQuestion({ question, onComplete, disabled, savedAnswer }: {
     try {
       const base64Audio = await blobToBase64(audioBlob);
 
-      // Call single API: ai-feedback (which handles both transcription and feedback)
+      // Same async flow as in-lesson speaking: speech-job → background analysis → poll analysis-result
       setCurrentStep('transcribing');
-      
-      const feedbackResponse = await fetch('/.netlify/functions/ai-feedback', {
+
+      const speechJobRes = await makeRequestWithRetry('/.netlify/functions/speech-job', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           audio_blob: base64Audio,
           audio_mime_type: audioBlob.type || 'audio/webm',
           prompt: question.prompt,
-          criteria: {
-            grammar: true,
-            vocabulary: true,
-            pronunciation: true,
-            topic_validation: true
-          }
-        })
+          prompt_id: question.id,
+          min_words: 20,
+          duration_seconds: recordingTime,
+          user_id: user?.id || undefined,
+          lesson_id: 'evaluation',
+        }),
       });
 
-      const feedbackResult = await feedbackResponse.json();
-
-      if (!feedbackResult.success) {
-        if (feedbackResult.min_words != null && feedbackResult.word_count != null) {
-          setError(feedbackResult.error || `Please speak at least ${feedbackResult.min_words} words. You said ${feedbackResult.word_count} word(s).`);
-          setIsMinWordsError(true);
-          setCurrentStep('idle');
-          setIsProcessing(false);
-          return;
-        }
-        throw new Error(feedbackResult.error || 'Analysis failed');
+      if (!speechJobRes.ok) {
+        const errBody = await parseSpeechApiJson(speechJobRes).catch(() => ({}))
+        throw new Error(errBody?.error || `Request failed: ${speechJobRes.status}`)
       }
 
-      // Extract transcript from response
-      const transcriptText = feedbackResult.transcript || '';
-      setTranscript(transcriptText);
-      
-      // Show analyzing state briefly before showing feedback
-      setCurrentStep('analyzing');
-      
-      // Small delay to show analyzing state
-      await new Promise(resolve => setTimeout(resolve, 500));
+      const { jobId } = await parseSpeechApiJson(speechJobRes)
+      if (!jobId) {
+        throw new Error('No job ID returned from server.')
+      }
+
+      triggerSpeechAnalysisBackground(jobId)
+
+      const pollResult = async () => {
+        const res = await fetch(`/.netlify/functions/analysis-result?id=${encodeURIComponent(jobId)}`, { cache: 'no-store' })
+        if (!res.ok) {
+          throw new Error(`Poll failed: ${res.status}`)
+        }
+        return parseSpeechApiJson(res)
+      }
+
+      let data = await pollResult()
+      while (data.status === 'processing' || data.status === 'analyzing') {
+        setCurrentStep(data.status === 'analyzing' ? 'analyzing' : 'transcribing')
+        await new Promise((r) => setTimeout(r, getEvalSpeakingPollDelayMs()))
+        data = await pollResult()
+      }
+
+      if (data.status === 'failed') {
+        const result = data.result || {}
+        if (result.reason === 'question_repetition') {
+          setError(data.error || 'It sounds like you repeated the question. Please answer in your own words.')
+        } else if (result.min_words != null && result.word_count != null) {
+          setError(data.error || `Please speak at least ${result.min_words} words. You said ${result.word_count} word(s).`)
+          setIsMinWordsError(true)
+        } else {
+          setError(data.error || 'Analysis failed')
+        }
+        setCurrentStep('idle')
+        setIsProcessing(false)
+        return
+      }
+
+      const result = data.result || {}
+      const transcriptText = data.transcript ?? result.transcript ?? ''
+
+      if (result.min_words != null && result.word_count != null && result.word_count < result.min_words) {
+        setError(result.error || `Please speak at least ${result.min_words} words. You said ${result.word_count} word(s).`)
+        setIsMinWordsError(true)
+        setCurrentStep('idle')
+        setIsProcessing(false)
+        return
+      }
+
+      const flagged =
+        result?.integrity?.flagged === true ||
+        result?.ai_flagged === true ||
+        result?.flagged === true
+      if (flagged) {
+        setError(
+          result?.integrity?.message ||
+            'Your answer was flagged for using AI. Please try again using your own words.'
+        )
+        setCurrentStep('idle')
+        setIsProcessing(false)
+        return
+      }
+
+      if (result.overall_score === undefined || typeof result.overall_score !== 'number') {
+        throw new Error('Something went wrong. Please try again.')
+      }
+
+      setTranscript(transcriptText)
+      setCurrentStep('analyzing')
+      await new Promise((resolve) => setTimeout(resolve, 300))
 
       const feedbackData = {
-        overall_score: feedbackResult.overall_score,
-        feedback: feedbackResult.feedback,
-        grammar_corrections: feedbackResult.grammar_corrections || [],
-        vocabulary_corrections: feedbackResult.vocabulary_corrections || [],
-        assessed_level: feedbackResult.assessed_level || 'A1'
-      };
+        overall_score: result.overall_score,
+        feedback: result.feedback,
+        grammar_corrections: result.grammar_corrections || [],
+        vocabulary_corrections: result.vocabulary_corrections || [],
+        assessed_level: result.assessed_level || 'A1',
+      }
 
-      setFeedback(feedbackData);
-      setCurrentStep('feedback');
-      setIsProcessing(false);
+      setFeedback(feedbackData)
+      setCurrentStep('feedback')
+      setIsProcessing(false)
 
       // Don't call onComplete here - wait for user to click "Continue" button
     } catch (err: any) {
