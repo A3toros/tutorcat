@@ -61,6 +61,11 @@ export default function AdminDashboardContent() {
   const [expandedLessons, setExpandedLessons] = useState<Set<string>>(new Set())
   const [showLanguageDropdown, setShowLanguageDropdown] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const [editingLevelUserId, setEditingLevelUserId] = useState<string | null>(null)
+  const [editLevelValue, setEditLevelValue] = useState<string>('')
+  const [isSavingLevel, setIsSavingLevel] = useState(false)
+
+  const CEFR_LEVEL_OPTIONS = ['', 'Pre-A1', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const
 
   // Content state
   const [lessons, setLessons] = useState<any[]>([])
@@ -474,6 +479,7 @@ export default function AdminDashboardContent() {
 
   const getLevelColor = (level: string) => {
     const colors = {
+      'Pre-A1': 'bg-slate-100 text-slate-800',
       A1: 'bg-green-100 text-green-800',
       A2: 'bg-blue-100 text-blue-800',
       B1: 'bg-yellow-100 text-yellow-800',
@@ -482,6 +488,60 @@ export default function AdminDashboardContent() {
       C2: 'bg-purple-100 text-purple-800'
     }
     return colors[level as keyof typeof colors] || 'bg-gray-100 text-gray-800'
+  }
+
+  const formatLevelLabel = (level: string | null | undefined) => {
+    if (!level) return t('notAssessed', 'Not Assessed')
+    return level
+  }
+
+  const startEditingLevel = (user: User) => {
+    setEditingLevelUserId(user.id)
+    setEditLevelValue(user.level || '')
+  }
+
+  const cancelEditingLevel = () => {
+    setEditingLevelUserId(null)
+    setEditLevelValue('')
+  }
+
+  const handleSaveUserLevel = async (userId: string) => {
+    setIsSavingLevel(true)
+    try {
+      const levelToSave = editLevelValue === '' ? null : editLevelValue
+      const response = await adminApiRequest('/.netlify/functions/admin-update-user-level', {
+        method: 'POST',
+        body: JSON.stringify({ userId, level: levelToSave }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const result = await response.json()
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to update level')
+      }
+
+      const savedLevel = (result.user?.level as string | null) ?? levelToSave ?? ''
+      setUsers((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, level: savedLevel || '' } : u))
+      )
+      cancelEditingLevel()
+      showNotification(t('levelUpdated', 'User level updated'), 'success')
+    } catch (error) {
+      const errorMessage = (error as Error).message
+      if (errorMessage.includes('Admin session expired') || errorMessage.includes('401')) {
+        return
+      }
+      console.error('Failed to update user level:', error)
+      showNotification(
+        t('levelUpdateFailed', 'Failed to update level') + ': ' + errorMessage,
+        'error'
+      )
+    } finally {
+      setIsSavingLevel(false)
+    }
   }
 
   if (isLoading) {
@@ -1007,9 +1067,59 @@ export default function AdminDashboardContent() {
                       {user.username || <span className="text-purple-500 italic">Not set</span>}
                     </Cell>
                     <Cell>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getLevelColor(user.level)}`}>
-                        {user.level || 'Not Assessed'}
-                      </span>
+                      {editingLevelUserId === user.id ? (
+                        <motion.div
+                          initial={{ opacity: 0, y: -4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="flex flex-col gap-2 min-w-[10rem]"
+                        >
+                          <Select
+                            value={editLevelValue}
+                            onChange={(e) => setEditLevelValue(e.target.value)}
+                            disabled={isSavingLevel}
+                            className="text-sm py-1.5"
+                            aria-label={t('level', 'Level')}
+                          >
+                            {CEFR_LEVEL_OPTIONS.map((lvl) => (
+                              <option key={lvl || 'not-assessed'} value={lvl}>
+                                {lvl === '' ? t('notAssessed', 'Not Assessed') : lvl}
+                              </option>
+                            ))}
+                          </Select>
+                          <motion.div
+                            initial={{ opacity: 0, y: 4 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="flex gap-2"
+                          >
+                            <Button
+                              size="sm"
+                              onClick={() => handleSaveUserLevel(user.id)}
+                              disabled={isSavingLevel}
+                              className="bg-purple-600 hover:bg-purple-700 text-white"
+                            >
+                              {isSavingLevel ? t('saving', 'Saving...') : t('save', 'Save')}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={cancelEditingLevel}
+                              disabled={isSavingLevel}
+                            >
+                              {t('cancel', 'Cancel')}
+                            </Button>
+                          </motion.div>
+                        </motion.div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => startEditingLevel(user)}
+                          disabled={isLoadingUsers || isSavingLevel}
+                          title={t('clickToChangeLevel', 'Click to change level')}
+                          className={`px-2 py-1 rounded-full text-xs font-medium transition-opacity hover:opacity-80 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${getLevelColor(user.level)}`}
+                        >
+                          {formatLevelLabel(user.level)}
+                        </button>
+                      )}
                     </Cell>
                     <Cell className="text-slate-700">{user.total_stars} ⭐</Cell>
                     <Cell className="text-slate-700">{formatDate(user.last_login || null)}</Cell>

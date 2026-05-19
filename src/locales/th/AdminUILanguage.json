@@ -68,6 +68,14 @@
   "timePeriod": "ช่วงเวลา:",
   "week": "สัปดาห์",
   "month": "เดือน",
-  "year": "ปี"
+  "year": "ปี",
+  "allLevels": "ทุกระดับ",
+  "notAssessed": "ยังไม่ได้ประเมิน",
+  "clickToChangeLevel": "คลิกเพื่อเปลี่ยนระดับ",
+  "save": "บันทึก",
+  "cancel": "ยกเลิก",
+  "saving": "กำลังบันทึก...",
+  "levelUpdated": "อัปเดตระดับผู้ใช้แล้ว",
+  "levelUpdateFailed": "อัปเดตระดับไม่สำเร็จ"
 }
 

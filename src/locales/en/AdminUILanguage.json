@@ -68,6 +68,14 @@
   "timePeriod": "Time Period:",
   "week": "week",
   "month": "month",
-  "year": "year"
+  "year": "year",
+  "allLevels": "All Levels",
+  "notAssessed": "Not Assessed",
+  "clickToChangeLevel": "Click to change level",
+  "save": "Save",
+  "cancel": "Cancel",
+  "saving": "Saving...",
+  "levelUpdated": "User level updated",
+  "levelUpdateFailed": "Failed to update level"
 }
 
