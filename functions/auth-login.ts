@@ -131,14 +131,16 @@ const handler: Handler = async (event, context) => {
       if (isEmail) {
         // Query by email (case sensitive)
         userResult = await sql`
-          SELECT id, email, username, first_name, last_name, level, role, password_hash, eval_test_result
+          SELECT id, email, username, first_name, last_name, level, role, password_hash, eval_test_result,
+                 school_student_id, honorific, nickname, current_student_lesson
           FROM users
           WHERE email = ${loginIdentifier}
         `;
       } else {
         // Query by username (convert to lowercase for case-insensitive matching)
         userResult = await sql`
-          SELECT id, email, username, first_name, last_name, level, role, password_hash, eval_test_result
+          SELECT id, email, username, first_name, last_name, level, role, password_hash, eval_test_result,
+                 school_student_id, honorific, nickname, current_student_lesson
           FROM users
           WHERE LOWER(username) = LOWER(${loginIdentifier})
         `;
@@ -330,7 +332,11 @@ const handler: Handler = async (event, context) => {
           lastName: user.last_name,
           level: user.level,
           role: user.role,
-          evalTestResult: user.eval_test_result
+          evalTestResult: user.eval_test_result,
+          schoolStudentId: user.school_student_id,
+          honorific: user.honorific,
+          nickname: user.nickname,
+          currentStudentLesson: user.current_student_lesson ?? 1
         },
         token: token,
         sessionToken: sessionToken

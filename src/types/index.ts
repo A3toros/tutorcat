@@ -7,7 +7,11 @@ export interface User {
   firstName?: string
   lastName?: string
   level: string // 'A1', 'A2', 'B1', 'B2', 'C1', 'C2'
-  role?: string // 'user' or 'admin'
+  role?: string // 'user' | 'admin' | 'student'
+  schoolStudentId?: string | null
+  honorific?: string | null
+  nickname?: string | null
+  currentStudentLesson?: number | null
   currentLesson?: number
   totalStars?: number
   evalTestResult?: any // evaluation test results (null if not taken)

@@ -210,6 +210,16 @@ function LessonContent() {
   const [isTransitioning, setIsTransitioning] = useState(false)
   const hasInitializedFromStorage = React.useRef(false)
 
+  useEffect(() => {
+    if (user?.role === 'student') {
+      const id = searchParams.get('lessonId') || searchParams.get('id')
+      if (id) {
+        router.replace(`/student/lessons?lessonId=${id}`)
+      } else {
+        router.replace('/student/dashboard')
+      }
+    }
+  }, [user?.role, router, searchParams])
 
   // Get lesson ID from URL params
   const lessonId = searchParams.get('lessonId') || searchParams.get('id') || null

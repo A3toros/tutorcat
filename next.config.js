@@ -10,6 +10,18 @@ const nextConfig = {
         port: '',
         pathname: '**',
       },
+      {
+        protocol: 'https',
+        hostname: 'upload.wikimedia.org',
+        port: '',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'commons.wikimedia.org',
+        port: '',
+        pathname: '/**',
+      },
     ],
   },
   // Remove console logs in production (keep console.error and console.warn)

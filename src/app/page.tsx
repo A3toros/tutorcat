@@ -56,12 +56,15 @@ function HomeContent() {
     if (isAuthenticated) {
       // Check if user is admin (role is most reliable)
       if (user?.role === 'admin') {
-        // Admin token is in HTTP cookie, sent automatically with API requests
         window.location.href = '/admin/dashboard'
         return
       }
+
+      if (user?.role === 'student') {
+        window.location.href = '/student/dashboard'
+        return
+      }
       
-      // Regular user - redirect to dashboard
       window.location.href = '/dashboard'
     }
   }, [isAuthenticated, isLoading, user])

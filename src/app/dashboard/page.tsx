@@ -47,6 +47,11 @@ function DashboardContent() {
       return
     }
 
+    if (user?.role === 'student') {
+      window.location.href = '/student/dashboard'
+      return
+    }
+
   }, [user])
 
   // Check if user has completed evaluation test and redirect if not

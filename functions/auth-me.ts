@@ -80,7 +80,9 @@ const handler: Handler = async (event, context) => {
 
       // Get user from database
       const userResult = await sql`
-        SELECT id, email, username, first_name, last_name, level, role, current_lesson, total_stars, created_at, last_login, email_verified, eval_test_result
+        SELECT id, email, username, first_name, last_name, level, role, current_lesson, total_stars,
+               created_at, last_login, email_verified, eval_test_result,
+               school_student_id, honorific, nickname, current_student_lesson
         FROM users
         WHERE id = ${decoded.userId}
       `;
@@ -119,7 +121,11 @@ const handler: Handler = async (event, context) => {
             createdAt: user.created_at,
             lastLogin: user.last_login,
             emailVerified: user.email_verified,
-            evalTestResult: user.eval_test_result
+            evalTestResult: user.eval_test_result,
+            schoolStudentId: user.school_student_id,
+            honorific: user.honorific,
+            nickname: user.nickname,
+            currentStudentLesson: user.current_student_lesson ?? 1
           }
         })
       } as any;

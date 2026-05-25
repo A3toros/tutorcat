@@ -134,6 +134,11 @@ function EvaluationContent() {
 
   // Check if user has already completed evaluation test and redirect to dashboard
   useEffect(() => {
+    if (user?.role === 'student') {
+      router.push('/student/dashboard')
+      return
+    }
+
     if (user) {
       const userLevel = user.level
       const hasEvalResult = user.evalTestResult || user.eval_test_result

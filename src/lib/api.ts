@@ -108,6 +108,14 @@ class ApiClient {
         }
       }
 
+      if (data && typeof data === 'object' && data.success === false) {
+        return {
+          success: false,
+          error: data.error || data.message || 'Request failed',
+          data: data as T,
+        }
+      }
+
       return {
         success: true,
         data: data as T,
@@ -237,6 +245,30 @@ class ApiClient {
   async getDashboardData(): Promise<ApiResponse> {
     return this.request('/get-dashboard-data', {
       method: 'GET',
+    })
+  }
+
+  async getStudentDashboard(): Promise<ApiResponse> {
+    return this.request('/get-student-dashboard', { method: 'GET' })
+  }
+
+  async getStudentLesson(lessonId: string): Promise<ApiResponse> {
+    return this.request(`/get-student-lesson?lessonId=${encodeURIComponent(lessonId)}`, {
+      method: 'GET',
+    })
+  }
+
+  async submitStudentLessonActivity(payload: Record<string, unknown>): Promise<ApiResponse> {
+    return this.request('/submit-student-lesson-activity', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  }
+
+  async finalizeStudentLesson(studentLessonId: string): Promise<ApiResponse> {
+    return this.request('/finalize-student-lesson', {
+      method: 'POST',
+      body: JSON.stringify({ studentLessonId }),
     })
   }
 
