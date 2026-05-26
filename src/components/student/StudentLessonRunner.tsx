@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import { Button, Card, LoadingSpinnerModal, Modal, ProgressBar } from '@/components/ui'
 import { apiClient } from '@/lib/api'
 import { studentLessonProgressStorage } from '@/services/StudentLessonProgressStorage'
-import { useUser } from '@/components/student/StudentProtectedRoute'
+import { useUser } from '@/components/auth/ProtectedRoute'
+import { STUDENT_DASHBOARD_PATH } from '@/lib/studentRoutes'
 import StudentActivityRenderer from './StudentActivityRenderer'
 import {
   STUDENT_SECTIONS,
@@ -316,7 +317,7 @@ export default function StudentLessonRunner({ lessonId }: Props) {
     return (
       <div className="max-w-lg mx-auto py-12 text-center">
         <p className="text-red-600 mb-4">{error || 'Lesson not found'}</p>
-        <Button onClick={() => router.push('/student/dashboard')}>Back to dashboard</Button>
+        <Button onClick={() => router.push(STUDENT_DASHBOARD_PATH)}>Back to dashboard</Button>
       </div>
     )
   }
@@ -325,7 +326,7 @@ export default function StudentLessonRunner({ lessonId }: Props) {
     <div className="min-h-screen bg-gradient-to-br from-sky-50 via-purple-50 to-indigo-100 py-4 px-3 sm:py-8 sm:px-4">
       <div className="max-w-3xl mx-auto">
         <div className="mb-6">
-          <Button variant="ghost" size="sm" onClick={() => router.push('/student/dashboard')}>
+          <Button variant="ghost" size="sm" onClick={() => router.push(STUDENT_DASHBOARD_PATH)}>
             ← Dashboard
           </Button>
           <h1 className="text-2xl font-bold text-slate-800 mt-2">{lesson.topic}</h1>
@@ -419,14 +420,14 @@ export default function StudentLessonRunner({ lessonId }: Props) {
         ) : (
           <Card className="p-4 sm:p-6 text-center">
             <p className="text-slate-600 mb-4">No activities in this lesson yet.</p>
-            <Button onClick={() => router.push('/student/dashboard')}>Back</Button>
+            <Button onClick={() => router.push(STUDENT_DASHBOARD_PATH)}>Back</Button>
           </Card>
         )}
       </div>
 
       <Modal
         isOpen={showComplete}
-        onClose={() => router.push('/student/dashboard')}
+        onClose={() => router.push(STUDENT_DASHBOARD_PATH)}
         title="Lesson complete!"
       >
         <p className="text-slate-700 mb-4">
@@ -434,7 +435,7 @@ export default function StudentLessonRunner({ lessonId }: Props) {
             ? `Great work! Score: ${finalizeResult.percentage}%`
             : `Score: ${finalizeResult?.percentage ?? 0}%. Try again to pass (60%+).`}
         </p>
-        <Button onClick={() => router.push('/student/dashboard')}>Back to dashboard</Button>
+        <Button onClick={() => router.push(STUDENT_DASHBOARD_PATH)}>Back to dashboard</Button>
       </Modal>
     </div>
   )

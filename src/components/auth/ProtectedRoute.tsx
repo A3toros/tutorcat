@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { LoadingSpinnerModal } from '@/components/ui'
 import { apiClient } from '@/lib/api'
+import { STUDENT_DASHBOARD_PATH } from '@/lib/studentRoutes'
 import { User } from '@/types'
 
 interface ProtectedRouteProps {
@@ -26,8 +27,21 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       const response = await apiClient.getCurrentUser()
 
       if (response.success && response.data?.user) {
+        const currentUser = response.data.user as User
         setIsAuthenticated(true)
-        setUser(response.data.user)
+        setUser(currentUser)
+
+        if (typeof window !== 'undefined' && currentUser.role === 'student') {
+          const path = window.location.pathname
+          if (
+            path === '/dashboard' ||
+            path === '/evaluation' ||
+            path.startsWith('/lessons')
+          ) {
+            window.location.replace(STUDENT_DASHBOARD_PATH)
+            return
+          }
+        }
       } else {
         setIsAuthenticated(false)
         setUser(null)

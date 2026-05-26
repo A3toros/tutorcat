@@ -183,8 +183,10 @@ export async function submitSpeechForFeedback(params: {
   })
 
   if (!speechJobRes.ok) {
-    const errBody = await parseSpeechApiJson(speechJobRes).catch(() => ({}))
-    throw Object.assign(new Error((errBody.error as string) || `Request failed: ${speechJobRes.status}`), {
+    const errBody = (await parseSpeechApiJson(speechJobRes).catch(() => ({}))) as Record<string, unknown>
+    throw Object.assign(
+      new Error(String(errBody.error || `Request failed: ${speechJobRes.status}`)),
+      {
       kind: 'generic' as SpeechJobErrorKind,
     })
   }

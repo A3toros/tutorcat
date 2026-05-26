@@ -17,7 +17,11 @@ function key(userId: string, studentLessonId: string) {
 }
 
 export const studentLessonProgressStorage = {
-  save(userId: string, studentLessonId: string, progress: Omit<StudentLessonLocalProgress, 'userId' | 'studentLessonId'>) {
+  save(
+    userId: string,
+    studentLessonId: string,
+    progress: Pick<StudentLessonLocalProgress, 'completedOrders' | 'activityIndex'>
+  ) {
     if (typeof window === 'undefined') return
     try {
       const payload: StudentLessonLocalProgress = {

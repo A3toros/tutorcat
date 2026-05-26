@@ -1,5 +1,5 @@
 import { Handler } from '@netlify/functions';
-import { neon } from '@neondatabase/serverless';
+import { neon, NeonQueryFunction } from '@neondatabase/serverless';
 import { getHeaders } from './cors-headers';
 import { requireStudentAuth } from './student-auth.js';
 
@@ -22,7 +22,7 @@ const isValidUUID = (str: string | undefined): boolean =>
   !!str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 
 async function upsertActivityResult(
-  sql: ReturnType<typeof neon>,
+  sql: NeonQueryFunction<false, false>,
   params: {
     userId: string;
     studentLessonId: string;
@@ -54,30 +54,29 @@ async function upsertActivityResult(
   } = params;
 
   // Match by activity_id when present, else by activity_order (works without partial-index ON CONFLICT)
-  let existing: { id: string }[] = [];
-  if (activityId) {
-    existing = await sql`
-      SELECT id FROM student_lesson_activity_results
-      WHERE user_id = ${userId}
-        AND student_lesson_id = ${studentLessonId}
-        AND (
-          activity_id = ${activityId}
-          OR activity_order = ${activityOrder}
-        )
-      ORDER BY completed_at DESC NULLS LAST
-      LIMIT 1
-    `;
-  } else {
-    existing = await sql`
-      SELECT id FROM student_lesson_activity_results
-      WHERE user_id = ${userId}
-        AND student_lesson_id = ${studentLessonId}
-        AND activity_order = ${activityOrder}
-      LIMIT 1
-    `;
-  }
+  const existingRows = activityId
+    ? await sql`
+        SELECT id FROM student_lesson_activity_results
+        WHERE user_id = ${userId}
+          AND student_lesson_id = ${studentLessonId}
+          AND (
+            activity_id = ${activityId}
+            OR activity_order = ${activityOrder}
+          )
+        ORDER BY completed_at DESC NULLS LAST
+        LIMIT 1
+      `
+    : await sql`
+        SELECT id FROM student_lesson_activity_results
+        WHERE user_id = ${userId}
+          AND student_lesson_id = ${studentLessonId}
+          AND activity_order = ${activityOrder}
+        LIMIT 1
+      `;
 
-  if (existing.length > 0) {
+  const existingId = (existingRows as Array<{ id: string }>)[0]?.id;
+
+  if (existingId) {
     await sql`
       UPDATE student_lesson_activity_results
       SET
@@ -91,7 +90,7 @@ async function upsertActivityResult(
         completed_at = ${completedAt}::timestamp,
         answers = ${answersJson}::jsonb,
         feedback = ${feedbackJson}::jsonb
-      WHERE id = ${existing[0].id}
+      WHERE id = ${existingId}
     `;
     return;
   }
@@ -177,7 +176,8 @@ const handler: Handler = async (event) => {
           AND active = TRUE
         LIMIT 1
       `;
-      if (found.length) activityId = found[0].id as string;
+      const foundRow = (found as Array<{ id: string }>)[0];
+      if (foundRow?.id) activityId = foundRow.id;
     }
 
     const activityScore = submission.score ?? 0;

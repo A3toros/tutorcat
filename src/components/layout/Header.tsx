@@ -10,6 +10,7 @@ import { getAvailableLanguages, getCurrentLanguage, setAppLang } from '@/lib/lan
 import { useNotification } from '@/contexts/NotificationContext'
 import { apiClient } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
+import { getHomePathForRole } from '@/lib/authRedirects'
 import Button from '@/components/ui/Button'
 import CachedImage from '@/components/ui/CachedImage'
 import Modal from '@/components/ui/Modal'
@@ -44,6 +45,7 @@ const Header: React.FC<HeaderProps> = ({
   // Determine if user is logged in (prefer prop, fallback to auth context)
   // Only check after mount to avoid hydration mismatch
   const isUserLoggedIn = mounted ? (isLoggedIn || !!user) : isLoggedIn
+  const homeHref = mounted && isUserLoggedIn ? getHomePathForRole(user?.role) : '/'
 
   // Handle hydration issues by delaying language detection until client-side
   React.useEffect(() => {
@@ -107,7 +109,7 @@ const Header: React.FC<HeaderProps> = ({
         <div className="flex items-center justify-between h-16">
           {/* Logo/Brand */}
           <Link 
-            href={isUserLoggedIn ? '/dashboard' : '/'}
+            href={homeHref}
             className="flex items-center space-x-2 cursor-pointer"
           >
             <motion.div

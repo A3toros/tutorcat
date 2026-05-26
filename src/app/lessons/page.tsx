@@ -216,7 +216,7 @@ function LessonContent() {
       if (id) {
         router.replace(`/student/lessons?lessonId=${id}`)
       } else {
-        router.replace('/student/dashboard')
+        router.replace('/student_dashboard')
       }
     }
   }, [user?.role, router, searchParams])

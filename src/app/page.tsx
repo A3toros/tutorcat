@@ -61,7 +61,7 @@ function HomeContent() {
       }
 
       if (user?.role === 'student') {
-        window.location.href = '/student/dashboard'
+        window.location.href = '/student_dashboard'
         return
       }
       

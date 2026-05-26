@@ -8,10 +8,11 @@ export default function ConditionalFooter() {
   const isAdminRoute = pathname.startsWith('/admin')
   const isLessonRoute = pathname.startsWith('/lessons')
   const isDashboardRoute = pathname.startsWith('/dashboard')
-  const isStudentLessonRoute = pathname.startsWith('/student/lessons')
+  const isStudentRoute =
+    pathname.startsWith('/student_dashboard') || pathname.startsWith('/student/')
 
   // Hide footer on focused lesson flows (platform + student)
-  if (isAdminRoute || isLessonRoute || isDashboardRoute || isStudentLessonRoute) {
+  if (isAdminRoute || isLessonRoute || isDashboardRoute || isStudentRoute) {
     return null
   }
 

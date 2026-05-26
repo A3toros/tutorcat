@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { StudentProtectedRoute, useUser } from '@/components/student/StudentProtectedRoute'
+import StudentProtectedRoute from '@/components/auth/StudentProtectedRoute'
+import { useUser } from '@/components/auth/ProtectedRoute'
 import { Button, Card } from '@/components/ui'
 import { apiClient } from '@/lib/api'
 
@@ -25,7 +26,7 @@ function StudentProfileContent() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-sky-50 via-purple-50 to-indigo-100 py-4 px-3 sm:py-8 sm:px-4">
       <div className="max-w-lg mx-auto">
-        <Button variant="ghost" size="sm" onClick={() => router.push('/student/dashboard')}>
+        <Button variant="ghost" size="sm" onClick={() => router.push('/student_dashboard')}>
           ← Dashboard
         </Button>
         <Card className="p-4 sm:p-6 mt-4">

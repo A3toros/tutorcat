@@ -6,6 +6,7 @@ import { Button, Input, Modal } from '@/components/ui'
 import { useAuth } from '@/contexts/AuthContext'
 import { useModal } from '@/contexts/ModalContext'
 import { apiClient } from '@/lib/api'
+import { redirectToRoleHome } from '@/lib/authRedirects'
 
 interface LoginModalProps {
   onSuccess?: () => void
@@ -61,6 +62,8 @@ const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
 
         // Small delay to ensure localStorage is persisted before redirect
         await new Promise(resolve => setTimeout(resolve, 200))
+
+        redirectToRoleHome(user)
 
         if (onSuccess) {
           onSuccess()

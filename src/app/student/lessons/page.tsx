@@ -2,7 +2,7 @@
 
 import React, { Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { StudentProtectedRoute } from '@/components/student/StudentProtectedRoute'
+import StudentProtectedRoute from '@/components/auth/StudentProtectedRoute'
 import StudentLessonRunner from '@/components/student/StudentLessonRunner'
 import { LoadingSpinnerModal } from '@/components/ui'
 

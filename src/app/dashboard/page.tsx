@@ -48,21 +48,18 @@ function DashboardContent() {
     }
 
     if (user?.role === 'student') {
-      window.location.href = '/student/dashboard'
+      window.location.href = '/student_dashboard'
       return
     }
 
   }, [user])
 
   // Check if user has completed evaluation test and redirect if not
-  // Only check this for non-admin users
+  // Only check this for platform users (not admin, not student)
   useEffect(() => {
     if (user) {
-      // Skip evaluation check for admins
-      const isAdmin = user?.role === 'admin'
-      
-      if (isAdmin) {
-        return // Admin users don't need evaluation test
+      if (user?.role === 'admin' || user?.role === 'student') {
+        return
       }
 
       // Check if user has a level assigned (from evaluation test)
