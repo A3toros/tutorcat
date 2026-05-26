@@ -12,6 +12,9 @@ type StudentLessonScore = {
   lesson_number: number
   topic: string
   score_percentage: number
+  completed?: boolean
+  activities_done: number
+  activities_total: number
   completed_at?: string | null
 }
 
@@ -44,6 +47,7 @@ export default function AdminStudentsPage() {
   const [students, setStudents] = useState<AdminStudent[]>([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [expandedLessons, setExpandedLessons] = useState<Set<string>>(new Set())
   const [loadingTranscriptsFor, setLoadingTranscriptsFor] = useState<string | null>(null)
   const [transcriptsByStudent, setTranscriptsByStudent] = useState<Record<string, TranscriptItem[]>>({})
   const [audioUrlByJob, setAudioUrlByJob] = useState<Record<string, string>>({})
@@ -71,13 +75,43 @@ export default function AdminStudentsPage() {
   const class115 = useMemo(() => students.filter((s) => s.class === '1/15').sort(bySchoolId), [students])
   const class116 = useMemo(() => students.filter((s) => s.class === '1/16').sort(bySchoolId), [students])
 
-  const toggleExpanded = (studentId: string) => {
+  const lessonKey = (studentId: string, lessonId: string) => `${studentId}:${lessonId}`
+
+  const toggleExpanded = (student: AdminStudent) => {
+    const studentId = student.id
     setExpanded((prev) => {
       const next = new Set(prev)
-      if (next.has(studentId)) next.delete(studentId)
-      else next.add(studentId)
+      const opening = !next.has(studentId)
+      if (opening) {
+        next.add(studentId)
+        loadTranscripts(student)
+      } else {
+        next.delete(studentId)
+      }
       return next
     })
+  }
+
+  const toggleLesson = (studentId: string, lessonId: string) => {
+    const key = lessonKey(studentId, lessonId)
+    setExpandedLessons((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  const lessonSummary = (s: AdminStudent) => {
+    const lessons = s.lessons || []
+    const passed = lessons.filter((l) => l.completed).length
+    const inProgress = lessons.filter((l) => !l.completed && l.activities_done > 0).length
+    if (!lessons.length) return '—'
+    const parts: string[] = []
+    if (passed) parts.push(`${passed} passed`)
+    if (inProgress) parts.push(`${inProgress} in progress`)
+    if (!parts.length) parts.push('not started')
+    return parts.join(', ')
   }
 
   const loadTranscripts = useCallback(
@@ -147,7 +181,7 @@ export default function AdminStudentsPage() {
           <Row>
             <Head>ID</Head>
             <Head>Nickname</Head>
-            <Head>Passed lessons</Head>
+            <Head>Lessons</Head>
             <Head>Speech jobs</Head>
             <Head>Actions</Head>
           </Row>
@@ -159,14 +193,28 @@ export default function AdminStudentsPage() {
               <React.Fragment key={s.id}>
                 <Row className={isOpen ? 'bg-slate-50' : 'hover:bg-slate-50'}>
                   <Cell className="text-sm font-semibold text-slate-800 tabular-nums">
-                    {s.school_student_id || '—'}
+                    <button
+                      type="button"
+                      onClick={() => toggleExpanded(s)}
+                      className="text-left hover:text-purple-700 underline-offset-2 hover:underline"
+                    >
+                      {s.school_student_id || '—'}
+                    </button>
                   </Cell>
-                  <Cell className="text-sm text-slate-700">{s.nickname || '—'}</Cell>
-                  <Cell className="text-sm text-slate-700 tabular-nums">{s.lessons?.length || 0}</Cell>
+                  <Cell className="text-sm text-slate-700">
+                    <button
+                      type="button"
+                      onClick={() => toggleExpanded(s)}
+                      className="text-left hover:text-purple-700 underline-offset-2 hover:underline font-medium"
+                    >
+                      {s.nickname || '—'}
+                    </button>
+                  </Cell>
+                  <Cell className="text-sm text-slate-700">{lessonSummary(s)}</Cell>
                   <Cell className="text-sm text-slate-700 tabular-nums">{s.speech_jobs || 0}</Cell>
                   <Cell>
                     <div className="flex flex-wrap gap-2">
-                      <Button size="sm" variant="secondary" onClick={() => { toggleExpanded(s.id); loadTranscripts(s) }}>
+                      <Button size="sm" variant="secondary" onClick={() => toggleExpanded(s)}>
                         {isOpen ? 'Hide' : 'View'}
                       </Button>
                       <Button size="sm" variant="ghost" onClick={() => router.push('/admin/transcripts')}>
@@ -181,28 +229,75 @@ export default function AdminStudentsPage() {
                     <Cell colSpan={5}>
                       <div className="space-y-4 py-3">
                         <div>
-                          <div className="text-xs font-semibold text-slate-600 mb-2">Passed lessons & scores</div>
+                          <div className="text-xs font-semibold text-slate-600 mb-2">Lessons</div>
                           {s.lessons?.length ? (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div className="space-y-2">
                               {s.lessons
                                 .slice()
                                 .sort((a, b) => a.lesson_number - b.lesson_number)
-                                .map((l) => (
-                                  <div
-                                    key={l.lesson_id}
-                                    className="rounded-lg border border-purple-100 bg-white px-3 py-2 flex items-center justify-between"
-                                  >
-                                    <div className="text-sm text-slate-800">
-                                      <span className="font-semibold">L{l.lesson_number}</span> {l.topic}
+                                .map((l) => {
+                                  const open = expandedLessons.has(lessonKey(s.id, l.lesson_id))
+                                  const total = l.activities_total || 0
+                                  const done = l.activities_done || 0
+                                  return (
+                                    <div
+                                      key={l.lesson_id}
+                                      className="rounded-lg border border-purple-100 bg-white overflow-hidden"
+                                    >
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleLesson(s.id, l.lesson_id)}
+                                        className="w-full px-3 py-2 flex items-center justify-between gap-3 text-left hover:bg-purple-50/50"
+                                      >
+                                        <div className="flex items-center gap-2 min-w-0">
+                                          <span className="text-slate-400 shrink-0" aria-hidden>
+                                            {open ? '▼' : '▶'}
+                                          </span>
+                                          <div className="text-sm text-slate-800 truncate">
+                                            <span className="font-semibold">L{l.lesson_number}</span> {l.topic}
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-3 shrink-0">
+                                          <span className="text-sm font-semibold text-slate-700 tabular-nums">
+                                            {done}/{total} activities
+                                          </span>
+                                          {l.completed ? (
+                                            <span className="text-sm font-extrabold text-purple-700 tabular-nums">
+                                              {l.score_percentage}%
+                                            </span>
+                                          ) : (
+                                            <span className="text-xs text-slate-500">in progress</span>
+                                          )}
+                                        </div>
+                                      </button>
+                                      {open ? (
+                                        <div className="border-t border-purple-50 px-3 py-2 text-sm text-slate-600 space-y-1">
+                                          <p>
+                                            <span className="font-medium text-slate-800">Activities:</span>{' '}
+                                            {done} of {total} completed
+                                            {total > 0 ? ` (${Math.round((done / total) * 100)}%)` : ''}
+                                          </p>
+                                          {l.completed ? (
+                                            <p>
+                                              <span className="font-medium text-slate-800">Final score:</span>{' '}
+                                              {l.score_percentage}%
+                                              {l.completed_at
+                                                ? ` · ${new Date(l.completed_at).toLocaleString()}`
+                                                : ''}
+                                            </p>
+                                          ) : done > 0 ? (
+                                            <p className="text-amber-800">Lesson not finished yet.</p>
+                                          ) : (
+                                            <p>Not started.</p>
+                                          )}
+                                        </div>
+                                      ) : null}
                                     </div>
-                                    <div className="text-sm font-extrabold text-purple-700 tabular-nums">
-                                      {l.score_percentage}%
-                                    </div>
-                                  </div>
-                                ))}
+                                  )
+                                })}
                             </div>
                           ) : (
-                            <div className="text-sm text-slate-500">No passed lessons yet.</div>
+                            <div className="text-sm text-slate-500">No lessons available.</div>
                           )}
                         </div>
 
@@ -272,7 +367,7 @@ export default function AdminStudentsPage() {
           <Card className="p-5 bg-gradient-to-br from-white to-purple-50 border-purple-200">
             <h1 className="text-2xl font-bold text-slate-900">Students</h1>
             <p className="text-sm text-slate-600 mt-1">
-              Shows only nickname + student ID. Includes passed lesson scores and speech recordings.
+              Nickname + student ID. Expand a student to see lesson activity progress and speech recordings.
             </p>
           </Card>
 

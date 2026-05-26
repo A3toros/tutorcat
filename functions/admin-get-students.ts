@@ -108,7 +108,7 @@ export const handler: Handler = async (event) => {
         ? []
         : await sql`
             SELECT
-              sup.user_id::text as user_id,
+              u.id::text as user_id,
               sl.id::text as lesson_id,
               sl.lesson_number,
               sl.topic,
@@ -117,15 +117,28 @@ export const handler: Handler = async (event) => {
               (
                 SELECT COALESCE(SUM(sar.max_score), 0)::int
                 FROM student_lesson_activity_results sar
-                WHERE sar.user_id = sup.user_id
+                WHERE sar.user_id = u.id
                   AND sar.student_lesson_id = sl.id
               ) as max_score_total,
+              (
+                SELECT COUNT(*)::int
+                FROM student_lesson_activities sla
+                WHERE sla.student_lesson_id = sl.id AND sla.active = TRUE
+              ) as activities_total,
+              (
+                SELECT COUNT(DISTINCT sar.activity_order)::int
+                FROM student_lesson_activity_results sar
+                WHERE sar.user_id = u.id
+                  AND sar.student_lesson_id = sl.id
+              ) as activities_done,
               sup.completed_at
-            FROM student_lessons sl
+            FROM users u
+            CROSS JOIN student_lessons sl
             LEFT JOIN student_user_progress sup
-              ON sup.student_lesson_id = sl.id
-            WHERE sup.user_id = ANY(${studentIds}::uuid[])
-            ORDER BY sl.lesson_number ASC
+              ON sup.student_lesson_id = sl.id AND sup.user_id = u.id
+            WHERE u.id = ANY(${studentIds}::uuid[])
+              AND sl.active = TRUE
+            ORDER BY u.id, sl.lesson_number ASC
           `
 
     const speechCounts =
@@ -146,6 +159,8 @@ export const handler: Handler = async (event) => {
       const maxTotal = Number(row.max_score_total) || 0
       const score = Number(row.score) || 0
       const pct = maxTotal > 0 ? Math.round((score / maxTotal) * 100) : 100
+      const activitiesTotal = Number(row.activities_total) || 0
+      const activitiesDone = Number(row.activities_done) || 0
       const item = {
         lesson_id: String(row.lesson_id),
         lesson_number: Number(row.lesson_number),
@@ -153,6 +168,8 @@ export const handler: Handler = async (event) => {
         completed: Boolean(row.completed),
         score_total: score,
         score_percentage: pct,
+        activities_done: activitiesDone,
+        activities_total: activitiesTotal,
         completed_at: row.completed_at,
       }
       const arr = lessonsByUser.get(userId) || []
@@ -169,7 +186,7 @@ export const handler: Handler = async (event) => {
         nickname: s.nickname ? String(s.nickname) : '',
         class: cls,
         speech_jobs: speechByUser.get(String(s.id)) ?? 0,
-        lessons: (lessonsByUser.get(String(s.id)) || []).filter((l) => l.completed),
+        lessons: lessonsByUser.get(String(s.id)) || [],
       }
     })
 

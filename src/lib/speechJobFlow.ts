@@ -23,6 +23,7 @@ export type SpeechErrorFlags = {
   isAIFlaggedError?: boolean
   isSpeechTooLongError?: boolean
   isQuestionRepetitionError?: boolean
+  isConsecutiveRepetitionError?: boolean
   isDeliveryReadError?: boolean
 }
 
@@ -198,6 +199,15 @@ export async function submitSpeechForFeedback(params: {
       throw speechError(
         String(data.error || 'It sounds like you repeated the question. Please answer in your own words.'),
         { isQuestionRepetitionError: true }
+      )
+    }
+    if (result.reason === 'consecutive_repetition') {
+      throw speechError(
+        String(
+          data.error ||
+            "Don't repeat the same word or phrase to make your answer longer. Say your answer in your own words, then record again."
+        ),
+        { isConsecutiveRepetitionError: true }
       )
     }
     if (result.min_words != null && result.word_count != null) {

@@ -36,7 +36,7 @@ function formatTime(seconds: number): string {
 
 function errorTitle(flags: SpeechErrorFlags): string {
   if (flags.isMinWordsError) return 'Not enough words'
-  if (flags.isQuestionRepetitionError) return 'Please re-record'
+  if (flags.isQuestionRepetitionError || flags.isConsecutiveRepetitionError) return 'Please re-record'
   if (flags.isDeliveryReadError) return "Speak, don't read"
   if (flags.isAIFlaggedError) return 'Flagged'
   if (flags.isSpeechTooLongError) return 'Speech too long'
@@ -163,6 +163,7 @@ export default function StudentSpeakingRecorder({
           isAIFlaggedError: e.isAIFlaggedError,
           isSpeechTooLongError: e.isSpeechTooLongError,
           isQuestionRepetitionError: e.isQuestionRepetitionError,
+          isConsecutiveRepetitionError: e.isConsecutiveRepetitionError,
           isDeliveryReadError: e.isDeliveryReadError,
         })
         setStep('idle')
@@ -380,6 +381,7 @@ export default function StudentSpeakingRecorder({
     errorFlags.isMinWordsError ||
     errorFlags.isDeliveryReadError ||
     errorFlags.isQuestionRepetitionError ||
+    errorFlags.isConsecutiveRepetitionError ||
     errorFlags.isAIFlaggedError ||
     errorFlags.isSpeechTooLongError
 
@@ -396,6 +398,11 @@ export default function StudentSpeakingRecorder({
           {errorFlags.isMinWordsError && (
             <p className="mt-2 text-xs text-amber-800">
               Tap Re-record and speak for longer to meet the minimum word count.
+            </p>
+          )}
+          {errorFlags.isConsecutiveRepetitionError && (
+            <p className="mt-2 text-xs text-amber-800">
+              Use different words — don&apos;t say the same word many times in a row.
             </p>
           )}
           <Button variant="secondary" size="sm" className="mt-3 w-full" onClick={resetRecording}>

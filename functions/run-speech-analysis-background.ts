@@ -7,6 +7,10 @@
 import OpenAI from 'openai';
 import { neon } from '@neondatabase/serverless';
 import { createClient } from '@supabase/supabase-js';
+import {
+  CONSECUTIVE_REPETITION_ERROR_MSG,
+  detectConsecutiveRepetition,
+} from './speech-consecutive-repetition';
 
 const SUPABASE_BUCKET = 'tutorcat';
 
@@ -288,6 +292,26 @@ export default async (req: Request, _context?: unknown): Promise<void> => {
     return;
   }
 
+  const isWheelTopic = typeof job.prompt_id === 'string' && job.prompt_id.includes('-wheel-');
+  if (!isWheelTopic) {
+    const repetition = detectConsecutiveRepetition(job.transcript);
+    if (repetition) {
+      const errorMsg = CONSECUTIVE_REPETITION_ERROR_MSG;
+      const resultPayload = {
+        reason: 'consecutive_repetition',
+        kind: repetition.kind,
+        repeated: repetition.repeated,
+      };
+      await sql`
+        UPDATE speech_jobs
+        SET status = 'failed', error = ${errorMsg}, result_json = ${JSON.stringify(resultPayload)}::jsonb, updated_at = NOW()
+        WHERE id = ${jobId}
+      `;
+      await uploadResultToSupabase(jobId, { status: 'failed', result_json: resultPayload, error: errorMsg });
+      return;
+    }
+  }
+
   const updatedRows = await sql`
     UPDATE speech_jobs
     SET status = 'analyzing', updated_at = NOW()
@@ -298,8 +322,6 @@ export default async (req: Request, _context?: unknown): Promise<void> => {
     console.log('run-speech-analysis-background: lost race, another poll already started analysis', { jobId, status: job.status, rows_updated: 0 });
     return;
   }
-
-  const isWheelTopic = typeof job.prompt_id === 'string' && job.prompt_id.includes('-wheel-');
 
   try {
     const result = await runFeedbackAnalysis(
