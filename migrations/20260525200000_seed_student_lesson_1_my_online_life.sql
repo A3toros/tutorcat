@@ -74,10 +74,10 @@ FROM student_lessons sl
 CROSS JOIN (VALUES
   (1, 'student_warmup_poll', 'Warmup: Hours online', 'How many hours are you online each day?', '{}'),
   (2, 'student_vocabulary_intro', 'Learn: Online vocabulary', 'Study these words before the games.', '{"group_by_category": true, "show_thai": false, "study_seconds": 60}'),
-  (3, 'student_vocab_picture_match', 'Match: Picture → word', 'Tap or drag a picture to its matching word (or drag a word onto a picture).', '{}'),
+  (3, 'student_vocab_picture_match', 'Match: Picture → word', 'Tap a picture, then tap the matching word (or tap a word, then tap the picture).', '{}'),
   (4, 'student_vocab_missing_letters', 'Spell: Missing letters', 'Type the full word or phrase.', '{"sentences": [{"template": "pl__ g__es", "answer": "play games"}, {"template": "wa__h vid__s", "answer": "watch videos"}, {"template": "mes__ge", "answer": "message"}, {"template": "scr__ll", "answer": "scroll"}]}'),
   (5, 'student_vocab_categorize', 'Sort: Word categories', 'Tap a word, then tap its category. Or drag a word and drop it on a category box.', '{"buckets": ["Apps/Devices", "Activities", "Opinions"]}'),
-  (6, 'student_vocab_speed_tap', 'Speed: Activity words', 'Tap activity words only. Tap again to unselect. Pass: 50%.', '{"duration_seconds": 45, "pass_percent": 50, "targets": ["play games", "scroll", "upload", "message"], "distractors": ["interesting", "phone"]}'),
+  (6, 'student_vocab_speed_tap', 'Speed: Activity words', 'Select all activity words (no distractors), then tap Continue.', '{"targets": ["play games", "scroll", "upload", "message"], "distractors": ["interesting", "phone"]}'),
   (7, 'student_grammar_builder', 'Grammar: Rules', 'Read the rules, then practice.', '{}'),
   (8, 'student_grammar_drag_order', 'Practice: Sentence order', 'Put the words in the correct order.', '{}'),
   (9, 'student_grammar_mcq', 'Practice: Choose answer', 'Pick the correct word.', '{}'),
@@ -85,7 +85,7 @@ CROSS JOIN (VALUES
   (11, 'student_grammar_complete', 'Practice: Complete the sentence', 'Choose an app and a reason to complete the sentence.', '{"template": "My favorite app is {app} because {reason}.", "apps": ["Instagram", "TikTok", "Facebook", "YouTube"], "reasons": ["I can watch videos", "I can chat with friends", "it is fun", "I learn new things"]}'),
   (12, 'student_grammar_error_fix', 'Practice: Fix the mistake', 'Write the correct sentence.', '{}'),
   (13, 'student_grammar_make_question', 'Practice: Make a question', 'Put the words in order to make a question.', '{}'),
-  (14, 'student_speaking_cards', 'Speaking: Partner questions', 'Practice with a partner in class.', '{"prompts": ["What app do you use most?", "How many hours are you online?", "What do you usually do online?", "Do you play games?", "What app do you dislike?", "Why?"]}'),
+  (14, 'student_speaking_cards', 'Speaking: Practice questions', 'Answer each question out loud. AI will listen and give you feedback.', '{"prompts": ["What app you use the most and why do you like it?", "What games do you play on your computer or mobile phone and what do you like about them?", "Do you think children should spend a lot of time online? why?", "Is TikTok good or bad for you? explain why"]}'),
   (15, 'student_challenge_wheel', 'Challenge: 30-second speak', 'Spin the wheel and speak for 30 seconds.', '{"duration_seconds": 30, "prompts": ["My favorite app", "My screen time", "My online habits", "Apps I dislike", "Games I play", "What I do after school"]}'),
   (16, 'student_exit_poll', 'Exit ticket', 'Answer before you finish the lesson.', '{}')
 ) AS v(activity_order, activity_type, title, description, content)
@@ -218,14 +218,14 @@ FROM student_lesson_activities la
 JOIN student_lessons sl ON sl.id = la.student_lesson_id
 WHERE sl.slug = 'my-online-life' AND la.activity_order = 13;
 
--- Exit polls 2–4 (activity 16)
+-- Exit ticket (activity 16) — 3 questions (Q1 replaced)
 INSERT INTO student_poll_items (activity_id, question, options, allow_multiple, sort_order)
 SELECT la.id, v.question, v.options::jsonb, FALSE, v.sort_order
 FROM student_lesson_activities la
 JOIN student_lessons sl ON sl.id = la.student_lesson_id
 CROSS JOIN (VALUES
   (
-    'Which app would disappear forever?',
+    'What do you like the most?',
     '[{"id": "tiktok", "label": "TikTok"}, {"id": "youtube", "label": "YouTube"}, {"id": "instagram", "label": "Instagram"}, {"id": "games", "label": "Games"}]',
     1
   ),

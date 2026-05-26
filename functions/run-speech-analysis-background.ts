@@ -105,27 +105,40 @@ Question repetition:
 - If the student repeats the exact question text inside their answer,  set question_repetition = true. Note thatusing some words from question is ok
 - Otherwise (no clear repetition of the question text), set question_repetition = false.`;
 
+const WHEEL_TOPIC_SYSTEM_APPEND = `
+
+Wheel topic mode (short label, not a question to read aloud):
+- The prompt is a brief topic label. Students may naturally use words from the topic — that is fine.
+- Always set question_repetition = false.
+- Judge only whether they spoke about the topic (is_off_topic if completely unrelated).`;
+
 async function runFeedbackAnalysis(
   transcription: string,
   prompt: string,
-  cefrLevel: string | null
+  cefrLevel: string | null,
+  options?: { skipQuestionRepetition?: boolean }
 ): Promise<{ success: true; feedback: Record<string, unknown> } | { success: false; error: string }> {
   if (!openai) return { success: false, error: 'OpenAI not configured' };
+
+  const skipQuestionRepetition = options?.skipQuestionRepetition === true;
+  const systemPrompt = skipQuestionRepetition
+    ? FEEDBACK_SYSTEM_PROMPT + WHEEL_TOPIC_SYSTEM_APPEND
+    : FEEDBACK_SYSTEM_PROMPT;
 
   const feedbackResponse = await openai.chat.completions.create({
     model: 'gpt-5-mini',
     max_completion_tokens: 3000,
     messages: [
-      { role: 'system', content: FEEDBACK_SYSTEM_PROMPT },
+      { role: 'system', content: systemPrompt },
       {
         role: 'user',
-        content: `Prompt: "${prompt}"
+        content: `Topic: "${prompt}"
 
 Expected CEFR level: ${cefrLevel || 'unknown'}
 
 Student's spoken response: "${transcription}"
 
-Please analyze their speaking performance. Focus on how well they addressed the prompt, their grammar accuracy, vocabulary usage, and fluency.`,
+Please analyze their speaking performance. Focus on how well they spoke about the topic, their grammar accuracy, vocabulary usage, and fluency.`,
       },
     ],
   });
@@ -164,6 +177,9 @@ Please analyze their speaking performance. Focus on how well they addressed the 
   }
 
   if (typeof (feedback as any).question_repetition !== 'boolean') {
+    (feedback as any).question_repetition = false;
+  }
+  if (skipQuestionRepetition) {
     (feedback as any).question_repetition = false;
   }
 
@@ -232,11 +248,19 @@ export default async (req: Request, _context?: unknown): Promise<void> => {
   const sql = neon(databaseUrl);
 
   const jobRows = await sql`
-    SELECT id, transcript, status, prompt, cefr_level, min_words
+    SELECT id, transcript, status, prompt, prompt_id, cefr_level, min_words
     FROM speech_jobs
     WHERE id = ${jobId}
   `;
-  const job = jobRows[0] as { id: string; transcript: string; status: string; prompt: string | null; cefr_level: string | null; min_words: number | null } | undefined;
+  const job = jobRows[0] as {
+    id: string;
+    transcript: string;
+    status: string;
+    prompt: string | null;
+    prompt_id: string | null;
+    cefr_level: string | null;
+    min_words: number | null;
+  } | undefined;
   if (!job) {
     console.warn('run-speech-analysis-background: job not found (may be replication delay)', { jobId });
     return;
@@ -275,16 +299,19 @@ export default async (req: Request, _context?: unknown): Promise<void> => {
     return;
   }
 
+  const isWheelTopic = typeof job.prompt_id === 'string' && job.prompt_id.includes('-wheel-');
+
   try {
     const result = await runFeedbackAnalysis(
       job.transcript,
       job.prompt || 'Please respond to the speaking question.',
-      job.cefr_level
+      job.cefr_level,
+      { skipQuestionRepetition: isWheelTopic }
     );
     if (result.success) {
       const feedback = result.feedback as any;
 
-      if (feedback.question_repetition === true) {
+      if (!isWheelTopic && feedback.question_repetition === true) {
         const errorMsg =
           'It sounds like you repeated the question instead of answering it. Please re-record your answer using your own words.';
         const resultPayload = { reason: 'question_repetition' };

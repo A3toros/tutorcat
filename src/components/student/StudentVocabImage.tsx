@@ -24,7 +24,7 @@ export default function StudentVocabImage({ src, alt, className = '' }: Props) {
     <img
       src={src}
       alt={alt}
-      className={`h-full w-full object-contain p-0.5 ${className}`}
+      className={`h-full w-full object-contain ${className}`}
       referrerPolicy="no-referrer"
       loading="lazy"
       decoding="async"

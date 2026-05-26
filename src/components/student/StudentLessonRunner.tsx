@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button, Card, LoadingSpinnerModal, Modal, ProgressBar } from '@/components/ui'
 import { apiClient } from '@/lib/api'
@@ -8,12 +8,12 @@ import { studentLessonProgressStorage } from '@/services/StudentLessonProgressSt
 import { useUser } from '@/components/auth/ProtectedRoute'
 import { STUDENT_DASHBOARD_PATH } from '@/lib/studentRoutes'
 import StudentActivityRenderer from './StudentActivityRenderer'
-import {
-  STUDENT_SECTIONS,
-  type StudentActivityResult,
-  type StudentLesson,
-  type StudentLessonActivity,
-  type StudentUserProgress,
+import { computeLessonPercentage, effectiveActivityScore } from '@/lib/studentLessonScoring'
+import type {
+  StudentActivityResult,
+  StudentLesson,
+  StudentLessonActivity,
+  StudentUserProgress,
 } from '@/types/student'
 
 interface Props {
@@ -57,6 +57,7 @@ export default function StudentLessonRunner({ lessonId }: Props) {
     passed: boolean
   } | null>(null)
   const [completedOrders, setCompletedOrders] = useState<Set<number>>(new Set())
+  const [activityResults, setActivityResults] = useState<StudentActivityResult[]>([])
 
   const findFirstIncompleteIndex = useCallback(
     (acts: StudentLessonActivity[], done: Set<number>) => {
@@ -87,6 +88,7 @@ export default function StudentLessonRunner({ lessonId }: Props) {
       )
       setActivities(acts)
       setUserProgress(data.userProgress ?? null)
+      setActivityResults(data.activityResults || [])
 
       const done = buildCompletedOrders(data.activityResults || [], acts)
 
@@ -104,9 +106,20 @@ export default function StudentLessonRunner({ lessonId }: Props) {
       if (data.userProgress?.completed) {
         setPendingFinalize(false)
         setActivityIndex(acts.length > 0 ? acts.length - 1 : 0)
+        const pct = computeLessonPercentage(
+          (data.activityResults || []).map((r) =>
+            effectiveActivityScore({
+              activityType: r.activityType,
+              score: r.score,
+              maxScore: r.maxScore,
+              answers: r.answers,
+              feedback: r.feedback,
+            })
+          )
+        )
         setFinalizeResult({
-          percentage: 100,
-          passed: true,
+          percentage: pct,
+          passed: pct >= 60,
         })
         setShowComplete(true)
         return
@@ -147,18 +160,17 @@ export default function StudentLessonRunner({ lessonId }: Props) {
   const allActivitiesDone =
     activities.length > 0 && completedOrders.size >= activities.length
 
-  const sectionProgress = useMemo(() => {
-    return STUDENT_SECTIONS.map((section) => {
-      const sectionActs = activities.filter((a) =>
-        section.activityTypes.includes(a.activity_type as never)
-      )
-      const done = sectionActs.every((a) => completedOrders.has(a.activity_order))
-      const current = currentActivity
-        ? section.activityTypes.includes(currentActivity.activity_type as never)
-        : false
-      return { ...section, done, current, total: sectionActs.length }
-    })
-  }, [activities, completedOrders, currentActivity])
+  const estimatedLessonPercentage = computeLessonPercentage(
+    activityResults.map((r) =>
+      effectiveActivityScore({
+        activityType: r.activityType,
+        score: r.score,
+        maxScore: r.maxScore,
+        answers: r.answers,
+        feedback: r.feedback,
+      })
+    )
+  )
 
   const advanceAfterComplete = useCallback(
     (done: Set<number>) => {
@@ -284,6 +296,26 @@ export default function StudentLessonRunner({ lessonId }: Props) {
       }
 
       setCompletedOrders(nextDone)
+      setActivityResults((prev) => {
+        const next = prev.filter(
+          (r) =>
+            r.activityOrder !== currentActivity.activity_order &&
+            r.activityId !== currentActivity.id
+        )
+        next.push({
+          activityId: currentActivity.id,
+          activityType: currentActivity.activity_type,
+          activityOrder: currentActivity.activity_order,
+          score: result.score,
+          maxScore: result.maxScore,
+          attempts: result.attempts ?? 1,
+          timeSpent: result.timeSpent,
+          completed: true,
+          answers: result.answers,
+          feedback: result.feedback,
+        })
+        return next.sort((a, b) => a.activityOrder - b.activityOrder)
+      })
 
       if (user?.id) {
         studentLessonProgressStorage.save(user.id, lesson.id, {
@@ -336,32 +368,13 @@ export default function StudentLessonRunner({ lessonId }: Props) {
         </div>
 
         <Card className="p-3 sm:p-4 mb-4 sm:mb-6">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-2">
-            {sectionProgress.map((s) => (
-              <div
-                key={s.id}
-                className={`rounded-lg px-2 py-2 text-xs text-center border ${
-                  s.current
-                    ? 'border-purple-500 bg-purple-50 font-semibold text-purple-900'
-                    : s.done
-                      ? 'border-green-300 bg-green-50 text-green-800'
-                      : 'border-slate-200 text-slate-500'
-                }`}
-              >
-                {s.label}
-              </div>
-            ))}
-          </div>
-          <p className="text-xs text-slate-500 mt-3 mb-1">
+          <p className="text-xs text-slate-500 mb-2">
             Activity {Math.min(activityIndex + 1, activities.length)} of {activities.length}
             {completedOrders.size > 0 && (
-              <span className="ml-2 text-green-700">
-                ({completedOrders.size} saved)
-              </span>
+              <span className="ml-2 text-green-700">({completedOrders.size} saved)</span>
             )}
           </p>
           <ProgressBar
-            className="mt-1"
             progress={
               activities.length
                 ? Math.round((completedOrders.size / activities.length) * 100)
@@ -386,8 +399,14 @@ export default function StudentLessonRunner({ lessonId }: Props) {
         {pendingFinalize && allActivitiesDone && !userProgress?.completed ? (
           <Card className="p-4 sm:p-6 text-center">
             <h2 className="text-lg font-semibold text-slate-800 mb-2">All activities complete</h2>
-            <p className="text-slate-600 mb-4">
-              Your progress is saved. Finish the lesson to record your score.
+            <p className="text-slate-600 mb-2">
+              Your progress is saved. Finish the lesson to save your overall score.
+            </p>
+            <p className="text-4xl font-extrabold text-purple-700 tabular-nums mb-1">
+              {estimatedLessonPercentage}%
+            </p>
+            <p className="text-sm text-slate-500 mb-4">
+              Includes speaking AI scores (pass = 60%+)
             </p>
             {submitting && <LoadingSpinnerModal isOpen message="Saving..." />}
             <Button onClick={runFinalize} disabled={submitting}>
@@ -430,11 +449,17 @@ export default function StudentLessonRunner({ lessonId }: Props) {
         onClose={() => router.push(STUDENT_DASHBOARD_PATH)}
         title="Lesson complete!"
       >
-        <p className="text-slate-700 mb-4">
-          {finalizeResult?.passed
-            ? `Great work! Score: ${finalizeResult.percentage}%`
-            : `Score: ${finalizeResult?.percentage ?? 0}%. Try again to pass (60%+).`}
-        </p>
+        <div className="rounded-2xl border border-purple-200 bg-gradient-to-br from-fuchsia-50 via-purple-50 to-indigo-50 px-5 py-5 text-center mb-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-purple-700">
+            Overall score
+          </p>
+          <p className="mt-1 text-6xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-fuchsia-600 via-purple-600 to-indigo-600 tabular-nums">
+            {finalizeResult?.percentage ?? 0}%
+          </p>
+          <p className="text-sm font-semibold text-slate-700">
+            {finalizeResult?.passed ? 'Great job!' : 'Try again to pass (60%+).'}
+          </p>
+        </div>
         <Button onClick={() => router.push(STUDENT_DASHBOARD_PATH)}>Back to dashboard</Button>
       </Modal>
     </div>

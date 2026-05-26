@@ -102,7 +102,14 @@ export default function StudentDashboardContent() {
                   </div>
                   <div className="flex items-center gap-3">
                     {lesson.completed && (
-                      <span className="text-sm text-green-700 font-medium">Completed</span>
+                      <span className="inline-flex items-center gap-2 rounded-full border border-purple-200 bg-gradient-to-r from-fuchsia-50 via-purple-50 to-indigo-50 px-3 py-1 text-sm font-semibold text-purple-800">
+                        Passed
+                        {typeof lesson.score_percentage === 'number' && (
+                          <span className="rounded-full bg-white/70 px-2 py-0.5 text-purple-900 tabular-nums">
+                            {lesson.score_percentage}%
+                          </span>
+                        )}
+                      </span>
                     )}
                     <Button
                       disabled={lesson.locked}

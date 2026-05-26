@@ -139,6 +139,7 @@ export interface StudentDashboardLesson {
   communication_goal?: string | null
   completed: boolean
   score: number
+  score_percentage?: number | null
   progress_percentage: number
   locked: boolean
 }

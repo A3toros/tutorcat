@@ -3,6 +3,10 @@
 import React, { useMemo, useState } from 'react'
 import { Button, Card } from '@/components/ui'
 import StudentVocabImage from '@/components/student/StudentVocabImage'
+import {
+  lesson1PictureMatchFallbackItems,
+  parseStudentVocabularyItems,
+} from '@/lib/studentLessonNormalize'
 import { resolveStudentVocabImageUrl } from '@/lib/studentVocabImages'
 import { useCoarsePointer } from '@/lib/useCoarsePointer'
 import type { StudentActivityProps } from '../activityProps'
@@ -12,10 +16,11 @@ const touchTarget =
 
 export default function StudentPictureWordMatch({ activity, onComplete }: StudentActivityProps) {
   const isTouch = useCoarsePointer()
-  const pairs = useMemo(
-    () => (activity.vocabulary_items || []).filter((item) => item.english_word),
-    [activity.vocabulary_items]
-  )
+  const pairs = useMemo(() => {
+    const fromApi = parseStudentVocabularyItems(activity.vocabulary_items)
+    if (fromApi.length > 0) return fromApi
+    return lesson1PictureMatchFallbackItems(activity.id)
+  }, [activity.vocabulary_items, activity.id])
 
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null)
   const [selectedWordId, setSelectedWordId] = useState<string | null>(null)
@@ -121,9 +126,7 @@ export default function StudentPictureWordMatch({ activity, onComplete }: Studen
     ? 'Picture selected — tap the matching word'
     : selectedWordId
       ? 'Word selected — tap the matching picture'
-      : isTouch
-        ? 'Tap a picture, then a word (or tap a word, then a picture)'
-        : 'Select a picture or word, then match it'
+      : 'Tap a picture, then a word — or a word, then a picture'
 
   return (
     <Card className="p-4 sm:p-6">
@@ -136,25 +139,14 @@ export default function StudentPictureWordMatch({ activity, onComplete }: Studen
         role="note"
       >
         <p className="font-semibold text-purple-800 mb-1.5 text-sm">How to play</p>
-        {isTouch ? (
-          <ul className="space-y-1 text-xs sm:text-sm list-disc list-inside">
-            <li>
-              <strong>Tap a picture</strong>, then <strong>tap</strong> the matching word
-            </li>
-            <li>
-              Or <strong>tap a word</strong>, then <strong>tap</strong> the matching picture
-            </li>
-          </ul>
-        ) : (
-          <ol className="list-decimal list-inside space-y-0.5 text-xs sm:text-sm">
-            <li>
-              <strong>Tap</strong> a picture, then a word — or a word, then a picture
-            </li>
-            <li>
-              Or <strong>drag</strong> a picture onto a word (or a word onto a picture)
-            </li>
-          </ol>
-        )}
+        <ul className="space-y-1 text-xs sm:text-sm list-disc list-inside">
+          <li>
+            <strong>Tap a picture</strong>, then <strong>tap</strong> the matching word
+          </li>
+          <li>
+            Or <strong>tap a word</strong> first, then <strong>tap</strong> the matching picture
+          </li>
+        </ul>
       </div>
 
       <p className="text-xs text-slate-500 mb-3" aria-live="polite">
@@ -162,79 +154,95 @@ export default function StudentPictureWordMatch({ activity, onComplete }: Studen
       </p>
 
       <div className="flex flex-col gap-5 md:grid md:grid-cols-2 md:gap-6">
-        <div className="space-y-2">
-          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Pictures</p>
-          {pairs.map((item) => {
-            const matched = matches[item.id]
-            const isSelected = selectedImageId === item.id
-            const isDragging = draggingImageId === item.id
-            const isDropHighlight = dropTargetImageId === item.id
-            const canAcceptWord = Boolean(selectedWordId) && !matched
-            return (
-              <div
-                key={item.id}
-                draggable={allowDrag && !matched}
-                onDragStart={
-                  allowDrag
-                    ? (e) => {
-                        if (matched) return
-                        e.dataTransfer.setData('application/x-tutorcat-image-id', item.id)
-                        e.dataTransfer.setData('text/plain', item.english_word)
-                        e.dataTransfer.effectAllowed = 'move'
-                        setDraggingImageId(item.id)
-                        setSelectedImageId(item.id)
-                        setSelectedWordId(null)
-                      }
-                    : undefined
-                }
-                onDragEnd={allowDrag ? clearDragState : undefined}
-                onDragOver={allowDrag ? handleDragOver : undefined}
-                onDragEnter={
-                  allowDrag ? () => !matched && setDropTargetImageId(item.id) : undefined
-                }
-                onDragLeave={
-                  allowDrag
-                    ? () => setDropTargetImageId((t) => (t === item.id ? null : t))
-                    : undefined
-                }
-                onDrop={allowDrag ? handleDropOnImage(item.id) : undefined}
-                onClick={() => handleImageTap(item.id)}
-                role="button"
-                tabIndex={matched ? -1 : 0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    handleImageTap(item.id)
+        <div>
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">
+            Pictures
+          </p>
+          <div className="grid grid-cols-2 gap-2 sm:gap-3">
+            {pairs.map((item) => {
+              const matched = matches[item.id]
+              const isSelected = selectedImageId === item.id
+              const isDragging = draggingImageId === item.id
+              const isDropHighlight = dropTargetImageId === item.id
+              const canAcceptWord = Boolean(selectedWordId) && !matched
+              const statusLabel = matched
+                ? 'Matched'
+                : isSelected
+                  ? 'Selected'
+                  : canAcceptWord
+                    ? 'Tap to match'
+                    : null
+              return (
+                <div
+                  key={item.id}
+                  draggable={allowDrag && !matched}
+                  onDragStart={
+                    allowDrag
+                      ? (e) => {
+                          if (matched) return
+                          e.dataTransfer.setData('application/x-tutorcat-image-id', item.id)
+                          e.dataTransfer.setData('text/plain', item.english_word)
+                          e.dataTransfer.effectAllowed = 'move'
+                          setDraggingImageId(item.id)
+                          setSelectedImageId(item.id)
+                          setSelectedWordId(null)
+                        }
+                      : undefined
                   }
-                }}
-                className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors ${touchTarget} ${
-                  allowDrag && !matched ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
-                } ${
-                  matched
-                    ? 'border-green-400 bg-green-50 opacity-80'
-                    : isDropHighlight || (canAcceptWord && isTouch)
-                      ? 'border-purple-500 bg-purple-50 ring-2 ring-purple-200'
-                      : isSelected || isDragging
-                        ? 'border-purple-500 ring-2 ring-purple-200 bg-purple-50/50'
-                        : 'border-slate-200 active:bg-purple-50'
-                }`}
-              >
-                <div className="relative h-14 w-14 sm:h-16 sm:w-16 shrink-0 overflow-hidden rounded-md bg-slate-100 flex items-center justify-center pointer-events-none">
-                  <StudentVocabImage
-                    src={resolveStudentVocabImageUrl(item.english_word, item.image_url)}
-                    alt={item.english_word}
-                  />
+                  onDragEnd={allowDrag ? clearDragState : undefined}
+                  onDragOver={allowDrag ? handleDragOver : undefined}
+                  onDragEnter={
+                    allowDrag ? () => !matched && setDropTargetImageId(item.id) : undefined
+                  }
+                  onDragLeave={
+                    allowDrag
+                      ? () => setDropTargetImageId((t) => (t === item.id ? null : t))
+                      : undefined
+                  }
+                  onDrop={allowDrag ? handleDropOnImage(item.id) : undefined}
+                  onClick={() => handleImageTap(item.id)}
+                  role="button"
+                  tabIndex={matched ? -1 : 0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      handleImageTap(item.id)
+                    }
+                  }}
+                  className={`flex flex-col items-center justify-center gap-1 rounded-lg border px-2 py-2 sm:px-2.5 sm:py-2.5 text-center transition-colors ${touchTarget} ${
+                    allowDrag && !matched ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
+                  } ${
+                    matched
+                      ? 'border-green-400 bg-green-50 opacity-80'
+                      : isDropHighlight || canAcceptWord
+                        ? 'border-purple-500 bg-purple-50 ring-2 ring-purple-200'
+                        : isSelected || isDragging
+                          ? 'border-purple-500 ring-2 ring-purple-200 bg-purple-50/50'
+                          : 'border-slate-200 active:bg-purple-50'
+                  }`}
+                >
+                  <div className="h-12 w-12 sm:h-14 sm:w-14 shrink-0 overflow-hidden rounded-md bg-slate-100 pointer-events-none">
+                    <StudentVocabImage
+                      src={resolveStudentVocabImageUrl(item.english_word, item.image_url)}
+                      alt={item.english_word}
+                    />
+                  </div>
+                  <span
+                    className={`min-h-[14px] text-[10px] sm:text-xs leading-tight ${
+                      statusLabel
+                        ? matched
+                          ? 'text-green-700 font-medium'
+                          : 'text-purple-700'
+                        : 'invisible'
+                    }`}
+                    aria-hidden={!statusLabel}
+                  >
+                    {statusLabel ?? '·'}
+                  </span>
                 </div>
-                {matched ? (
-                  <span className="text-sm text-green-700 font-medium">Matched</span>
-                ) : isSelected ? (
-                  <span className="text-xs sm:text-sm text-purple-700">Selected</span>
-                ) : canAcceptWord ? (
-                  <span className="text-xs sm:text-sm text-purple-600">Tap to match</span>
-                ) : null}
-              </div>
-            )
-          })}
+              )
+            })}
+          </div>
         </div>
 
         <div>
@@ -288,7 +296,7 @@ export default function StudentPictureWordMatch({ activity, onComplete }: Studen
                   } ${
                     used
                       ? 'border-green-300 bg-green-50 text-green-800 line-through opacity-70'
-                      : isDropHighlight || (canAcceptImage && isTouch)
+                      : isDropHighlight || canAcceptImage
                         ? 'border-purple-500 bg-purple-100 ring-2 ring-purple-200'
                         : isSelected
                           ? 'border-purple-500 bg-purple-50 ring-2 ring-purple-200'

@@ -67,13 +67,31 @@ const handler: Handler = async (event) => {
           sla.content,
           sla.created_at,
           sla.updated_at,
-          COALESCE(json_agg(DISTINCT vi.*) FILTER (WHERE vi.id IS NOT NULL), '[]') as vocabulary_items,
-          COALESCE(json_agg(DISTINCT gi.*) FILTER (WHERE gi.id IS NOT NULL), '[]') as grammar_items,
-          COALESCE(json_agg(DISTINCT pi.*) FILTER (WHERE pi.id IS NOT NULL), '[]') as poll_items
+          COALESCE(
+            (
+              SELECT json_agg(vi ORDER BY vi.sort_order, vi.id)
+              FROM student_vocabulary_items vi
+              WHERE vi.activity_id = sla.id
+            ),
+            '[]'
+          ) as vocabulary_items,
+          COALESCE(
+            (
+              SELECT json_agg(gi ORDER BY gi.sort_order, gi.id)
+              FROM student_grammar_items gi
+              WHERE gi.activity_id = sla.id
+            ),
+            '[]'
+          ) as grammar_items,
+          COALESCE(
+            (
+              SELECT json_agg(pi ORDER BY pi.sort_order, pi.id)
+              FROM student_poll_items pi
+              WHERE pi.activity_id = sla.id
+            ),
+            '[]'
+          ) as poll_items
         FROM student_lesson_activities sla
-        LEFT JOIN student_vocabulary_items vi ON sla.id = vi.activity_id
-        LEFT JOIN student_grammar_items gi ON sla.id = gi.activity_id
-        LEFT JOIN student_poll_items pi ON sla.id = pi.activity_id
         WHERE sla.student_lesson_id = ${lessonId} AND sla.active = TRUE
         GROUP BY sla.id, sla.student_lesson_id, sla.activity_type, sla.activity_order,
                  sla.title, sla.description, sla.estimated_time_seconds, sla.content,
@@ -112,7 +130,21 @@ const handler: Handler = async (event) => {
     }
 
     const lesson = lessonRows[0];
-    const totalActivities = activitiesResult.length;
+    const activities = (activitiesResult as Record<string, unknown>[]).map((row) => {
+      const next = { ...row };
+      for (const key of ['vocabulary_items', 'grammar_items', 'poll_items'] as const) {
+        const raw = next[key];
+        if (typeof raw === 'string') {
+          try {
+            next[key] = JSON.parse(raw);
+          } catch {
+            next[key] = [];
+          }
+        }
+      }
+      return next;
+    });
+    const totalActivities = activities.length;
     const completedActivityCount = results.length;
 
     const activityResults = results.map((r: Record<string, unknown>) => ({
@@ -155,7 +187,7 @@ const handler: Handler = async (event) => {
       body: JSON.stringify({
         success: true,
         lesson,
-        activities: activitiesResult,
+        activities,
         userProgress,
         activityResults,
         completedActivityCount,

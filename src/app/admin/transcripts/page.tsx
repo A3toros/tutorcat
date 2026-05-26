@@ -27,6 +27,8 @@ interface TranscriptItem {
   user_id: string | null
   user_email: string | null
   lesson_id: string | null
+  student_lesson_number?: number | null
+  student_lesson_topic?: string | null
   prompt: string | null
   prompt_id: string | null
   transcript: string
@@ -483,7 +485,10 @@ export default function AdminTranscriptsPage() {
                     const isActivityExpanded = expandedActivities.has(item.job_id)
 
                     const rawPrompt = item.prompt || ''
-                    let lessonLabel = item.lesson_id || item.prompt_id || ''
+                    let lessonLabel =
+                      item.student_lesson_number && item.student_lesson_topic
+                        ? `Student L${item.student_lesson_number}: ${item.student_lesson_topic}`
+                        : item.lesson_id || item.prompt_id || ''
                     let promptLabel = rawPrompt
 
                     if (!lessonLabel && rawPrompt) {

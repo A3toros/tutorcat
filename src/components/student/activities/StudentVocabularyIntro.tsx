@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Button, Card } from '@/components/ui'
 import StudentVocabImage from '@/components/student/StudentVocabImage'
+import { parseStudentVocabularyItems } from '@/lib/studentLessonNormalize'
 import { resolveStudentVocabImageUrl } from '@/lib/studentVocabImages'
 import type { StudentActivityProps } from '../activityProps'
 
@@ -35,7 +36,7 @@ export default function StudentVocabularyIntro({ activity, onComplete }: Student
   }, [secondsLeft])
 
   const items = useMemo(() => {
-    const raw = activity.vocabulary_items || []
+    const raw = parseStudentVocabularyItems(activity.vocabulary_items)
     const byWord = new Map<string, (typeof raw)[0]>()
     for (const item of raw) {
       const key = item.english_word.trim().toLowerCase()

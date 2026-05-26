@@ -54,17 +54,73 @@ const TWEMOJI12_DIRECT: Record<string, string> = {
     'https://upload.wikimedia.org/wikipedia/commons/c/c8/Twemoji12_1f606.svg',
 }
 
+/** Verified upload.wikimedia.org URLs (from Commons Special:FilePath redirects). */
+const COMMONS_FILE_DIRECT: Record<string, string> = {
+  'OOjs_UI_icon_advanced.svg':
+    'https://upload.wikimedia.org/wikipedia/commons/0/05/OOjs_UI_icon_advanced.svg',
+  'Globe_icon.svg':
+    'https://upload.wikimedia.org/wikipedia/commons/c/c4/Globe_icon.svg',
+  'Emoji_u1f4bb.svg':
+    'https://upload.wikimedia.org/wikipedia/commons/d/d7/Emoji_u1f4bb.svg',
+  'Wifi.svg': 'https://upload.wikimedia.org/wikipedia/commons/9/9e/Wifi.svg',
+  'OOjs_UI_icon_speechBubble-ltr-progressive.svg':
+    'https://upload.wikimedia.org/wikipedia/commons/f/f2/OOjs_UI_icon_speechBubble-ltr-progressive.svg',
+  'OOjs_UI_icon_message-progressive.svg':
+    'https://upload.wikimedia.org/wikipedia/commons/7/7e/OOjs_UI_icon_message-progressive.svg',
+  'Telephone icon blue gradient.svg':
+    'https://upload.wikimedia.org/wikipedia/commons/b/b8/Telephone_icon_blue_gradient.svg',
+  'Youtube icon.svg':
+    'https://upload.wikimedia.org/wikipedia/commons/2/21/YouTube_icon_%282011-2013%29.svg',
+  'OOjs_UI_icon_share-progressive.svg':
+    'https://upload.wikimedia.org/wikipedia/commons/0/09/OOjs_UI_icon_share-progressive.svg',
+  'Smiley.svg': 'https://upload.wikimedia.org/wikipedia/commons/8/85/Smiley.svg',
+}
+
 function fileToImageUrl(filename: string): string {
-  return TWEMOJI12_DIRECT[filename] ?? commonsImage(filename)
+  return (
+    TWEMOJI12_DIRECT[filename] ??
+    COMMONS_FILE_DIRECT[filename] ??
+    commonsImage(filename)
+  )
+}
+
+/** Fast path: direct URL per lesson-1 word (picture match + vocab intro). */
+export const LESSON1_IMAGE_URL_BY_WORD: Record<string, string> = {
+  app: COMMONS_FILE_DIRECT['OOjs_UI_icon_advanced.svg'],
+  website: COMMONS_FILE_DIRECT['Globe_icon.svg'],
+  phone: TWEMOJI12_DIRECT['Twemoji12_1f4f1.svg'],
+  tablet: TWEMOJI12_DIRECT['Twemoji12_1f4fb.svg'],
+  computer: COMMONS_FILE_DIRECT['Emoji_u1f4bb.svg'],
+  internet: COMMONS_FILE_DIRECT['Wifi.svg'],
+  chat: COMMONS_FILE_DIRECT['OOjs_UI_icon_speechBubble-ltr-progressive.svg'],
+  message: COMMONS_FILE_DIRECT['OOjs_UI_icon_message-progressive.svg'],
+  call: COMMONS_FILE_DIRECT['Telephone icon blue gradient.svg'],
+  'watch videos': commonsImage('YouTube full-color icon (2017).svg'),
+  'play games': TWEMOJI12_DIRECT['Twemoji12_1f3ae.svg'],
+  'listen to music': TWEMOJI12_DIRECT['Twemoji12_1f3a7.svg'],
+  stream: COMMONS_FILE_DIRECT['Youtube icon.svg'],
+  post: COMMONS_FILE_DIRECT['OOjs_UI_icon_share-progressive.svg'],
+  search: fileToImageUrl('OOjs_UI_icon_search-ltr-progressive.svg'),
+  scroll: TWEMOJI12_DIRECT['Twemoji12_1f4f2.svg'],
+  download: fileToImageUrl('Icon Download Black.svg'),
+  upload: TWEMOJI12_DIRECT['Twemoji12_1f4e4.svg'],
+  fun: COMMONS_FILE_DIRECT['Smiley.svg'],
+  boring: TWEMOJI12_DIRECT['Twemoji12_1f634.svg'],
+  interesting: fileToImageUrl('Light bulb icon red.svg'),
+  useful: fileToImageUrl('OOjs UI icon check-constructive.svg'),
+  funny: TWEMOJI12_DIRECT['Twemoji12_1f606.svg'],
+  exciting: fileToImageUrl('OOjs_UI_icon_star.svg'),
 }
 
 export function lesson1VocabImageUrl(englishWord: string): string {
   const key = englishWord.trim().toLowerCase()
+  const direct = LESSON1_IMAGE_URL_BY_WORD[key]
+  if (direct) return direct
   const file = LESSON1_VOCAB_IMAGE_FILES[key]
   return file ? fileToImageUrl(file) : ''
 }
 
-/** Prefer canonical lesson-1 map; ignore stale/broken DB upload paths. */
+/** Prefer canonical lesson-1 direct URLs; ignore stale/broken DB paths. */
 export function resolveStudentVocabImageUrl(
   englishWord: string,
   dbUrl?: string | null,
@@ -72,6 +128,16 @@ export function resolveStudentVocabImageUrl(
   const mapped = lesson1VocabImageUrl(englishWord)
   if (mapped) return mapped
   if (!dbUrl) return ''
-  if (dbUrl.includes('commons.wikimedia.org/wiki/Special:FilePath/')) return dbUrl
+  if (dbUrl.includes('upload.wikimedia.org/')) return dbUrl
+  if (dbUrl.includes('commons.wikimedia.org/wiki/Special:FilePath/')) {
+    const filename = decodeURIComponent(
+      dbUrl.split('/Special:FilePath/')[1]?.split('?')[0] ?? '',
+    )
+    if (filename) {
+      const fromFile = fileToImageUrl(filename)
+      if (!fromFile.includes('/wiki/Special:FilePath/')) return fromFile
+    }
+    return dbUrl
+  }
   return dbUrl
 }

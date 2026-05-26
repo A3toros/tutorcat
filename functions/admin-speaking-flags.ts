@@ -87,6 +87,8 @@ export const handler: Handler = async (event) => {
           sj.user_id,
           u.email as user_email,
           sj.lesson_id,
+          sls.lesson_number as student_lesson_number,
+          sls.topic as student_lesson_topic,
           sj.transcript,
           sj.status,
           sj.result_json,
@@ -105,6 +107,7 @@ export const handler: Handler = async (event) => {
           ) AS lesson_result
         FROM speech_jobs sj
         LEFT JOIN users u ON sj.user_id = u.id
+        LEFT JOIN student_lessons sls ON sls.id::text = sj.lesson_id::text
         WHERE
           1 = 1
           ${lessonId ? sql`AND sj.lesson_id = ${lessonId}` : sql``}
@@ -123,6 +126,7 @@ export const handler: Handler = async (event) => {
         SELECT COUNT(*) as total
         FROM speech_jobs sj
         LEFT JOIN users u ON sj.user_id = u.id
+        LEFT JOIN student_lessons sls ON sls.id::text = sj.lesson_id::text
         WHERE
           1 = 1
           ${lessonId ? sql`AND sj.lesson_id = ${lessonId}` : sql``}
@@ -149,6 +153,8 @@ export const handler: Handler = async (event) => {
         user_id: row.user_id,
         user_email: row.user_email || null,
         lesson_id: row.lesson_id,
+        student_lesson_number: row.student_lesson_number ?? null,
+        student_lesson_topic: row.student_lesson_topic ?? null,
         prompt: row.prompt,
         prompt_id: row.prompt_id,
         transcript: row.transcript,

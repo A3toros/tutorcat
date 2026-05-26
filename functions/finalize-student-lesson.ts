@@ -2,6 +2,7 @@ import { Handler } from '@netlify/functions';
 import { neon } from '@neondatabase/serverless';
 import { getHeaders } from './cors-headers';
 import { requireStudentAuth } from './student-auth.js';
+import { sumEffectiveScores } from './student-lesson-scoring.js';
 
 const handler: Handler = async (event) => {
   const headers = getHeaders(event, true);
@@ -61,20 +62,20 @@ const handler: Handler = async (event) => {
     const studentLessonId = body.studentLessonId;
 
     const activityResults = await sql`
-      SELECT score, max_score, activity_order
+      SELECT id, activity_type, score, max_score, activity_order, answers, feedback
       FROM student_lesson_activity_results
       WHERE user_id = ${userId} AND student_lesson_id = ${studentLessonId}
     `;
 
-    const totalScore = activityResults.reduce(
-      (sum, r) => sum + (Number(r.score) || 0),
-      0
+    const { totalScore, maxScore, percentage } = sumEffectiveScores(
+      activityResults as Array<{
+        activity_type?: string
+        score?: number
+        max_score?: number
+        answers?: unknown
+        feedback?: unknown
+      }>
     );
-    const maxScore = activityResults.reduce(
-      (sum, r) => sum + (Number(r.max_score) || 0),
-      0
-    );
-    const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 100;
     const isPassed = maxScore === 0 ? true : percentage >= 60;
 
     const lessonMeta = await sql`

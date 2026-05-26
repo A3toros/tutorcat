@@ -2,6 +2,7 @@ import { Handler } from '@netlify/functions';
 import { neon } from '@neondatabase/serverless';
 import { getHeaders } from './cors-headers';
 import { requireStudentAuth } from './student-auth.js';
+import { sumEffectiveScores } from './student-lesson-scoring.js';
 
 const handler: Handler = async (event) => {
   const headers = getHeaders(event, false);
@@ -40,6 +41,24 @@ const handler: Handler = async (event) => {
     const sql = neon(databaseUrl);
     const userId = auth.user.id;
 
+    const allActivityResults = await sql`
+      SELECT student_lesson_id, activity_type, score, max_score, answers, feedback
+      FROM student_lesson_activity_results
+      WHERE user_id = ${userId}
+    `;
+
+    const percentageByLesson = new Map<string, number>();
+    const byLesson = new Map<string, typeof allActivityResults>();
+    for (const row of allActivityResults as Array<{ student_lesson_id: string }>) {
+      const lid = String(row.student_lesson_id);
+      const list = byLesson.get(lid) || [];
+      list.push(row);
+      byLesson.set(lid, list);
+    }
+    for (const [lid, rows] of byLesson.entries()) {
+      percentageByLesson.set(lid, sumEffectiveScores(rows).percentage);
+    }
+
     const lessons = await sql`
       SELECT
         sl.id,
@@ -50,6 +69,12 @@ const handler: Handler = async (event) => {
         sl.live_duration_minutes,
         COALESCE(sup.completed, FALSE) as completed,
         COALESCE(sup.score, 0) as score,
+        (
+          SELECT COALESCE(SUM(sar.max_score), 0)::int
+          FROM student_lesson_activity_results sar
+          WHERE sar.user_id = ${userId}
+            AND sar.student_lesson_id = sl.id
+        ) as max_score_total,
         (
           SELECT COUNT(*)::int FROM student_lesson_activities sla
           WHERE sla.student_lesson_id = sl.id AND sla.active = TRUE
@@ -85,6 +110,9 @@ const handler: Handler = async (event) => {
         live_duration_minutes: row.live_duration_minutes,
         completed: Boolean(row.completed),
         score: Number(row.score) || 0,
+        score_percentage: Boolean(row.completed)
+          ? percentageByLesson.get(String(row.id)) ?? null
+          : null,
         progress_percentage: Boolean(row.completed) ? 100 : progressPct,
         locked: lessonNumber > currentLesson,
       };

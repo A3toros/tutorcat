@@ -1,0 +1,292 @@
+'use client'
+
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import AdminProtectedRoute from '@/components/auth/AdminProtectedRoute'
+import { Button, Card, Table, Header, Body, Row, Head, Cell } from '@/components/ui'
+import { useNotification } from '@/contexts/NotificationContext'
+import { adminApiRequest } from '@/utils/adminApi'
+
+type StudentLessonScore = {
+  lesson_id: string
+  lesson_number: number
+  topic: string
+  score_percentage: number
+  completed_at?: string | null
+}
+
+type AdminStudent = {
+  id: string
+  school_student_id: string | null
+  nickname: string
+  class: '1/15' | '1/16' | null
+  speech_jobs: number
+  lessons: StudentLessonScore[]
+}
+
+type TranscriptItem = {
+  job_id: string
+  prompt: string | null
+  prompt_id: string | null
+  created_at: string
+  transcript: string
+  status: string
+}
+
+function bySchoolId(a: AdminStudent, b: AdminStudent) {
+  return String(a.school_student_id || '').localeCompare(String(b.school_student_id || ''))
+}
+
+export default function AdminStudentsPage() {
+  const router = useRouter()
+  const { showNotification } = useNotification()
+
+  const [students, setStudents] = useState<AdminStudent[]>([])
+  const [loading, setLoading] = useState(true)
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [loadingTranscriptsFor, setLoadingTranscriptsFor] = useState<string | null>(null)
+  const [transcriptsByStudent, setTranscriptsByStudent] = useState<Record<string, TranscriptItem[]>>({})
+  const [audioUrlByJob, setAudioUrlByJob] = useState<Record<string, string>>({})
+  const [loadingAudioJob, setLoadingAudioJob] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true)
+      const res = await adminApiRequest('/.netlify/functions/admin-get-students', { method: 'GET' })
+      const data = await res.json()
+      if (!data?.success) throw new Error(data?.error || 'Failed to load students')
+      setStudents(Array.isArray(data.students) ? data.students : [])
+    } catch (e) {
+      showNotification((e as Error).message || 'Failed to load students', 'error')
+      setStudents([])
+    } finally {
+      setLoading(false)
+    }
+  }, [showNotification])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  const class115 = useMemo(() => students.filter((s) => s.class === '1/15').sort(bySchoolId), [students])
+  const class116 = useMemo(() => students.filter((s) => s.class === '1/16').sort(bySchoolId), [students])
+
+  const toggleExpanded = (studentId: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(studentId)) next.delete(studentId)
+      else next.add(studentId)
+      return next
+    })
+  }
+
+  const loadTranscripts = useCallback(
+    async (student: AdminStudent) => {
+      if (!student?.id) return
+      if (transcriptsByStudent[student.id]) return
+      setLoadingTranscriptsFor(student.id)
+      try {
+        const params = new URLSearchParams()
+        params.set('scope', 'lessons')
+        params.set('page', '1')
+        params.set('limit', '20')
+        params.set('userId', student.id)
+        const res = await adminApiRequest(`/.netlify/functions/admin-speaking-flags?${params.toString()}`, { method: 'GET' })
+        const data = await res.json()
+        if (!data?.success) throw new Error(data?.error || 'Failed to load transcripts')
+        const items: TranscriptItem[] = Array.isArray(data.items)
+          ? data.items.map((it: any) => ({
+              job_id: it.job_id,
+              prompt: it.prompt ?? null,
+              prompt_id: it.prompt_id ?? null,
+              created_at: it.created_at,
+              transcript: it.transcript || '',
+              status: it.status || '',
+            }))
+          : []
+        setTranscriptsByStudent((prev) => ({ ...prev, [student.id]: items }))
+      } catch (e) {
+        showNotification((e as Error).message || 'Failed to load transcripts', 'error')
+      } finally {
+        setLoadingTranscriptsFor(null)
+      }
+    },
+    [transcriptsByStudent, showNotification]
+  )
+
+  const loadAudioUrl = useCallback(
+    async (jobId: string) => {
+      if (!jobId || audioUrlByJob[jobId]) return
+      setLoadingAudioJob(jobId)
+      try {
+        const res = await adminApiRequest(
+          `/.netlify/functions/admin-get-speech-audio-url?jobId=${encodeURIComponent(jobId)}`,
+          { method: 'GET' }
+        )
+        const data = await res.json()
+        if (!data?.success || !data?.url) throw new Error(data?.error || 'Audio not found')
+        setAudioUrlByJob((prev) => ({ ...prev, [jobId]: data.url as string }))
+      } catch (e) {
+        showNotification((e as Error).message || 'Failed to load audio', 'error')
+      } finally {
+        setLoadingAudioJob(null)
+      }
+    },
+    [audioUrlByJob, showNotification]
+  )
+
+  const StudentTable = ({ title, list }: { title: string; list: AdminStudent[] }) => (
+    <Card className="p-5">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <h2 className="text-lg font-semibold text-slate-800">Class {title}</h2>
+        <div className="text-sm text-slate-600">{list.length} students</div>
+      </div>
+
+      <Table>
+        <Header>
+          <Row>
+            <Head>ID</Head>
+            <Head>Nickname</Head>
+            <Head>Passed lessons</Head>
+            <Head>Speech jobs</Head>
+            <Head>Actions</Head>
+          </Row>
+        </Header>
+        <Body>
+          {list.map((s) => {
+            const isOpen = expanded.has(s.id)
+            return (
+              <React.Fragment key={s.id}>
+                <Row className={isOpen ? 'bg-slate-50' : 'hover:bg-slate-50'}>
+                  <Cell className="text-sm font-semibold text-slate-800 tabular-nums">
+                    {s.school_student_id || '—'}
+                  </Cell>
+                  <Cell className="text-sm text-slate-700">{s.nickname || '—'}</Cell>
+                  <Cell className="text-sm text-slate-700 tabular-nums">{s.lessons?.length || 0}</Cell>
+                  <Cell className="text-sm text-slate-700 tabular-nums">{s.speech_jobs || 0}</Cell>
+                  <Cell>
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" variant="secondary" onClick={() => { toggleExpanded(s.id); loadTranscripts(s) }}>
+                        {isOpen ? 'Hide' : 'View'}
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => router.push('/admin/transcripts')}>
+                        Open transcripts
+                      </Button>
+                    </div>
+                  </Cell>
+                </Row>
+
+                {isOpen ? (
+                  <Row>
+                    <Cell colSpan={5}>
+                      <div className="space-y-4 py-3">
+                        <div>
+                          <div className="text-xs font-semibold text-slate-600 mb-2">Passed lessons & scores</div>
+                          {s.lessons?.length ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {s.lessons
+                                .slice()
+                                .sort((a, b) => a.lesson_number - b.lesson_number)
+                                .map((l) => (
+                                  <div
+                                    key={l.lesson_id}
+                                    className="rounded-lg border border-purple-100 bg-white px-3 py-2 flex items-center justify-between"
+                                  >
+                                    <div className="text-sm text-slate-800">
+                                      <span className="font-semibold">L{l.lesson_number}</span> {l.topic}
+                                    </div>
+                                    <div className="text-sm font-extrabold text-purple-700 tabular-nums">
+                                      {l.score_percentage}%
+                                    </div>
+                                  </div>
+                                ))}
+                            </div>
+                          ) : (
+                            <div className="text-sm text-slate-500">No passed lessons yet.</div>
+                          )}
+                        </div>
+
+                        <div>
+                          <div className="text-xs font-semibold text-slate-600 mb-2">Audio recordings & transcripts</div>
+                          {loadingTranscriptsFor === s.id ? (
+                            <div className="text-sm text-slate-500">Loading…</div>
+                          ) : (transcriptsByStudent[s.id] || []).length ? (
+                            <div className="space-y-3">
+                              {(transcriptsByStudent[s.id] || []).map((it) => (
+                                <div key={it.job_id} className="rounded-lg border border-slate-200 bg-white p-3">
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <div className="text-xs text-slate-600">
+                                      <span className="font-semibold text-slate-800">{it.status}</span>
+                                      <span className="mx-2">·</span>
+                                      <span className="tabular-nums">{new Date(it.created_at).toLocaleString()}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        disabled={loadingAudioJob === it.job_id}
+                                        onClick={() => loadAudioUrl(it.job_id)}
+                                      >
+                                        {audioUrlByJob[it.job_id] ? 'Loaded' : loadingAudioJob === it.job_id ? 'Loading…' : 'Load audio'}
+                                      </Button>
+                                    </div>
+                                  </div>
+                                  {audioUrlByJob[it.job_id] && (
+                                    <audio className="w-full mt-2" controls src={audioUrlByJob[it.job_id]} />
+                                  )}
+                                  <div className="mt-2 text-sm text-slate-800 whitespace-pre-wrap">
+                                    {it.transcript || '—'}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-sm text-slate-500">No speech jobs found.</div>
+                          )}
+                        </div>
+                      </div>
+                    </Cell>
+                  </Row>
+                ) : null}
+              </React.Fragment>
+            )
+          })}
+        </Body>
+      </Table>
+    </Card>
+  )
+
+  return (
+    <AdminProtectedRoute>
+      <main className="min-h-screen bg-slate-900 p-4 sm:p-6">
+        <div className="max-w-6xl mx-auto space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <Button variant="secondary" size="sm" onClick={() => router.push('/admin/dashboard')}>
+              ← Back to Dashboard
+            </Button>
+            <Button variant="ghost" size="sm" onClick={load} disabled={loading}>
+              Refresh
+            </Button>
+          </div>
+
+          <Card className="p-5 bg-gradient-to-br from-white to-purple-50 border-purple-200">
+            <h1 className="text-2xl font-bold text-slate-900">Students</h1>
+            <p className="text-sm text-slate-600 mt-1">
+              Shows only nickname + student ID. Includes passed lesson scores and speech recordings.
+            </p>
+          </Card>
+
+          {loading ? (
+            <Card className="p-6 text-slate-700">Loading…</Card>
+          ) : (
+            <>
+              <StudentTable title="1/15" list={class115} />
+              <StudentTable title="1/16" list={class116} />
+            </>
+          )}
+        </div>
+      </main>
+    </AdminProtectedRoute>
+  )
+}
+

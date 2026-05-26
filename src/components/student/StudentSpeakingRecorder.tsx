@@ -4,13 +4,13 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Button, MascotThinking } from '@/components/ui'
 import { useUser } from '@/components/student/StudentProtectedRoute'
 import {
+  getMinWordsForLevel,
   getSupportedRecordingMimeType,
-  getStudentMinWords,
-  SpeechFeedbackPayload,
-  SpeechJobErrorKind,
-  STUDENT_MAX_RECORDING_SECONDS,
+  SPEECH_MAX_DURATION_SECONDS,
   submitSpeechForFeedback,
-} from '@/lib/studentSpeechApi'
+  type SpeechErrorFlags,
+  type SpeechFeedbackPayload,
+} from '@/lib/speechJobFlow'
 
 export type { SpeechFeedbackPayload }
 
@@ -23,7 +23,6 @@ export interface StudentSpeakingRecorderProps {
   cefrLevel?: string
   disabled?: boolean
   onSuccess: (result: SpeechFeedbackPayload) => void
-  /** Called when the student taps Re-record so the parent can unlock Next / Finish. */
   onRerecord?: () => void
 }
 
@@ -35,13 +34,22 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
+function errorTitle(flags: SpeechErrorFlags): string {
+  if (flags.isMinWordsError) return 'Not enough words'
+  if (flags.isQuestionRepetitionError) return 'Please re-record'
+  if (flags.isDeliveryReadError) return "Speak, don't read"
+  if (flags.isAIFlaggedError) return 'Flagged'
+  if (flags.isSpeechTooLongError) return 'Speech too long'
+  return 'Something went wrong'
+}
+
 export default function StudentSpeakingRecorder({
   promptText,
   promptId,
   lessonId,
   minWords,
   maxRecordingSeconds = 60,
-  cefrLevel = 'A1',
+  cefrLevel,
   disabled = false,
   onSuccess,
   onRerecord,
@@ -53,8 +61,8 @@ export default function StudentSpeakingRecorder({
   const [isStopping, setIsStopping] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
-  const [error, setError] = useState<string | null>(null)
-  const [errorKind, setErrorKind] = useState<SpeechJobErrorKind | null>(null)
+  const [submissionError, setSubmissionError] = useState<string | null>(null)
+  const [errorFlags, setErrorFlags] = useState<SpeechErrorFlags>({})
   const [feedback, setFeedback] = useState<SpeechFeedbackPayload | null>(null)
   const [transcript, setTranscript] = useState('')
 
@@ -65,7 +73,8 @@ export default function StudentSpeakingRecorder({
   const autoStopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const recordingStartRef = useRef<number>(0)
 
-  const effectiveMinWords = minWords ?? getStudentMinWords(cefrLevel)
+  const effectiveMinWords = minWords ?? getMinWordsForLevel(cefrLevel)
+  const maxSeconds = Math.min(maxRecordingSeconds, SPEECH_MAX_DURATION_SECONDS)
 
   const cleanupStream = useCallback(() => {
     if (recordingIntervalRef.current) {
@@ -89,39 +98,32 @@ export default function StudentSpeakingRecorder({
     setIsStopping(false)
     setIsProcessing(false)
     setRecordingTime(0)
-    setError(null)
-    setErrorKind(null)
+    setSubmissionError(null)
+    setErrorFlags({})
     setStep('idle')
     chunksRef.current = []
   }, [cleanupStream])
 
-  useEffect(() => {
-    return () => cleanupStream()
-  }, [cleanupStream])
+  useEffect(() => () => cleanupStream(), [cleanupStream])
 
   useEffect(() => {
-    const check = async () => {
-      try {
-        if (navigator.permissions) {
-          const status = await navigator.permissions.query({ name: 'microphone' as PermissionName })
-          if (status.state === 'granted') setHasMicPermission(true)
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-    check()
+    navigator.permissions
+      ?.query({ name: 'microphone' as PermissionName })
+      .then((s) => {
+        if (s.state === 'granted') setHasMicPermission(true)
+      })
+      .catch(() => {})
   }, [])
 
   const requestMicPermission = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       setHasMicPermission(true)
-      setError(null)
+      setSubmissionError(null)
       stream.getTracks().forEach((t) => t.stop())
     } catch (err) {
       const e = err as Error
-      setError(
+      setSubmissionError(
         e.name === 'NotAllowedError'
           ? 'Microphone access denied. Allow the microphone in your browser settings.'
           : `Microphone error: ${e.message}`
@@ -133,8 +135,8 @@ export default function StudentSpeakingRecorder({
     async (audioBlob: Blob, durationSec: number) => {
       setIsProcessing(true)
       setStep('transcribing')
-      setError(null)
-      setErrorKind(null)
+      setSubmissionError(null)
+      setErrorFlags({})
 
       try {
         const result = await submitSpeechForFeedback({
@@ -146,16 +148,23 @@ export default function StudentSpeakingRecorder({
           userId: user?.id,
           minWords: effectiveMinWords,
           cefrLevel,
+          onPollStatus: (status) =>
+            setStep(status === 'analyzing' ? 'analyzing' : 'transcribing'),
         })
         setTranscript(result.transcript)
         setFeedback(result)
         setStep('feedback')
         onSuccess(result)
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Processing failed. Please try again.'
-        const kind = (err as { kind?: SpeechJobErrorKind })?.kind ?? 'generic'
-        setError(message)
-        setErrorKind(kind)
+        const e = err as Error & SpeechErrorFlags
+        setSubmissionError(e.message || 'Processing failed. Please try again.')
+        setErrorFlags({
+          isMinWordsError: e.isMinWordsError,
+          isAIFlaggedError: e.isAIFlaggedError,
+          isSpeechTooLongError: e.isSpeechTooLongError,
+          isQuestionRepetitionError: e.isQuestionRepetitionError,
+          isDeliveryReadError: e.isDeliveryReadError,
+        })
         setStep('idle')
       } finally {
         setIsProcessing(false)
@@ -163,16 +172,7 @@ export default function StudentSpeakingRecorder({
         cleanupStream()
       }
     },
-    [
-      promptText,
-      promptId,
-      lessonId,
-      user?.id,
-      effectiveMinWords,
-      cefrLevel,
-      onSuccess,
-      cleanupStream,
-    ]
+    [promptText, promptId, lessonId, user?.id, effectiveMinWords, cefrLevel, onSuccess, cleanupStream]
   )
 
   const startRecording = async () => {
@@ -181,22 +181,27 @@ export default function StudentSpeakingRecorder({
     setIsStopping(false)
     setFeedback(null)
     setTranscript('')
-    setError(null)
-    setErrorKind(null)
+    setSubmissionError(null)
+    setErrorFlags({})
 
     try {
       const isIOS =
         /iPad|iPhone|iPod/.test(navigator.userAgent) ||
         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
       const stream = await navigator.mediaDevices.getUserMedia(
-        isIOS ? { audio: { echoCancellation: true } } : { audio: true }
+        isIOS
+          ? { audio: { echoCancellation: true } }
+          : { audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }
       )
       streamRef.current = stream
       chunksRef.current = []
       setHasMicPermission(true)
 
       const mimeType = getSupportedRecordingMimeType()
-      const mediaRecorder = new MediaRecorder(stream, { mimeType })
+      const mediaRecorder = new MediaRecorder(
+        stream,
+        isIOS ? { mimeType } : { mimeType, audioBitsPerSecond: 64000 }
+      )
       mediaRecorderRef.current = mediaRecorder
       recordingStartRef.current = Date.now()
 
@@ -218,21 +223,19 @@ export default function StudentSpeakingRecorder({
       recordingIntervalRef.current = setInterval(() => {
         setRecordingTime((prev) => {
           const next = prev + 1
-          if (next >= maxRecordingSeconds && mediaRecorderRef.current?.state === 'recording') {
+          if (next >= maxSeconds && mediaRecorderRef.current?.state === 'recording') {
             stopRecording()
-            return maxRecordingSeconds
+            return maxSeconds
           }
           return next
         })
       }, 1000)
 
       autoStopTimeoutRef.current = setTimeout(() => {
-        if (mediaRecorderRef.current?.state === 'recording') {
-          stopRecording()
-        }
-      }, maxRecordingSeconds * 1000)
+        if (mediaRecorderRef.current?.state === 'recording') stopRecording()
+      }, maxSeconds * 1000)
     } catch {
-      setError('Failed to start recording. Check your microphone and try again.')
+      setSubmissionError('Failed to start recording. Check your microphone and try again.')
     }
   }
 
@@ -260,11 +263,7 @@ export default function StudentSpeakingRecorder({
       return
     }
 
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop())
-      streamRef.current = null
-    }
-    mediaRecorderRef.current = null
+    cleanupStream()
     setIsStopping(false)
     setIsProcessing(false)
     setStep('idle')
@@ -276,15 +275,11 @@ export default function StudentSpeakingRecorder({
         <p className="text-sm text-amber-900 mb-3">
           Allow the microphone so we can transcribe your speech and give AI feedback.
         </p>
-        <Button
-          onClick={requestMicPermission}
-          disabled={disabled}
-          className="inline-flex items-center gap-2"
-        >
+        <Button onClick={requestMicPermission} disabled={disabled} className="inline-flex items-center gap-2">
           <img src="/mic-start.png" alt="" className="w-5 h-5" aria-hidden />
           Allow microphone
         </Button>
-        {error && <p className="text-red-600 text-sm mt-2">{error}</p>}
+        {submissionError && <p className="text-red-600 text-sm mt-2">{submissionError}</p>}
       </div>
     )
   }
@@ -294,9 +289,7 @@ export default function StudentSpeakingRecorder({
       <div className="py-6 flex flex-col items-center">
         <MascotThinking
           size="md"
-          speechText={
-            step === 'analyzing' ? 'Analyzing your answer…' : 'Transcribing your speech…'
-          }
+          speechText={step === 'analyzing' ? 'Analyzing your answer…' : 'Transcribing your speech…'}
           alwaysShowSpeech
         />
       </div>
@@ -304,14 +297,12 @@ export default function StudentSpeakingRecorder({
   }
 
   if (step === 'feedback' && feedback) {
+    const passed = feedback.overall_score >= 50
     return (
       <div className="space-y-4 text-left">
         <div className="rounded-lg border border-green-200 bg-green-50 p-4">
           <p className="text-xs font-semibold uppercase text-green-700 mb-1">AI feedback</p>
           <p className="text-sm text-slate-800 mb-2">{feedback.feedback}</p>
-          <p className="text-xs text-slate-500">
-            Score: <strong>{feedback.overall_score}/100</strong>
-          </p>
         </div>
 
         {transcript && (
@@ -353,43 +344,67 @@ export default function StudentSpeakingRecorder({
           </p>
         )}
 
-        <Button
-          variant="secondary"
-          className="w-full sm:w-auto"
-          onClick={() => {
-            setFeedback(null)
-            setTranscript('')
-            resetRecording()
-            onRerecord?.()
-          }}
-        >
-          Re-record
-        </Button>
+        <div className="rounded-2xl border border-purple-200 bg-gradient-to-br from-fuchsia-50 via-purple-50 to-indigo-50 px-4 py-4 text-center">
+          <p className="text-xs font-semibold uppercase tracking-wide text-purple-700">Your score</p>
+          <p className="mt-1 text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-fuchsia-600 via-purple-600 to-indigo-600 tabular-nums">
+            {feedback.overall_score}
+          </p>
+          <p className="text-sm font-semibold text-slate-700">out of 100</p>
+          {!passed && (
+            <p className="mt-2 text-sm text-rose-700">
+              Score is under 50 — please re-record to continue.
+            </p>
+          )}
+        </div>
+
+        {!passed && (
+          <Button
+            variant="secondary"
+            className="w-full sm:w-auto"
+            onClick={() => {
+              setFeedback(null)
+              setTranscript('')
+              resetRecording()
+              onRerecord?.()
+            }}
+          >
+            Re-record
+          </Button>
+        )}
       </div>
     )
   }
 
+  const showError = Boolean(submissionError)
+  const canRerecord =
+    errorFlags.isMinWordsError ||
+    errorFlags.isDeliveryReadError ||
+    errorFlags.isQuestionRepetitionError ||
+    errorFlags.isAIFlaggedError ||
+    errorFlags.isSpeechTooLongError
+
   return (
     <div className="space-y-3">
       <p className="text-xs text-slate-500 text-center">
-        Speak for at least {effectiveMinWords} words. Max {Math.min(maxRecordingSeconds, STUDENT_MAX_RECORDING_SECONDS)}s.
+        Say at least {effectiveMinWords} words in your answer (up to {maxSeconds} seconds).
       </p>
 
-      {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {error}
-          <Button
-            variant="secondary"
-            size="sm"
-            className="mt-2 w-full"
-            onClick={resetRecording}
-          >
-            {errorKind === 'min_words' || errorKind === 'delivery_read' ? 'Re-record' : 'Try again'}
+      {showError && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-950">
+          <p className="font-semibold text-amber-900">{errorTitle(errorFlags)}</p>
+          <p className="mt-1">{submissionError}</p>
+          {errorFlags.isMinWordsError && (
+            <p className="mt-2 text-xs text-amber-800">
+              Tap Re-record and speak for longer to meet the minimum word count.
+            </p>
+          )}
+          <Button variant="secondary" size="sm" className="mt-3 w-full" onClick={resetRecording}>
+            {canRerecord ? 'Re-record' : 'Try again'}
           </Button>
         </div>
       )}
 
-      {!error && (
+      {!showError && (
         <div className="flex flex-col items-center gap-3">
           {!isRecording ? (
             <div className="flex flex-col items-center">
@@ -406,14 +421,7 @@ export default function StudentSpeakingRecorder({
                     startRecording()
                   }
                 }}
-                style={{
-                  opacity: disabled ? 0.5 : 1,
-                  cursor: disabled ? 'not-allowed' : 'pointer',
-                }}
-                onError={(e) => {
-                  console.error('Failed to load mic-start.png')
-                  e.currentTarget.style.display = 'none'
-                }}
+                style={{ opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
               />
               <p className="text-xs text-slate-500 mt-2">Tap to start recording</p>
             </div>
@@ -427,14 +435,10 @@ export default function StudentSpeakingRecorder({
                 <>
                   <p
                     className={`text-lg font-semibold tabular-nums ${
-                      recordingTime >= maxRecordingSeconds - 5 ? 'text-rose-600' : 'text-slate-800'
+                      recordingTime >= maxSeconds - 5 ? 'text-rose-600' : 'text-slate-800'
                     }`}
                   >
                     Recording: {formatTime(recordingTime)}
-                    {recordingTime >= maxRecordingSeconds - 5 &&
-                      recordingTime < maxRecordingSeconds && (
-                        <span className="ml-2 text-sm font-normal">(stopping soon…)</span>
-                      )}
                   </p>
                   <p className="text-sm text-slate-500">Tap the button below to stop</p>
                 </>
@@ -445,9 +449,7 @@ export default function StudentSpeakingRecorder({
                 role="button"
                 tabIndex={isStopping ? -1 : 0}
                 className={`w-16 h-16 transition-all duration-200 touch-manipulation ${
-                  isStopping
-                    ? 'opacity-50 grayscale cursor-not-allowed'
-                    : 'cursor-pointer hover:opacity-80'
+                  isStopping ? 'opacity-50 grayscale cursor-not-allowed' : 'cursor-pointer hover:opacity-80'
                 }`}
                 onClick={isStopping ? undefined : stopRecording}
                 onKeyDown={(e) => {
@@ -455,10 +457,6 @@ export default function StudentSpeakingRecorder({
                     e.preventDefault()
                     stopRecording()
                   }
-                }}
-                onError={(e) => {
-                  console.error('Failed to load mic-stop.png')
-                  e.currentTarget.style.display = 'none'
                 }}
               />
             </div>
