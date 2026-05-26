@@ -4,7 +4,7 @@ BEGIN;
 
 INSERT INTO student_grammar_items (activity_id, item_kind, original_sentence, correct_sentence, options, sort_order)
 SELECT la.id, 'frequency_select', 'I _____ use YouTube.', 'always',
-  '{"choices": ["always", "sometimes", "never"], "correct": "always"}'::jsonb, 2
+  '{"choices": ["always", "asleaways", "alwasy"], "correct": "always"}'::jsonb, 2
 FROM student_lesson_activities la
 JOIN student_lessons sl ON sl.id = la.student_lesson_id
 WHERE sl.slug = 'my-online-life'
@@ -17,7 +17,7 @@ WHERE sl.slug = 'my-online-life'
 UPDATE student_grammar_items gi
 SET
   correct_sentence = 'always',
-  options = '{"choices": ["always", "sometimes", "never"], "correct": "always"}'::jsonb
+  options = '{"choices": ["always", "asleaways", "alwasy"], "correct": "always"}'::jsonb
 FROM student_lesson_activities la
 JOIN student_lessons sl ON sl.id = la.student_lesson_id
 WHERE gi.activity_id = la.id

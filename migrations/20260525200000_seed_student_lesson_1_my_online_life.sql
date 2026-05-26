@@ -195,8 +195,8 @@ SELECT la.id, 'frequency_select', v.prompt, v.correct_word,
 FROM student_lesson_activities la
 JOIN student_lessons sl ON sl.id = la.student_lesson_id
 CROSS JOIN (VALUES
-  ('I _____ eat pizza every day.', 'always', '{"choices": ["always", "sometimes", "never"], "correct": "always"}', 1),
-  ('I _____ use YouTube.', 'always', '{"choices": ["always", "sometimes", "never"], "correct": "always"}', 2)
+  ('I _____ eat pizza every day.', 'always', '{"choices": ["always", "asleaways", "alwasy"], "correct": "always"}', 1),
+  ('I _____ use YouTube.', 'always', '{"choices": ["always", "asleaways", "alwasy"], "correct": "always"}', 2)
 ) AS v(prompt, correct_word, options, sort_order)
 WHERE sl.slug = 'my-online-life' AND la.activity_order = 10;
 
@@ -206,7 +206,7 @@ SELECT la.id, 'error_correction', v.wrong, v.fixed, v.sort_order
 FROM student_lesson_activities la
 JOIN student_lessons sl ON sl.id = la.student_lesson_id
 CROSS JOIN (VALUES
-  ('I usually playing games.', 'I usually play games.', 1),
+  ('I always post videos.', 'I never post videos.', 1),
   ('I use always YouTube.', 'I always use YouTube.', 2)
 ) AS v(wrong, fixed, sort_order)
 WHERE sl.slug = 'my-online-life' AND la.activity_order = 12;

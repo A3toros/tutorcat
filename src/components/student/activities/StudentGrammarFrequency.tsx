@@ -5,7 +5,8 @@ import { Button, Card } from '@/components/ui'
 import type { StudentActivityProps } from '../activityProps'
 import type { StudentGrammarItem } from '@/types/student'
 
-const DEFAULT_CHOICES = ['always', 'sometimes', 'never']
+/** One word that fits the blank; other buttons are nonsense (not real frequency alternatives). */
+const DEFAULT_CHOICES = ['always', 'asleaways', 'alwasy']
 
 function parseOptions(raw: unknown): { choices: string[]; correct: string } {
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
@@ -61,6 +62,15 @@ export default function StudentGrammarFrequency({ activity, onComplete }: Studen
           correct_sentence: 'always',
           options: { choices: DEFAULT_CHOICES, correct: 'always' },
           sort_order: 1,
+        } as StudentGrammarItem,
+        {
+          id: 'default-youtube',
+          activity_id: '',
+          item_kind: 'frequency_select',
+          original_sentence: 'I _____ use YouTube.',
+          correct_sentence: 'always',
+          options: { choices: DEFAULT_CHOICES, correct: 'always' },
+          sort_order: 2,
         } as StudentGrammarItem,
       ]
 
