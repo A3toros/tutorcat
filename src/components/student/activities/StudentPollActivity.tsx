@@ -9,11 +9,25 @@ export default function StudentPollActivity({ activity, onComplete }: StudentAct
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
 
+  const isGraded = polls.some(
+    (p: any) => typeof p?.correct_option_id === 'string' && p.correct_option_id
+  )
   const allAnswered = polls.every((p) => answers[p.id])
+  const allCorrect = !isGraded
+    ? true
+    : polls.every((p: any) => {
+        const picked = answers[p.id]
+        const correct = String(p?.correct_option_id || '')
+        return Boolean(picked && correct && picked === correct)
+      })
 
   const handleSubmit = () => {
     if (!allAnswered) {
       setError('Please answer all questions.')
+      return
+    }
+    if (!allCorrect) {
+      setError('Some answers are not correct. Try again.')
       return
     }
     onComplete({
@@ -39,10 +53,17 @@ export default function StudentPollActivity({ activity, onComplete }: StudentAct
                 <button
                   key={opt.id}
                   type="button"
-                  onClick={() => setAnswers((prev) => ({ ...prev, [poll.id]: opt.id }))}
+                  onClick={() => {
+                    setAnswers((prev) => ({ ...prev, [poll.id]: opt.id }))
+                    setError(null)
+                  }}
                   className={`rounded-lg border px-4 py-3 text-left transition ${
                     answers[poll.id] === opt.id
-                      ? 'border-purple-500 bg-purple-50 text-purple-900'
+                      ? isGraded &&
+                        (poll as any).correct_option_id &&
+                        answers[poll.id] !== (poll as any).correct_option_id
+                        ? 'border-red-500 bg-red-50 text-red-900'
+                        : 'border-purple-500 bg-purple-50 text-purple-900'
                       : 'border-slate-200 hover:border-purple-300'
                   }`}
                 >
@@ -54,8 +75,8 @@ export default function StudentPollActivity({ activity, onComplete }: StudentAct
         ))}
       </div>
       {error && <p className="text-red-600 text-sm mt-4">{error}</p>}
-      <Button className="mt-6" onClick={handleSubmit} disabled={!allAnswered}>
-        Continue
+      <Button className="mt-6" onClick={handleSubmit} disabled={!allAnswered || (isGraded && !allCorrect)}>
+        {isGraded ? 'Check' : 'Continue'}
       </Button>
     </Card>
   )

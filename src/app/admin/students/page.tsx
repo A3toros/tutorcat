@@ -11,11 +11,21 @@ type StudentLessonScore = {
   lesson_id: string
   lesson_number: number
   topic: string
+  lesson_active?: boolean
   score_percentage: number
   completed?: boolean
   activities_done: number
   activities_total: number
   completed_at?: string | null
+}
+
+type StudentTrackLesson = {
+  id: string
+  lesson_number: number
+  topic: string
+  slug: string | null
+  active: boolean
+  activity_count: number
 }
 
 type AdminStudent = {
@@ -45,6 +55,9 @@ export default function AdminStudentsPage() {
   const { showNotification } = useNotification()
 
   const [students, setStudents] = useState<AdminStudent[]>([])
+  const [trackLessons, setTrackLessons] = useState<StudentTrackLesson[]>([])
+  const [loadingLessons, setLoadingLessons] = useState(true)
+  const [togglingLessonId, setTogglingLessonId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [expandedLessons, setExpandedLessons] = useState<Set<string>>(new Set())
@@ -52,6 +65,21 @@ export default function AdminStudentsPage() {
   const [transcriptsByStudent, setTranscriptsByStudent] = useState<Record<string, TranscriptItem[]>>({})
   const [audioUrlByJob, setAudioUrlByJob] = useState<Record<string, string>>({})
   const [loadingAudioJob, setLoadingAudioJob] = useState<string | null>(null)
+
+  const loadTrackLessons = useCallback(async () => {
+    try {
+      setLoadingLessons(true)
+      const res = await adminApiRequest('/.netlify/functions/admin-student-lessons', { method: 'GET' })
+      const data = await res.json()
+      if (!data?.success) throw new Error(data?.error || 'Failed to load lessons')
+      setTrackLessons(Array.isArray(data.lessons) ? data.lessons : [])
+    } catch (e) {
+      showNotification((e as Error).message || 'Failed to load student lessons', 'error')
+      setTrackLessons([])
+    } finally {
+      setLoadingLessons(false)
+    }
+  }, [showNotification])
 
   const load = useCallback(async () => {
     try {
@@ -70,7 +98,33 @@ export default function AdminStudentsPage() {
 
   useEffect(() => {
     load()
-  }, [load])
+    loadTrackLessons()
+  }, [load, loadTrackLessons])
+
+  const toggleLessonActive = async (lesson: StudentTrackLesson) => {
+    const nextActive = !lesson.active
+    setTogglingLessonId(lesson.id)
+    try {
+      const res = await adminApiRequest('/.netlify/functions/admin-student-lessons', {
+        method: 'PATCH',
+        body: JSON.stringify({ lessonId: lesson.id, active: nextActive }),
+      })
+      const data = await res.json()
+      if (!data?.success) throw new Error(data?.error || 'Failed to update lesson')
+      const updated = data.lesson as StudentTrackLesson
+      setTrackLessons((prev) =>
+        prev.map((l) => (l.id === lesson.id ? { ...l, ...updated, activity_count: l.activity_count } : l))
+      )
+      showNotification(
+        nextActive ? `Lesson ${lesson.lesson_number} is now visible to students.` : `Lesson ${lesson.lesson_number} hidden from students.`,
+        'success'
+      )
+    } catch (e) {
+      showNotification((e as Error).message || 'Failed to update lesson', 'error')
+    } finally {
+      setTogglingLessonId(null)
+    }
+  }
 
   const class115 = useMemo(() => students.filter((s) => s.class === '1/15').sort(bySchoolId), [students])
   const class116 = useMemo(() => students.filter((s) => s.class === '1/16').sort(bySchoolId), [students])
@@ -255,6 +309,9 @@ export default function AdminStudentsPage() {
                                           </span>
                                           <div className="text-sm text-slate-800 truncate">
                                             <span className="font-semibold">L{l.lesson_number}</span> {l.topic}
+                                            {l.lesson_active === false && (
+                                              <span className="ml-2 text-xs font-medium text-amber-700">(hidden)</span>
+                                            )}
                                           </div>
                                         </div>
                                         <div className="flex items-center gap-3 shrink-0">
@@ -359,7 +416,7 @@ export default function AdminStudentsPage() {
             <Button variant="secondary" size="sm" onClick={() => router.push('/admin/dashboard')}>
               ← Back to Dashboard
             </Button>
-            <Button variant="ghost" size="sm" onClick={load} disabled={loading}>
+            <Button variant="ghost" size="sm" onClick={() => { load(); loadTrackLessons() }} disabled={loading}>
               Refresh
             </Button>
           </div>
@@ -369,6 +426,72 @@ export default function AdminStudentsPage() {
             <p className="text-sm text-slate-600 mt-1">
               Nickname + student ID. Expand a student to see lesson activity progress and speech recordings.
             </p>
+          </Card>
+
+          <Card className="p-5">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-800">Student track lessons</h2>
+                <p className="text-sm text-slate-600 mt-0.5">
+                  Only <strong>active</strong> lessons appear on the student dashboard. New lessons start inactive.
+                </p>
+              </div>
+            </div>
+            {loadingLessons ? (
+              <p className="text-sm text-slate-500">Loading lessons…</p>
+            ) : trackLessons.length === 0 ? (
+              <p className="text-sm text-slate-500">No student lessons in the database yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {trackLessons.map((lesson) => (
+                  <div
+                    key={lesson.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-slate-800">
+                        L{lesson.lesson_number} · {lesson.topic}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {lesson.slug || 'no slug'} · {lesson.activity_count} activities
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span
+                        className={`text-xs font-semibold uppercase tracking-wide ${
+                          lesson.active ? 'text-green-700' : 'text-slate-400'
+                        }`}
+                      >
+                        {lesson.active ? 'Active' : 'Inactive'}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() =>
+                          router.push(
+                            `/admin/students/test-lesson?lessonId=${encodeURIComponent(lesson.id)}`
+                          )
+                        }
+                      >
+                        Test
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={lesson.active ? 'secondary' : 'primary'}
+                        disabled={togglingLessonId === lesson.id}
+                        onClick={() => toggleLessonActive(lesson)}
+                      >
+                        {togglingLessonId === lesson.id
+                          ? 'Saving…'
+                          : lesson.active
+                            ? 'Deactivate'
+                            : 'Activate'}
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </Card>
 
           {loading ? (

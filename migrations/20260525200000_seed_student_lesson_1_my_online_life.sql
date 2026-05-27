@@ -73,7 +73,7 @@ SELECT sl.id, v.activity_type, v.activity_order, v.title, v.description, v.conte
 FROM student_lessons sl
 CROSS JOIN (VALUES
   (1, 'student_warmup_poll', 'Warmup: Hours online', 'How many hours are you online each day?', '{}'),
-  (2, 'student_vocabulary_intro', 'Learn: Online vocabulary', 'Study these words before the games.', '{"group_by_category": true, "show_thai": false, "study_seconds": 60}'),
+  (2, 'student_vocabulary_intro', 'Learn: Online vocabulary', 'Study these words before the games.', '{"group_by_category": true, "show_thai": false, "tap_thai_translation": true, "study_seconds": 60}'),
   (3, 'student_vocab_picture_match', 'Match: Picture → word', 'Tap a picture, then tap the matching word (or tap a word, then tap the picture).', '{}'),
   (4, 'student_vocab_missing_letters', 'Spell: Missing letters', 'Type the full word or phrase.', '{"sentences": [{"template": "pl__ g__es", "answer": "play games"}, {"template": "wa__h vid__s", "answer": "watch videos"}, {"template": "mes__ge", "answer": "message"}, {"template": "scr__ll", "answer": "scroll"}]}'),
   (5, 'student_vocab_categorize', 'Sort: Word categories', 'Tap a word, then tap its category. Or drag a word and drop it on a category box.', '{"buckets": ["Apps/Devices", "Activities", "Opinions"]}'),
@@ -103,36 +103,36 @@ JOIN student_lessons sl ON sl.id = la.student_lesson_id
 WHERE sl.slug = 'my-online-life' AND la.activity_order = 1;
 
 -- Vocabulary intro (activity 2)
-INSERT INTO student_vocabulary_items (activity_id, english_word, category, image_url, sort_order)
-SELECT la.id, v.word, v.category, v.image_url, v.sort_order
+INSERT INTO student_vocabulary_items (activity_id, english_word, thai_translation, category, image_url, sort_order)
+SELECT la.id, v.word, v.thai, v.category, v.image_url, v.sort_order
 FROM student_lesson_activities la
 JOIN student_lessons sl ON sl.id = la.student_lesson_id
 CROSS JOIN (VALUES
-  ('app', 'Apps and technology', 'https://commons.wikimedia.org/wiki/Special:FilePath/OOjs_UI_icon_advanced.svg', 1),
-  ('website', 'Apps and technology', 'https://commons.wikimedia.org/wiki/Special:FilePath/Globe_icon.svg', 2),
-  ('phone', 'Apps and technology', 'https://upload.wikimedia.org/wikipedia/commons/4/4a/Twemoji12_1f4f1.svg', 3),
-  ('tablet', 'Apps and technology', 'https://upload.wikimedia.org/wikipedia/commons/8/89/Twemoji12_1f4fb.svg', 4),
-  ('computer', 'Apps and technology', 'https://commons.wikimedia.org/wiki/Special:FilePath/Emoji_u1f4bb.svg', 5),
-  ('internet', 'Apps and technology', 'https://commons.wikimedia.org/wiki/Special:FilePath/Wifi.svg', 6),
-  ('chat', 'Online activities', 'https://commons.wikimedia.org/wiki/Special:FilePath/OOjs_UI_icon_speechBubble-ltr-progressive.svg', 7),
-  ('message', 'Online activities', 'https://commons.wikimedia.org/wiki/Special:FilePath/OOjs_UI_icon_message-progressive.svg', 8),
-  ('call', 'Online activities', 'https://commons.wikimedia.org/wiki/Special:FilePath/Telephone%20icon%20blue%20gradient.svg', 9),
-  ('watch videos', 'Online activities', 'https://commons.wikimedia.org/wiki/Special:FilePath/YouTube%20full-color%20icon%20(2017).svg', 10),
-  ('play games', 'Online activities', 'https://upload.wikimedia.org/wikipedia/commons/6/65/Twemoji12_1f3ae.svg', 11),
-  ('listen to music', 'Online activities', 'https://upload.wikimedia.org/wikipedia/commons/7/7f/Twemoji12_1f3a7.svg', 12),
-  ('stream', 'Online activities', 'https://commons.wikimedia.org/wiki/Special:FilePath/Youtube%20icon.svg', 13),
-  ('post', 'Online activities', 'https://commons.wikimedia.org/wiki/Special:FilePath/OOjs_UI_icon_share-progressive.svg', 14),
-  ('search', 'Online activities', 'https://commons.wikimedia.org/wiki/Special:FilePath/OOjs_UI_icon_search-ltr-progressive.svg', 15),
-  ('scroll', 'Online activities', 'https://upload.wikimedia.org/wikipedia/commons/9/98/Twemoji12_1f4f2.svg', 16),
-  ('download', 'Online activities', 'https://commons.wikimedia.org/wiki/Special:FilePath/Icon%20Download%20Black.svg', 17),
-  ('upload', 'Online activities', 'https://upload.wikimedia.org/wikipedia/commons/e/e7/Twemoji12_1f4e4.svg', 18),
-  ('fun', 'Opinion words', 'https://commons.wikimedia.org/wiki/Special:FilePath/Smiley.svg', 19),
-  ('boring', 'Opinion words', 'https://upload.wikimedia.org/wikipedia/commons/4/40/Twemoji12_1f634.svg', 20),
-  ('interesting', 'Opinion words', 'https://commons.wikimedia.org/wiki/Special:FilePath/Light%20bulb%20icon%20red.svg', 21),
-  ('useful', 'Opinion words', 'https://commons.wikimedia.org/wiki/Special:FilePath/OOjs%20UI%20icon%20check-constructive.svg', 22),
-  ('funny', 'Opinion words', 'https://upload.wikimedia.org/wikipedia/commons/c/c8/Twemoji12_1f606.svg', 23),
-  ('exciting', 'Opinion words', 'https://commons.wikimedia.org/wiki/Special:FilePath/OOjs_UI_icon_star.svg', 24)
-) AS v(word, category, image_url, sort_order)
+  ('app', 'แอป', 'Apps and technology', 'https://commons.wikimedia.org/wiki/Special:FilePath/OOjs_UI_icon_advanced.svg', 1),
+  ('website', 'เว็บไซต์', 'Apps and technology', 'https://commons.wikimedia.org/wiki/Special:FilePath/Globe_icon.svg', 2),
+  ('phone', 'โทรศัพท์', 'Apps and technology', 'https://upload.wikimedia.org/wikipedia/commons/4/4a/Twemoji12_1f4f1.svg', 3),
+  ('tablet', 'แท็บเล็ต', 'Apps and technology', 'https://upload.wikimedia.org/wikipedia/commons/8/89/Twemoji12_1f4fb.svg', 4),
+  ('computer', 'คอมพิวเตอร์', 'Apps and technology', 'https://commons.wikimedia.org/wiki/Special:FilePath/Emoji_u1f4bb.svg', 5),
+  ('internet', 'อินเทอร์เน็ต', 'Apps and technology', 'https://commons.wikimedia.org/wiki/Special:FilePath/Wifi.svg', 6),
+  ('chat', 'แชต', 'Online activities', 'https://commons.wikimedia.org/wiki/Special:FilePath/OOjs_UI_icon_speechBubble-ltr-progressive.svg', 7),
+  ('message', 'ข้อความ', 'Online activities', 'https://commons.wikimedia.org/wiki/Special:FilePath/OOjs_UI_icon_message-progressive.svg', 8),
+  ('call', 'โทร', 'Online activities', 'https://commons.wikimedia.org/wiki/Special:FilePath/Telephone%20icon%20blue%20gradient.svg', 9),
+  ('watch videos', 'ดูวิดีโอ', 'Online activities', 'https://commons.wikimedia.org/wiki/Special:FilePath/YouTube%20full-color%20icon%20(2017).svg', 10),
+  ('play games', 'เล่นเกม', 'Online activities', 'https://upload.wikimedia.org/wikipedia/commons/6/65/Twemoji12_1f3ae.svg', 11),
+  ('listen to music', 'ฟังเพลง', 'Online activities', 'https://upload.wikimedia.org/wikipedia/commons/7/7f/Twemoji12_1f3a7.svg', 12),
+  ('stream', 'สตรีม', 'Online activities', 'https://commons.wikimedia.org/wiki/Special:FilePath/Youtube%20icon.svg', 13),
+  ('post', 'โพสต์', 'Online activities', 'https://commons.wikimedia.org/wiki/Special:FilePath/OOjs_UI_icon_share-progressive.svg', 14),
+  ('search', 'ค้นหา', 'Online activities', 'https://commons.wikimedia.org/wiki/Special:FilePath/OOjs_UI_icon_search-ltr-progressive.svg', 15),
+  ('scroll', 'เลื่อนหน้าจอ', 'Online activities', 'https://upload.wikimedia.org/wikipedia/commons/9/98/Twemoji12_1f4f2.svg', 16),
+  ('download', 'ดาวน์โหลด', 'Online activities', 'https://commons.wikimedia.org/wiki/Special:FilePath/Icon%20Download%20Black.svg', 17),
+  ('upload', 'อัปโหลด', 'Online activities', 'https://upload.wikimedia.org/wikipedia/commons/e/e7/Twemoji12_1f4e4.svg', 18),
+  ('fun', 'สนุก', 'Opinion words', 'https://commons.wikimedia.org/wiki/Special:FilePath/Smiley.svg', 19),
+  ('boring', 'น่าเบื่อ', 'Opinion words', 'https://upload.wikimedia.org/wikipedia/commons/4/40/Twemoji12_1f634.svg', 20),
+  ('interesting', 'น่าสนใจ', 'Opinion words', 'https://commons.wikimedia.org/wiki/Special:FilePath/Light%20bulb%20icon%20red.svg', 21),
+  ('useful', 'มีประโยชน์', 'Opinion words', 'https://commons.wikimedia.org/wiki/Special:FilePath/OOjs%20UI%20icon%20check-constructive.svg', 22),
+  ('funny', 'ตลก', 'Opinion words', 'https://upload.wikimedia.org/wikipedia/commons/c/c8/Twemoji12_1f606.svg', 23),
+  ('exciting', 'น่าตื่นเต้น', 'Opinion words', 'https://commons.wikimedia.org/wiki/Special:FilePath/OOjs_UI_icon_star.svg', 24)
+) AS v(word, thai, category, image_url, sort_order)
 WHERE sl.slug = 'my-online-life' AND la.activity_order = 2;
 
 -- Picture match (activity 3) — 4 pairs only

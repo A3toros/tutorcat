@@ -189,7 +189,7 @@ export default function StudentSpeakingCards({ activity, lesson, onComplete }: S
         promptText={currentPrompt}
         promptId={`${activity.id}-card-${index}`}
         lessonId={lesson.id}
-        minWords={20}
+        minWords={15}
         maxRecordingSeconds={75}
         cefrLevel="A1"
         onSuccess={(result) => setResults((prev) => ({ ...prev, [index]: result }))}

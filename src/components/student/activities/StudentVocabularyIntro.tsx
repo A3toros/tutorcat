@@ -49,6 +49,9 @@ export default function StudentVocabularyIntro({ activity, onComplete }: Student
   }, [activity.vocabulary_items])
 
   const groupByCategory = Boolean(activity.content?.group_by_category)
+  const allowTapThai = Boolean(activity.content?.tap_thai_translation)
+  const showThaiAlways = Boolean(activity.content?.show_thai)
+  const [revealedThai, setRevealedThai] = useState<Record<string, boolean>>({})
 
   const grouped = useMemo(() => {
     if (!groupByCategory) return { All: items }
@@ -77,9 +80,21 @@ export default function StudentVocabularyIntro({ activity, onComplete }: Student
           )}
           <div className="grid gap-2 sm:gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {words.map((word) => (
-              <div
+              <button
                 key={word.id}
-                className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3"
+                type="button"
+                onClick={() => {
+                  if (!allowTapThai || !word.thai_translation) return
+                  setRevealedThai((prev) => ({ ...prev, [word.id]: !prev[word.id] }))
+                }}
+                className={`text-left flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3 ${
+                  allowTapThai && word.thai_translation ? 'hover:bg-purple-50/40 active:bg-purple-50/60' : ''
+                }`}
+                aria-label={
+                  allowTapThai && word.thai_translation
+                    ? `Tap to show Thai for ${word.english_word}`
+                    : word.english_word
+                }
               >
                 <div className="relative h-10 w-10 sm:h-12 sm:w-12 shrink-0 overflow-hidden rounded-md bg-slate-100 flex items-center justify-center">
                   <StudentVocabImage
@@ -87,10 +102,20 @@ export default function StudentVocabularyIntro({ activity, onComplete }: Student
                     alt={word.english_word}
                   />
                 </div>
-                <span className="font-medium text-slate-800 text-sm sm:text-base">
-                  {word.english_word}
-                </span>
-              </div>
+                <div className="min-w-0">
+                  <div className="font-medium text-slate-800 text-sm sm:text-base">
+                    {word.english_word}
+                  </div>
+                  {(showThaiAlways || revealedThai[word.id]) && word.thai_translation && (
+                    <div className="text-xs sm:text-sm text-slate-500 mt-0.5">
+                      {word.thai_translation}
+                    </div>
+                  )}
+                  {allowTapThai && !showThaiAlways && word.thai_translation && !revealedThai[word.id] && (
+                    <div className="text-[11px] text-slate-400 mt-0.5">Tap for Thai</div>
+                  )}
+                </div>
+              </button>
             ))}
           </div>
         </div>

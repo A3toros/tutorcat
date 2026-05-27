@@ -112,6 +112,7 @@ export const handler: Handler = async (event) => {
               sl.id::text as lesson_id,
               sl.lesson_number,
               sl.topic,
+              sl.active as lesson_active,
               COALESCE(sup.completed, FALSE) as completed,
               COALESCE(sup.score, 0) as score,
               (
@@ -137,7 +138,6 @@ export const handler: Handler = async (event) => {
             LEFT JOIN student_user_progress sup
               ON sup.student_lesson_id = sl.id AND sup.user_id = u.id
             WHERE u.id = ANY(${studentIds}::uuid[])
-              AND sl.active = TRUE
             ORDER BY u.id, sl.lesson_number ASC
           `
 
@@ -165,6 +165,7 @@ export const handler: Handler = async (event) => {
         lesson_id: String(row.lesson_id),
         lesson_number: Number(row.lesson_number),
         topic: row.topic,
+        lesson_active: Boolean(row.lesson_active),
         completed: Boolean(row.completed),
         score_total: score,
         score_percentage: pct,

@@ -43,7 +43,7 @@ export default function StudentGrammarErrorFix({ activity, onComplete }: Student
       <h2 className="text-xl font-semibold text-slate-800 mb-2">
         {activity.title || 'Fix the mistake'}
       </h2>
-      <p className="text-red-700 line-through mb-4">{current.original_sentence}</p>
+      <p className="text-red-700 font-semibold mb-4">{current.original_sentence}</p>
       <Input
         className="max-w-lg"
         value={value}

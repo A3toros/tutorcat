@@ -52,6 +52,30 @@ const TWEMOJI12_DIRECT: Record<string, string> = {
     'https://upload.wikimedia.org/wikipedia/commons/4/40/Twemoji12_1f634.svg',
   'Twemoji12_1f606.svg':
     'https://upload.wikimedia.org/wikipedia/commons/c/c8/Twemoji12_1f606.svg',
+  'Twemoji12_1f4c8.svg':
+    'https://upload.wikimedia.org/wikipedia/commons/b/be/Twemoji12_1f4c8.svg',
+  'Twemoji12_1f3c6.svg':
+    'https://upload.wikimedia.org/wikipedia/commons/a/a1/Twemoji12_1f3c6.svg',
+  'Twemoji12_1f4f9.svg':
+    'https://upload.wikimedia.org/wikipedia/commons/5/52/Twemoji12_1f4f9.svg',
+  'Twemoji12_23-20e3.svg':
+    'https://upload.wikimedia.org/wikipedia/commons/e/e3/Twemoji12_23-20e3.svg',
+  'Twemoji12_1f465.svg':
+    'https://upload.wikimedia.org/wikipedia/commons/8/8c/Twemoji12_1f465.svg',
+  'Twemoji12_1f525.svg':
+    'https://upload.wikimedia.org/wikipedia/commons/9/98/Twemoji12_1f525.svg',
+  'Twemoji12_1f440.svg':
+    'https://upload.wikimedia.org/wikipedia/commons/b/b6/Twemoji12_1f440.svg',
+  'Twemoji12_1f464.svg':
+    'https://upload.wikimedia.org/wikipedia/commons/b/b3/Twemoji12_1f464.svg',
+  'Twemoji12_2764.svg':
+    'https://upload.wikimedia.org/wikipedia/commons/8/82/Twemoji12_2764.svg',
+  'Twemoji_270f.svg':
+    'https://upload.wikimedia.org/wikipedia/commons/f/f4/Twemoji_270f.svg',
+  'Twemoji12_1f914.svg':
+    'https://upload.wikimedia.org/wikipedia/commons/d/d1/Twemoji12_1f914.svg',
+  'Twemoji12_1f60e.svg':
+    'https://upload.wikimedia.org/wikipedia/commons/8/82/Twemoji12_1f60e.svg',
 }
 
 /** Verified upload.wikimedia.org URLs (from Commons Special:FilePath redirects). */
@@ -74,6 +98,12 @@ const COMMONS_FILE_DIRECT: Record<string, string> = {
   'OOjs_UI_icon_share-progressive.svg':
     'https://upload.wikimedia.org/wikipedia/commons/0/09/OOjs_UI_icon_share-progressive.svg',
   'Smiley.svg': 'https://upload.wikimedia.org/wikipedia/commons/8/85/Smiley.svg',
+  'Light_bulb_icon_red.svg':
+    'https://upload.wikimedia.org/wikipedia/commons/8/84/Light_bulb_icon_red.svg',
+  'OOjs_UI_icon_star.svg':
+    'https://upload.wikimedia.org/wikipedia/commons/9/99/OOjs_UI_icon_star.svg',
+  'YouTube_full-color_icon_(2017).svg':
+    'https://upload.wikimedia.org/wikipedia/commons/0/09/YouTube_full-color_icon_%282017%29.svg',
 }
 
 function fileToImageUrl(filename: string): string {
@@ -112,6 +142,37 @@ export const LESSON1_IMAGE_URL_BY_WORD: Record<string, string> = {
   exciting: fileToImageUrl('OOjs_UI_icon_star.svg'),
 }
 
+/** Lesson 2 — verified direct URLs (Commons API, May 2026). */
+export const LESSON2_IMAGE_URL_BY_WORD: Record<string, string> = {
+  meme: TWEMOJI12_DIRECT['Twemoji12_1f606.svg'],
+  trend: TWEMOJI12_DIRECT['Twemoji12_1f4c8.svg'],
+  challenge: TWEMOJI12_DIRECT['Twemoji12_1f3c6.svg'],
+  video: COMMONS_FILE_DIRECT['YouTube_full-color_icon_(2017).svg'],
+  creator: TWEMOJI12_DIRECT['Twemoji12_1f4f9.svg'],
+  stream: COMMONS_FILE_DIRECT['Youtube icon.svg'],
+  hashtag: TWEMOJI12_DIRECT['Twemoji12_23-20e3.svg'],
+  comment: COMMONS_FILE_DIRECT['OOjs_UI_icon_speechBubble-ltr-progressive.svg'],
+  follower: TWEMOJI12_DIRECT['Twemoji12_1f465.svg'],
+  viral: TWEMOJI12_DIRECT['Twemoji12_1f525.svg'],
+  watch: TWEMOJI12_DIRECT['Twemoji12_1f440.svg'],
+  share: COMMONS_FILE_DIRECT['OOjs_UI_icon_share-progressive.svg'],
+  follow: TWEMOJI12_DIRECT['Twemoji12_1f464.svg'],
+  post: COMMONS_FILE_DIRECT['OOjs_UI_icon_share-progressive.svg'],
+  react: TWEMOJI12_DIRECT['Twemoji12_2764.svg'],
+  create: TWEMOJI12_DIRECT['Twemoji_270f.svg'],
+  funny: TWEMOJI12_DIRECT['Twemoji12_1f606.svg'],
+  weird: TWEMOJI12_DIRECT['Twemoji12_1f914.svg'],
+  cool: TWEMOJI12_DIRECT['Twemoji12_1f60e.svg'],
+  boring: TWEMOJI12_DIRECT['Twemoji12_1f634.svg'],
+  interesting: COMMONS_FILE_DIRECT['Light_bulb_icon_red.svg'],
+  popular: COMMONS_FILE_DIRECT['OOjs_UI_icon_star.svg'],
+}
+
+export function lesson2VocabImageUrl(englishWord: string): string {
+  const key = englishWord.trim().toLowerCase()
+  return LESSON2_IMAGE_URL_BY_WORD[key] || ''
+}
+
 export function lesson1VocabImageUrl(englishWord: string): string {
   const key = englishWord.trim().toLowerCase()
   const direct = LESSON1_IMAGE_URL_BY_WORD[key]
@@ -125,7 +186,7 @@ export function resolveStudentVocabImageUrl(
   englishWord: string,
   dbUrl?: string | null,
 ): string {
-  const mapped = lesson1VocabImageUrl(englishWord)
+  const mapped = lesson2VocabImageUrl(englishWord) || lesson1VocabImageUrl(englishWord)
   if (mapped) return mapped
   if (!dbUrl) return ''
   if (dbUrl.includes('upload.wikimedia.org/')) return dbUrl

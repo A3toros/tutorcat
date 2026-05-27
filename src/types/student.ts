@@ -59,6 +59,7 @@ export interface StudentPollItem {
   question: string
   options: Array<{ id: string; label: string }>
   allow_multiple: boolean
+  correct_option_id?: string | null
   sort_order: number
 }
 

@@ -54,6 +54,8 @@ export default function StudentSpeakingRecorder({
   onSuccess,
   onRerecord,
 }: StudentSpeakingRecorderProps) {
+  const isAdminLessonTestMode =
+    typeof window !== 'undefined' && (window as any).__ADMIN_LESSON_TEST_MODE === true
   const { user } = useUser()
   const [hasMicPermission, setHasMicPermission] = useState(false)
   const [step, setStep] = useState<Step>('idle')
@@ -75,6 +77,17 @@ export default function StudentSpeakingRecorder({
 
   const effectiveMinWords = minWords ?? getMinWordsForLevel(cefrLevel)
   const maxSeconds = Math.min(maxRecordingSeconds, SPEECH_MAX_DURATION_SECONDS)
+
+  if (isAdminLessonTestMode) {
+    return (
+      <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-center">
+        <p className="text-sm font-semibold text-slate-800 mb-1">Speaking test</p>
+        <p className="text-sm text-slate-600">
+          Speaking is disabled in admin test mode so we don&apos;t create speech records.
+        </p>
+      </div>
+    )
+  }
 
   const cleanupStream = useCallback(() => {
     if (recordingIntervalRef.current) {

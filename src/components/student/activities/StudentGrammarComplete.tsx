@@ -20,6 +20,18 @@ export default function StudentGrammarComplete({ activity, onComplete }: Student
     : DEFAULT_REASONS
   const template =
     (content.template as string) || 'My favorite app is {app} because {reason}.'
+  const slot1Label =
+    (content.slot1_label as string) ||
+    (template.includes('{app}') && template.includes('think') ? 'Choose content' : 'Choose an app')
+  const slot2Label =
+    (content.slot2_label as string) ||
+    (template.includes('{reason}') && template.includes('think') ? 'Choose an adjective' : 'Choose a reason')
+  const promptLine =
+    (content.prompt_line as string) ||
+    template
+      .replace('{app}', '______')
+      .replace('{reason}', '______')
+      .replace(/\.$/, '')
 
   const [app, setApp] = useState('')
   const [reason, setReason] = useState('')
@@ -40,15 +52,12 @@ export default function StudentGrammarComplete({ activity, onComplete }: Student
         <p className="text-slate-600 text-sm mb-4">{activity.description}</p>
       )}
 
-      <p className="text-lg text-slate-800 mb-4 leading-relaxed">
-        My favorite app is <span className="text-purple-600 font-medium">______</span> because{' '}
-        <span className="text-purple-600 font-medium">______</span>.
-      </p>
+      <p className="text-lg text-slate-800 mb-4 leading-relaxed">{promptLine}</p>
 
       <div className="space-y-4 max-w-md">
         <div>
           <label htmlFor="grammar-complete-app" className="block text-sm font-medium text-slate-700 mb-1">
-            Choose an app
+            {slot1Label}
           </label>
           <Select
             id="grammar-complete-app"
@@ -70,7 +79,7 @@ export default function StudentGrammarComplete({ activity, onComplete }: Student
             htmlFor="grammar-complete-reason"
             className="block text-sm font-medium text-slate-700 mb-1"
           >
-            Choose a reason
+            {slot2Label}
           </label>
           <Select
             id="grammar-complete-reason"
