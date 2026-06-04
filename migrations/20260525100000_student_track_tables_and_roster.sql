@@ -4,7 +4,7 @@
 -- Login: username = Student ID (e.g. 52439), password = same ID (e.g. 52439)
 -- Email is 52439@mws.ac.th (not used for login).
 -- Regenerate hashes: node scripts/gen-student-roster-values.js
--- Fix existing rows: migrations/20260525300000_fix_student_usernames_for_login.sql
+-- Fix existing rows: this migration sets username + password_hash for roster users.
 
 BEGIN;
 
@@ -45,7 +45,8 @@ CREATE TABLE IF NOT EXISTS student_lessons (
   communication_goal TEXT,
   grammar_focus JSONB NOT NULL DEFAULT '{}'::jsonb,
   vocabulary_list JSONB NOT NULL DEFAULT '[]'::jsonb,
-  active BOOLEAN NOT NULL DEFAULT TRUE,
+  -- New lessons start hidden; admin enables when ready.
+  active BOOLEAN NOT NULL DEFAULT FALSE,
   version INTEGER NOT NULL DEFAULT 1,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -136,6 +137,8 @@ CREATE TABLE IF NOT EXISTS student_poll_items (
   question TEXT NOT NULL,
   options JSONB NOT NULL DEFAULT '[]'::jsonb,
   allow_multiple BOOLEAN NOT NULL DEFAULT FALSE,
+  -- If set, the student must choose this option id to proceed.
+  correct_option_id TEXT,
   sort_order INTEGER NOT NULL DEFAULT 0
 );
 
@@ -185,6 +188,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS student_lesson_activity_results_user_lesson_ac
 
 CREATE INDEX IF NOT EXISTS idx_student_lesson_activity_results_user_lesson
   ON student_lesson_activity_results (user_id, student_lesson_id, activity_order);
+
+-- ---------------------------------------------------------------------------
+-- speech_jobs compatibility (student prompt_id / lesson_id can exceed VARCHAR(20))
+-- ---------------------------------------------------------------------------
+ALTER TABLE IF EXISTS speech_jobs
+  ALTER COLUMN prompt_id TYPE TEXT;
+
+ALTER TABLE IF EXISTS speech_jobs
+  ALTER COLUMN lesson_id TYPE TEXT;
 
 -- ---------------------------------------------------------------------------
 -- Pre-register MWS students (role = student)
@@ -248,6 +260,50 @@ ON CONFLICT (school_student_id) DO UPDATE SET
   role = 'student',
   email_verified = TRUE,
   password_hash = EXCLUDED.password_hash;
+
+-- ---------------------------------------------------------------------------
+-- Test student (QA)
+-- Login: username 111111, password 111111
+-- ---------------------------------------------------------------------------
+INSERT INTO users (
+  email,
+  username,
+  first_name,
+  last_name,
+  password_hash,
+  level,
+  role,
+  email_verified,
+  school_student_id,
+  honorific,
+  nickname,
+  current_student_lesson
+)
+VALUES (
+  '111111@mws.ac.th',
+  '111111',
+  'Test',
+  'Student',
+  '$2a$12$KXWbEtyqDGhlkRw1LMBol.A./6ooWys2ASrWvwfan7uLLvGZrwk1G',
+  NULL,
+  'student',
+  TRUE,
+  '111111',
+  'Mr',
+  'Test',
+  1
+)
+ON CONFLICT (school_student_id) DO UPDATE SET
+  email = EXCLUDED.email,
+  username = EXCLUDED.username,
+  first_name = EXCLUDED.first_name,
+  last_name = EXCLUDED.last_name,
+  honorific = EXCLUDED.honorific,
+  nickname = EXCLUDED.nickname,
+  role = 'student',
+  email_verified = TRUE,
+  password_hash = EXCLUDED.password_hash,
+  current_student_lesson = COALESCE(users.current_student_lesson, 1);
 
 -- If school_student_id column was empty on first run, also handle email/username conflicts:
 -- (Run manually only if inserts fail on unique email/username)
