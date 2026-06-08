@@ -1,5 +1,7 @@
 /** Speech-job + analysis-result flow — same backend as SpeakingWithFeedback. */
 
+import type { BrowserRhythmFeatures } from '@/lib/browserRhythm'
+
 export const SPEECH_MAX_DURATION_SECONDS = 120
 export const SPEECH_MAX_AUDIO_BYTES = 20 * 1024 * 1024
 export const DELIVERY_SPOKEN_PCT_MIN = 70
@@ -114,6 +116,7 @@ export async function submitSpeechForFeedback(params: {
   userId?: string
   minWords?: number
   cefrLevel?: string
+  browserRhythm?: BrowserRhythmFeatures
   onPollStatus?: (status: 'processing' | 'analyzing') => void
 }): Promise<SpeechFeedbackPayload> {
   const {
@@ -125,6 +128,7 @@ export async function submitSpeechForFeedback(params: {
     userId,
     minWords,
     cefrLevel,
+    browserRhythm,
     onPollStatus,
   } = params
 
@@ -152,6 +156,7 @@ export async function submitSpeechForFeedback(params: {
       duration_seconds: Math.max(1, Math.round(recordingDurationSec)),
       user_id: userId || undefined,
       lesson_id: lessonId,
+      browser_rhythm: browserRhythm || undefined,
     }),
   })
 

@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Button, MascotThinking } from '@/components/ui'
 import { useUser } from '@/components/student/StudentProtectedRoute'
+import { createBrowserRhythmSampler } from '@/lib/browserRhythm'
 import {
   getMinWordsForLevel,
   getSupportedRecordingMimeType,
@@ -74,6 +75,7 @@ export default function StudentSpeakingRecorder({
   const recordingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const autoStopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const recordingStartRef = useRef<number>(0)
+  const rhythmSamplerRef = useRef(createBrowserRhythmSampler())
 
   const effectiveMinWords = minWords ?? getMinWordsForLevel(cefrLevel)
   const maxSeconds = Math.min(maxRecordingSeconds, SPEECH_MAX_DURATION_SECONDS)
@@ -98,6 +100,7 @@ export default function StudentSpeakingRecorder({
       clearTimeout(autoStopTimeoutRef.current)
       autoStopTimeoutRef.current = null
     }
+    rhythmSamplerRef.current.stop()
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop())
       streamRef.current = null
@@ -152,6 +155,8 @@ export default function StudentSpeakingRecorder({
       setErrorFlags({})
 
       try {
+        const recordingDurationMs = Math.max(1, Date.now() - recordingStartRef.current)
+        const browserRhythm = rhythmSamplerRef.current.getFeatures(recordingDurationMs)
         const result = await submitSpeechForFeedback({
           audioBlob,
           recordingDurationSec: durationSec,
@@ -161,6 +166,7 @@ export default function StudentSpeakingRecorder({
           userId: user?.id,
           minWords: effectiveMinWords,
           cefrLevel,
+          browserRhythm,
           onPollStatus: (status) =>
             setStep(status === 'analyzing' ? 'analyzing' : 'transcribing'),
         })
@@ -210,6 +216,7 @@ export default function StudentSpeakingRecorder({
       streamRef.current = stream
       chunksRef.current = []
       setHasMicPermission(true)
+      rhythmSamplerRef.current.start(stream)
 
       const mimeType = getSupportedRecordingMimeType()
       const mediaRecorder = new MediaRecorder(
@@ -224,6 +231,7 @@ export default function StudentSpeakingRecorder({
       }
 
       mediaRecorder.onstop = async () => {
+        rhythmSamplerRef.current.stop()
         const blob = new Blob(chunksRef.current, { type: mimeType })
         const durationSec = Math.max(1, Math.round((Date.now() - recordingStartRef.current) / 1000))
         await processRecording(blob, durationSec)

@@ -11,8 +11,15 @@ import {
   CONSECUTIVE_REPETITION_ERROR_MSG,
   detectConsecutiveRepetition,
 } from './speech-consecutive-repetition';
+import {
+  computeRoboticVoiceScore,
+  roboticVoiceToDbColumns,
+  type RoboticVoiceFeaturesInput,
+  type RoboticVoiceResult,
+} from './robotic-voice';
 
 const SUPABASE_BUCKET = 'tutorcat';
+const FEATURES_PATH_SUFFIX = '.features.JSON';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const openai = OPENAI_API_KEY ? new OpenAI({ apiKey: OPENAI_API_KEY }) : null;
@@ -199,6 +206,34 @@ Please analyze their speaking performance. Focus on how well they spoke about th
   return { success: true, feedback };
 }
 
+function dbCols(rv: RoboticVoiceResult | null) {
+  return roboticVoiceToDbColumns(rv)
+}
+
+async function downloadJobFeatures(jobId: string): Promise<RoboticVoiceFeaturesInput | null> {
+  const url = process.env.SUPABASE_URL?.trim();
+  const key = process.env.SUPABASE_SECRET_KEY?.trim();
+  if (!url || !key) return null;
+  try {
+    const supabase = createClient(url, key);
+    const path = `${jobId}${FEATURES_PATH_SUFFIX}`;
+    const { data, error } = await supabase.storage.from(SUPABASE_BUCKET).download(path);
+    if (error || !data) {
+      console.warn('run-speech-analysis-background: features JSON not found', { jobId, error: error?.message });
+      return null;
+    }
+    const text = await (data as Blob).text();
+    const parsed = JSON.parse(text) as RoboticVoiceFeaturesInput;
+    return {
+      whisper_verbose: parsed.whisper_verbose ?? null,
+      browser_rhythm: parsed.browser_rhythm ?? null,
+    };
+  } catch (e) {
+    console.warn('run-speech-analysis-background: failed to load features JSON', { jobId, e });
+    return null;
+  }
+}
+
 /** Upload result JSON to Supabase Storage (tutorcat bucket) as {jobId}.JSON, same base name as the audio file. */
 async function uploadResultToSupabase(
   jobId: string,
@@ -323,6 +358,42 @@ export default async (req: Request, _context?: unknown): Promise<void> => {
     return;
   }
 
+  const featuresInput = await downloadJobFeatures(jobId);
+  let roboticVoice: RoboticVoiceResult | null = null;
+  if (featuresInput) {
+    roboticVoice = computeRoboticVoiceScore(featuresInput);
+    console.log('run-speech-analysis-background: [robotic_voice]', {
+      jobId,
+      score: roboticVoice.score,
+      flagged: roboticVoice.flagged,
+      would_flag: roboticVoice.signals.would_flag,
+      mode: roboticVoice._mode,
+      rules_hit: roboticVoice.signals.rules_hit,
+    });
+  } else {
+    console.log('run-speech-analysis-background: [robotic_voice] skipped — no features JSON', { jobId });
+  }
+
+  if (roboticVoice?.flagged === true) {
+    const errorMsg = roboticVoice.message;
+    const resultPayload = { reason: 'robotic_voice', robotic_voice: roboticVoice };
+    const rv = dbCols(roboticVoice);
+    await sql`
+      UPDATE speech_jobs
+      SET status = 'failed',
+          error = ${errorMsg},
+          result_json = ${JSON.stringify(resultPayload)}::jsonb,
+          robotic_voice_score = ${rv.score},
+          robotic_voice_would_flag = ${rv.would_flag},
+          robotic_voice_flagged = ${rv.flagged},
+          robotic_voice_rules = ${rv.rules ? JSON.stringify(rv.rules) : null}::jsonb,
+          updated_at = NOW()
+      WHERE id = ${jobId}
+    `;
+    await uploadResultToSupabase(jobId, { status: 'failed', result_json: resultPayload, error: errorMsg });
+    return;
+  }
+
   try {
     const result = await runFeedbackAnalysis(
       job.transcript,
@@ -336,23 +407,46 @@ export default async (req: Request, _context?: unknown): Promise<void> => {
       if (!isWheelTopic && feedback.question_repetition === true) {
         const errorMsg =
           'It sounds like you repeated the question instead of answering it. Please re-record your answer using your own words.';
-        const resultPayload = { reason: 'question_repetition' };
+        const resultPayload = {
+          reason: 'question_repetition',
+          ...(roboticVoice ? { robotic_voice: roboticVoice } : {}),
+        };
+        const rv = dbCols(roboticVoice);
         await sql`
           UPDATE speech_jobs
           SET status = 'failed',
               error = ${errorMsg},
               result_json = ${JSON.stringify(resultPayload)}::jsonb,
+              robotic_voice_score = ${rv.score},
+              robotic_voice_would_flag = ${rv.would_flag},
+              robotic_voice_flagged = ${rv.flagged},
+              robotic_voice_rules = ${rv.rules ? JSON.stringify(rv.rules) : null}::jsonb,
               updated_at = NOW()
           WHERE id = ${jobId}
         `;
         await uploadResultToSupabase(jobId, { status: 'failed', result_json: resultPayload, error: errorMsg });
       } else {
+        if (roboticVoice) {
+          feedback.robotic_voice = roboticVoice;
+        }
+        const rv = dbCols(roboticVoice);
         await sql`
           UPDATE speech_jobs
-          SET status = 'completed', result_json = ${JSON.stringify(feedback)}::jsonb, error = NULL, updated_at = NOW()
+          SET status = 'completed',
+              result_json = ${JSON.stringify(feedback)}::jsonb,
+              error = NULL,
+              robotic_voice_score = ${rv.score},
+              robotic_voice_would_flag = ${rv.would_flag},
+              robotic_voice_flagged = ${rv.flagged},
+              robotic_voice_rules = ${rv.rules ? JSON.stringify(rv.rules) : null}::jsonb,
+              updated_at = NOW()
           WHERE id = ${jobId}
         `;
-        await uploadResultToSupabase(jobId, { status: 'completed', result_json: feedback, delivery: feedback?.delivery });
+        await uploadResultToSupabase(jobId, {
+          status: 'completed',
+          result_json: feedback,
+          delivery: feedback?.delivery,
+        });
       }
     } else {
       await sql`

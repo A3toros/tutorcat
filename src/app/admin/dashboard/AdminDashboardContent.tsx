@@ -935,6 +935,14 @@ export default function AdminDashboardContent() {
                 <Button
                   variant="secondary"
                   size="sm"
+                  onClick={() => router.push('/admin/robot-detect')}
+                  className="bg-orange-50 text-orange-800 border border-orange-200 hover:bg-orange-100"
+                >
+                  Robot Detect
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={() => router.push('/admin/students')}
                   className="bg-purple-50 text-purple-800 border border-purple-200 hover:bg-purple-100"
                 >
