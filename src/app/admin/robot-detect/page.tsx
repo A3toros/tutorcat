@@ -303,7 +303,6 @@ export default function AdminRobotDetectPage() {
                                 size="sm"
                                 disabled={loadingAudioJobId === item.job_id}
                                 onClick={() => handlePlay(item.job_id)}
-                                title="Play recording"
                               >
                                 {playingJobId === item.job_id ? (
                                   <Pause className="w-4 h-4" />
