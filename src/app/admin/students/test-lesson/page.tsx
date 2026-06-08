@@ -1,9 +1,9 @@
 'use client'
 
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { Suspense, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import AdminProtectedRoute from '@/components/auth/AdminProtectedRoute'
-import { Button, Card } from '@/components/ui'
+import { Button, Card, LoadingSpinnerModal } from '@/components/ui'
 import { adminApiRequest } from '@/utils/adminApi'
 import StudentActivityRenderer from '@/components/student/StudentActivityRenderer'
 import type { StudentLesson, StudentLessonActivity } from '@/types/student'
@@ -15,7 +15,7 @@ type LoadState =
   | { kind: 'error'; message: string }
   | { kind: 'ready'; lesson: StudentLesson; activities: StudentLessonActivity[] }
 
-export default function AdminTestStudentLessonPage() {
+function AdminTestStudentLessonPageInner() {
   const router = useRouter()
   const params = useSearchParams()
   const lessonId = params.get('lessonId') || ''
@@ -165,6 +165,14 @@ export default function AdminTestStudentLessonPage() {
       </main>
       </UserContext.Provider>
     </AdminProtectedRoute>
+  )
+}
+
+export default function AdminTestStudentLessonPage() {
+  return (
+    <Suspense fallback={<LoadingSpinnerModal isOpen message="Loading..." />}>
+      <AdminTestStudentLessonPageInner />
+    </Suspense>
   )
 }
 
