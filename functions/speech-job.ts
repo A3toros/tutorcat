@@ -28,6 +28,8 @@ interface SpeechJobBody {
     pitch_variance?: number;
     energy_variance?: number;
     voiced_ratio?: number;
+    energy_autocorr_lag1?: number;
+    energy_autocorr_lag3?: number;
     [key: string]: unknown;
   };
 }

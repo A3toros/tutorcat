@@ -107,7 +107,7 @@ export function getSupportedRecordingMimeType(): string {
   return supported
 }
 
-export async function submitSpeechForFeedback(params: {
+export interface SubmitSpeechJobParams {
   audioBlob: Blob
   recordingDurationSec: number
   prompt: string
@@ -118,7 +118,26 @@ export async function submitSpeechForFeedback(params: {
   cefrLevel?: string
   browserRhythm?: BrowserRhythmFeatures
   onPollStatus?: (status: 'processing' | 'analyzing') => void
-}): Promise<SpeechFeedbackPayload> {
+  /** Improvement reads scripted text — skip AI-integrity client block. */
+  skipIntegrityCheck?: boolean
+  skipDeliveryCheck?: boolean
+  /** When false, return after completed even if overall_score missing (transcript-only flows). */
+  requireOverallScore?: boolean
+}
+
+export async function submitSpeechForFeedback(
+  params: SubmitSpeechJobParams
+): Promise<SpeechFeedbackPayload> {
+  const result = await submitSpeechJobAndPoll(params)
+  return result.feedback
+}
+
+export async function submitSpeechJobAndPoll(params: SubmitSpeechJobParams): Promise<{
+  jobId: string
+  transcript: string
+  result: Record<string, unknown>
+  feedback: SpeechFeedbackPayload
+}> {
   const {
     audioBlob,
     recordingDurationSec,
@@ -130,6 +149,9 @@ export async function submitSpeechForFeedback(params: {
     cefrLevel,
     browserRhythm,
     onPollStatus,
+    skipIntegrityCheck = false,
+    skipDeliveryCheck = false,
+    requireOverallScore = true,
   } = params
 
   const effectiveMinWords = minWords ?? getMinWordsForLevel(cefrLevel)
@@ -253,9 +275,10 @@ export async function submitSpeechForFeedback(params: {
   }
 
   const flagged =
-    (result?.integrity as { flagged?: boolean } | undefined)?.flagged === true ||
-    result?.ai_flagged === true ||
-    result?.flagged === true
+    !skipIntegrityCheck &&
+    ((result?.integrity as { flagged?: boolean } | undefined)?.flagged === true ||
+      result?.ai_flagged === true ||
+      result?.flagged === true)
   if (flagged) {
     throw speechError(
       String(
@@ -273,13 +296,13 @@ export async function submitSpeechForFeedback(params: {
       : null
   const delivery = (result?.delivery ?? feedbackObj?.delivery) as { spoken_pct?: number } | undefined
   const spokenPct = typeof delivery?.spoken_pct === 'number' ? delivery.spoken_pct : 100
-  if (spokenPct < DELIVERY_SPOKEN_PCT_MIN) {
+  if (!skipDeliveryCheck && spokenPct < DELIVERY_SPOKEN_PCT_MIN) {
     throw speechError('Please speak in your own words instead of reading. Re-record your answer.', {
       isDeliveryReadError: true,
     })
   }
 
-  if (typeof result.overall_score !== 'number') {
+  if (requireOverallScore && typeof result.overall_score !== 'number') {
     throw speechError('Something went wrong. Please try again.', {})
   }
 
@@ -290,9 +313,9 @@ export async function submitSpeechForFeedback(params: {
         ? feedbackObj.summary
         : ''
 
-  return {
+  const feedback: SpeechFeedbackPayload = {
     transcript,
-    overall_score: result.overall_score,
+    overall_score: typeof result.overall_score === 'number' ? result.overall_score : 0,
     feedback: feedbackText,
     grammar_corrections: (result.grammar_corrections as SpeechFeedbackPayload['grammar_corrections']) || [],
     vocabulary_corrections:
@@ -300,4 +323,6 @@ export async function submitSpeechForFeedback(params: {
     is_off_topic: Boolean(result.is_off_topic),
     integrity: result.integrity,
   }
+
+  return { jobId, transcript, result, feedback }
 }

@@ -9,6 +9,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { useApi } from '../../../hooks/useApi';
 import { getAIFeedbackHelper } from '../../../utils/aiFeedbackHelper';
 import { lessonProgressStorage } from '../../../services/LessonProgressStorage';
+import { normalizedEnergyAutocorr } from '@/lib/browserRhythm';
 
 interface SpeakingPrompt {
   id: string;
@@ -226,13 +227,14 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
     const voicedRatio = speechFraction;
 
     return {
-      // Matches plan: what we need from browser
       speech_rate: approxSpeechRate,
       pause_variance: pauseVariance,
       pause_entropy: pauseEntropy,
       pitch_variance: pitchVariance,
       energy_variance: energyVariance,
       voiced_ratio: voicedRatio,
+      energy_autocorr_lag1: normalizedEnergyAutocorr(energies, 1),
+      energy_autocorr_lag3: normalizedEnergyAutocorr(energies, 3),
     };
   };
 

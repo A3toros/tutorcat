@@ -9,9 +9,34 @@ export interface BrowserRhythmFeatures {
   pitch_variance: number
   energy_variance: number
   voiced_ratio: number
+  /** Normalized autocorrelation of energy at lag 1 (0–1). High = metronically regular. */
+  energy_autocorr_lag1: number
+  energy_autocorr_lag3: number
 }
 
 type RhythmSample = { energy: number; silent: boolean; zeroCrossRate: number }
+
+export function normalizedEnergyAutocorr(values: number[], lag: number): number {
+  if (values.length <= lag || lag < 1) return 0
+  const n = values.length - lag
+  const sliceA = values.slice(0, n)
+  const sliceB = values.slice(lag, lag + n)
+  const meanA = sliceA.reduce((a, b) => a + b, 0) / n
+  const meanB = sliceB.reduce((a, b) => a + b, 0) / n
+  let num = 0
+  let denA = 0
+  let denB = 0
+  for (let i = 0; i < n; i++) {
+    const da = sliceA[i] - meanA
+    const db = sliceB[i] - meanB
+    num += da * db
+    denA += da * da
+    denB += db * db
+  }
+  const den = Math.sqrt(denA * denB)
+  if (den <= 0) return 0
+  return Math.max(0, Math.min(1, num / den))
+}
 
 export type BrowserRhythmSampler = {
   start: (stream: MediaStream) => void
@@ -106,18 +131,15 @@ export function createBrowserRhythmSampler(): BrowserRhythmSampler {
       }, 0) / n
 
     let silentSamples = 0
-    let silentRuns = 0
     let currentRun = 0
     for (const s of samples) {
       if (s.silent) {
         silentSamples += 1
         currentRun += 1
       } else if (currentRun > 0) {
-        silentRuns += 1
         currentRun = 0
       }
     }
-    if (currentRun > 0) silentRuns += 1
 
     const pauseRatio = silentSamples / samples.length
 
@@ -169,6 +191,8 @@ export function createBrowserRhythmSampler(): BrowserRhythmSampler {
       pitch_variance: pitchVariance,
       energy_variance: energyVariance,
       voiced_ratio: speechFraction,
+      energy_autocorr_lag1: normalizedEnergyAutocorr(energies, 1),
+      energy_autocorr_lag3: normalizedEnergyAutocorr(energies, 3),
     }
   }
 

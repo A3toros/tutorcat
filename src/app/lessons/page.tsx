@@ -22,6 +22,8 @@ import { getActivityIcon } from '@/utils/activityIcons'
 import { lessonProgressStorage, type LessonProgressStorage } from '@/services/LessonProgressStorage'
 import { backgroundSaveQueue, type ActivityResult } from '@/services/BackgroundSaveQueue'
 import { lessonActivityFlow, type LessonSession, type Activity } from '@/services/LessonActivityFlow'
+import { createBrowserRhythmSampler } from '@/lib/browserRhythm'
+import { getSupportedRecordingMimeType, submitSpeechForFeedback } from '@/lib/speechJobFlow'
 import '@/utils/lessonTestingHelpers' // Import testing helpers (makes functions available globally)
 
 // Lesson step types
@@ -1543,7 +1545,7 @@ function LessonStepContent({ step, lessonData, currentActivity, onComplete, isCo
 
     switch (step) {
       case 'warmup':
-        return <WarmupStep data={lessonData.steps.warmup} level={lessonData.level} onComplete={(result: any) => !isTransitioning && handleActivityComplete('warm_up_speaking', result)} isCompleted={isCompleted} isTransitioning={isTransitioning} />
+        return <WarmupStep data={lessonData.steps.warmup} level={lessonData.level} lessonId={lessonId} onComplete={(result: any) => !isTransitioning && handleActivityComplete('warm_up_speaking', result)} isCompleted={isCompleted} isTransitioning={isTransitioning} />
       case 'vocabulary':
         return <VocabularyStep data={lessonData.steps.vocabulary} onComplete={onComplete || noopOnComplete} isCompleted={isCompleted} lessonId={lessonId} handleActivityComplete={handleActivityComplete} isTransitioning={isTransitioning} />
       case 'grammar':
@@ -1565,10 +1567,10 @@ function LessonStepContent({ step, lessonData, currentActivity, onComplete, isCo
 }
 
 // Warmup step with recording and API calls
-function WarmupStep({ data, level, onComplete, isCompleted, isTransitioning = false }: any) {
+function WarmupStep({ data, level, lessonId, onComplete, isCompleted, isTransitioning = false }: any) {
   const { t } = useTranslation()
   const { showNotification } = useNotification()
-  const { makeAuthenticatedRequest } = useApi()
+  const { user } = useUser()
   const [response, setResponse] = useState('')
   const [feedback, setFeedback] = useState<any>(null)
   const [isRecording, setIsRecording] = useState(false)
@@ -1581,6 +1583,8 @@ function WarmupStep({ data, level, onComplete, isCompleted, isTransitioning = fa
   const chunksRef = useRef<Blob[]>([])
   const streamRef = useRef<MediaStream | null>(null)
   const autoStopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const rhythmSamplerRef = useRef(createBrowserRhythmSampler())
+  const recordingStartRef = useRef(0)
 
   // Check microphone permission
   useEffect(() => {
@@ -1691,7 +1695,9 @@ function WarmupStep({ data, level, onComplete, isCompleted, isTransitioning = fa
       const stream = await navigator.mediaDevices.getUserMedia(audioConstraints)
 
       streamRef.current = stream
-      const mimeType = getSupportedMimeType()
+      rhythmSamplerRef.current.start(stream)
+      recordingStartRef.current = Date.now()
+      const mimeType = getSupportedRecordingMimeType()
       
       // Platform-specific MediaRecorder options
       const recorderOptions = isIOSDevice
@@ -1710,6 +1716,7 @@ function WarmupStep({ data, level, onComplete, isCompleted, isTransitioning = fa
       }
 
       mediaRecorder.onstop = async () => {
+        rhythmSamplerRef.current.stop()
         const audioBlob = new Blob(chunksRef.current, { type: mimeType })
         if (audioBlob.size === 0) {
           setError(isIOSDevice
@@ -1743,67 +1750,32 @@ function WarmupStep({ data, level, onComplete, isCompleted, isTransitioning = fa
         }
 
         try {
-          const base64Audio = await blobToBase64(audioBlob)
-          
-          const response = await fetch('/.netlify/functions/ai-speech-to-text', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              audio_blob: base64Audio,
-              audio_mime_type: mimeType,
-              test_id: 'lesson_warmup',
-              question_id: 'warmup',
-              prompt: data.prompt,
-              min_words: 0
-            })
+          const durationSec = Math.max(1, Math.round((Date.now() - recordingStartRef.current) / 1000))
+          const browserRhythm = rhythmSamplerRef.current.getFeatures(
+            Math.max(1, Date.now() - recordingStartRef.current)
+          )
+          const speechResult = await submitSpeechForFeedback({
+            audioBlob,
+            recordingDurationSec: durationSec,
+            prompt: data.prompt,
+            promptId: 'warmup',
+            lessonId: lessonId || 'warmup',
+            userId: user?.id,
+            minWords: 0,
+            cefrLevel: level,
+            browserRhythm,
           })
 
-          const result = await response.json()
-
-          if (!result.success) {
-            if (result.min_words != null && result.word_count != null) {
-              setError(result.error || `Please speak at least ${result.min_words} words. You said ${result.word_count} word(s).`)
-              setIsProcessing(false)
-              setIsRecording(false)
-              return
-            }
-            throw new Error(result.error || result.message || 'Processing failed')
-          }
-
-          // AI integrity: if backend flags the answer, block progression and force re-record.
-          const flagged =
-            result?.integrity?.flagged === true ||
-            result?.ai_flagged === true ||
-            result?.flagged === true ||
-            result?.feedback?.integrity?.flagged === true
-
-          if (flagged) {
-            setError(
-              result?.integrity?.message ||
-              result?.feedback?.integrity?.message ||
-              result?.message ||
-              'Your answer was flagged for using AI. Please try again using your own words.'
-            )
-            setIsProcessing(false)
-            setIsRecording(false)
-            return
-          }
-
-          setResponse(result.transcript || '')
-          
-          // Map feedback structure - API returns properties at top level (matching SpeakingTest.tsx)
-          if (result.overall_score !== undefined || result.feedback) {
-            const mappedFeedback = {
-              overall_score: result.overall_score,
-              is_off_topic: result.is_off_topic || false,
-              feedback: result.feedback,
-              grammar_corrections: result.grammar_corrections || [],
-              vocabulary_corrections: result.vocabulary_corrections || [],
-              ai_feedback: result.ai_feedback || null,
-              integrity: result.integrity || result?.feedback?.integrity || null
-            };
-            setFeedback(mappedFeedback);
-          }
+          setResponse(speechResult.transcript || '')
+          setFeedback({
+            overall_score: speechResult.overall_score,
+            is_off_topic: speechResult.is_off_topic || false,
+            feedback: speechResult.feedback,
+            grammar_corrections: speechResult.grammar_corrections || [],
+            vocabulary_corrections: speechResult.vocabulary_corrections || [],
+            ai_feedback: null,
+            integrity: speechResult.integrity || null,
+          })
         } catch (error: any) {
           console.error('Processing error:', error)
           setError(error.message || 'Failed to process recording. Please try again.')

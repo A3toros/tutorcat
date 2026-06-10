@@ -327,8 +327,10 @@ export default async (req: Request, _context?: unknown): Promise<void> => {
     return;
   }
 
-  const isWheelTopic = typeof job.prompt_id === 'string' && job.prompt_id.includes('-wheel-');
-  if (!isWheelTopic) {
+  const promptId = typeof job.prompt_id === 'string' ? job.prompt_id : '';
+  const isWheelTopic = promptId.includes('-wheel-');
+  const isImprovementRead = promptId === 'improvement';
+  if (!isWheelTopic && !isImprovementRead) {
     const repetition = detectConsecutiveRepetition(job.transcript);
     if (repetition) {
       const errorMsg = CONSECUTIVE_REPETITION_ERROR_MSG;
@@ -399,12 +401,12 @@ export default async (req: Request, _context?: unknown): Promise<void> => {
       job.transcript,
       job.prompt || 'Please respond to the speaking question.',
       job.cefr_level,
-      { skipQuestionRepetition: isWheelTopic }
+      { skipQuestionRepetition: isWheelTopic || isImprovementRead }
     );
     if (result.success) {
       const feedback = result.feedback as any;
 
-      if (!isWheelTopic && feedback.question_repetition === true) {
+      if (!isWheelTopic && !isImprovementRead && feedback.question_repetition === true) {
         const errorMsg =
           'It sounds like you repeated the question instead of answering it. Please re-record your answer using your own words.';
         const resultPayload = {

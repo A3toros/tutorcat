@@ -9,6 +9,8 @@ import { useApi } from '@/hooks/useApi'
 import { useNotification } from '@/contexts/NotificationContext'
 import { getSpeakingHelper } from '@/utils/speakingHelper'
 import { lessonProgressStorage } from '@/services/LessonProgressStorage'
+import { createBrowserRhythmSampler } from '@/lib/browserRhythm'
+import { submitSpeechJobAndPoll } from '@/lib/speechJobFlow'
 
 interface SpeakingImprovementProps {
   lessonData: {
@@ -50,6 +52,8 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
   const chunksRef = useRef<Blob[]>([])
   const streamRef = useRef<MediaStream | null>(null)
   const improvedTranscriptRef = useRef<string>('')
+  const rhythmSamplerRef = useRef(createBrowserRhythmSampler())
+  const recordingStartRef = useRef(0)
 
   // Get target word count for level (20/40/60)
   const getTargetWordCount = useCallback((level?: string): number => {
@@ -453,6 +457,8 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
       const stream = await navigator.mediaDevices.getUserMedia(audioConstraints)
 
       streamRef.current = stream
+      rhythmSamplerRef.current.start(stream)
+      recordingStartRef.current = Date.now()
       const mimeType = getSupportedMimeType()
       
       // Platform-specific MediaRecorder options
@@ -472,6 +478,7 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
       }
 
       mediaRecorder.onstop = async () => {
+        rhythmSamplerRef.current.stop()
         const audioBlob = new Blob(chunksRef.current, { type: mimeType })
         if (audioBlob.size === 0) {
           showNotification(isIOSDevice
@@ -497,38 +504,26 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
         mediaRecorderRef.current = null
 
         try {
-          const base64Audio = await blobToBase64(audioBlob)
-          
-          // Transcribe the audio
-          const response = await fetch('/.netlify/functions/ai-speech-to-text', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              audio_blob: base64Audio,
-              audio_mime_type: mimeType,
-              test_id: 'lesson_speaking_improvement',
-              question_id: 'improvement',
-              prompt: lessonData.improvedText,
-              cefr_level: lessonData.level || undefined
-            })
+          const durationSec = Math.max(1, Math.round((Date.now() - recordingStartRef.current) / 1000))
+          const browserRhythm = rhythmSamplerRef.current.getFeatures(
+            Math.max(1, Date.now() - recordingStartRef.current)
+          )
+          const { transcript } = await submitSpeechJobAndPoll({
+            audioBlob,
+            recordingDurationSec: durationSec,
+            prompt: lessonData.improvedText,
+            promptId: 'improvement',
+            lessonId: lessonData.lessonId,
+            userId: user?.id,
+            minWords: 0,
+            cefrLevel: lessonData.level,
+            browserRhythm,
+            skipIntegrityCheck: true,
+            skipDeliveryCheck: true,
+            requireOverallScore: false,
           })
 
-          const result = await response.json().catch(() => null)
-
-          if (!response.ok) {
-            const message = result?.error || (response.status === 500 ? 'Request timed out. Please try again.' : `Request failed: ${response.status}`)
-            throw new Error(message)
-          }
-
-          if (result == null || typeof result !== 'object') {
-            throw new Error('Request timed out or invalid response. Please try again.')
-          }
-
-          if (!result.success) {
-            throw new Error(result.error || 'Transcription failed')
-          }
-
-          setTranscript(result.transcript || '')
+          setTranscript(transcript || '')
 
           // Check similarity with improved transcript using ai-similarity endpoint
           // Use ref to get current value (closure may have stale value from when recording started)
@@ -553,7 +548,7 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
             method: 'POST',
             body: JSON.stringify({
               targetText: targetText,
-              userText: result.transcript || '',
+              userText: transcript || '',
               threshold: (lessonData.similarityThreshold || 70) / 100 // Convert percentage to 0-1 scale
             })
           })

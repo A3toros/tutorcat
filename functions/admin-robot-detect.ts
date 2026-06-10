@@ -155,6 +155,21 @@ export const handler: Handler = async (event) => {
       robotic_voice_flagged: row.robotic_voice_flagged ?? null,
       robotic_voice_rules: row.robotic_voice_rules ?? null,
       robotic_voice_detail: row.robotic_voice_detail ?? null,
+      signals: (() => {
+        const detail = row.robotic_voice_detail as { signals?: Record<string, unknown> } | null
+        const s = detail?.signals
+        if (!s || typeof s !== 'object') return null
+        return {
+          scorer_version: s.scorer_version ?? null,
+          std_logprob: s.std_logprob ?? null,
+          min_logprob: s.min_logprob ?? null,
+          logprob_range: s.logprob_range ?? null,
+          mean_logprob: s.mean_logprob ?? null,
+          boundary_pause_ratio: s.boundary_pause_ratio ?? null,
+          energy_autocorr_lag1: s.energy_autocorr_lag1 ?? null,
+          energy_autocorr_lag3: s.energy_autocorr_lag3 ?? null,
+        }
+      })(),
     }));
 
     return {
