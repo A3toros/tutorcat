@@ -26,16 +26,7 @@ interface RobotDetectItem {
   robotic_voice_flagged: boolean | null
   robotic_voice_rules: string[] | null
   robotic_voice_detail?: Record<string, unknown> | null
-  signals?: {
-    scorer_version?: string | null
-    std_logprob?: number | null
-    min_logprob?: number | null
-    logprob_range?: number | null
-    mean_logprob?: number | null
-    boundary_pause_ratio?: number | null
-    energy_autocorr_lag1?: number | null
-    energy_autocorr_lag3?: number | null
-  } | null
+  signals?: Record<string, unknown> | null
 }
 
 function scoreBadgeClass(score: number | null): string {
@@ -343,7 +334,17 @@ export default function AdminRobotDetectPage() {
                               </p>
                               {(item.signals || item.robotic_voice_detail) && (
                                 <>
-                                  <p className="font-semibold text-slate-700 mb-1">Signals (v2)</p>
+                                  <p className="font-semibold text-slate-700 mb-1">
+                                    Signals{' '}
+                                    <span className="text-xs font-normal text-slate-500">
+                                      (
+                                      {String(
+                                        (item.signals as { scorer_version?: string } | null)
+                                          ?.scorer_version || 'v1 legacy'
+                                      )}
+                                      )
+                                    </span>
+                                  </p>
                                   <pre className="text-xs bg-white border border-slate-200 rounded p-2 overflow-x-auto">
                                     {JSON.stringify(
                                       item.signals ??

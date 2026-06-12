@@ -3,6 +3,13 @@ import { neon } from '@neondatabase/serverless';
 import { validateJWT } from './auth-validate-jwt.js';
 import { getHeaders } from './cors-headers';
 
+/** GPT-combined summary only — never merge per-prompt text here. */
+function getCombinedImprovedTranscript(answers: unknown): string {
+  if (!answers || typeof answers !== 'object') return '';
+  const improved = (answers as { improvedTranscript?: unknown }).improvedTranscript;
+  return typeof improved === 'string' ? improved.trim() : '';
+}
+
 const handler: Handler = async (event, context) => {
   // Get security headers (no credentials needed for GET endpoint, but we'll allow credentials for authenticated endpoints)
   const headers = getHeaders(event, false);
@@ -128,7 +135,7 @@ const handler: Handler = async (event, context) => {
       ORDER BY la.activity_order
     `;
 
-    // Get user progress if userId provided
+    // Get user progress and activity results if userId provided
     let userProgress = null;
     let activityResults = null;
     if (userId) {
@@ -168,24 +175,26 @@ const handler: Handler = async (event, context) => {
           ...progressResult[0],
           score: progressPercentage // Replace cumulative score with actual percentage
         };
-        
-        // Always fetch activity results from database (even if lesson is not completed)
-        const results = await sql`
-          SELECT 
-            activity_type,
-            activity_order,
-            score,
-            max_score,
-            attempts,
-            time_spent,
-            completed_at,
-            answers,
-            feedback
-          FROM lesson_activity_results
-          WHERE user_id = ${userId} AND lesson_id = ${lessonId}
-          ORDER BY activity_order ASC
-        `;
-        
+      }
+
+      // Always fetch activity results when userId is known (even without user_progress row)
+      const results = await sql`
+        SELECT 
+          activity_type,
+          activity_order,
+          score,
+          max_score,
+          attempts,
+          time_spent,
+          completed_at,
+          answers,
+          feedback
+        FROM lesson_activity_results
+        WHERE user_id = ${userId} AND lesson_id = ${lessonId}
+        ORDER BY activity_order ASC
+      `;
+
+      if (results.length > 0) {
         activityResults = results.map((result: any) => ({
           activityType: result.activity_type,
           activityOrder: result.activity_order,
@@ -406,6 +415,24 @@ const handler: Handler = async (event, context) => {
           break;
       }
     });
+
+    // Hydrate speaking improvement text from prior speaking activity (DB), not lesson config
+    if (activityResults?.length) {
+      const speakingResult = [...activityResults]
+        .reverse()
+        .find(
+          (ar: { activityType?: string; answers?: unknown }) =>
+            (ar.activityType === 'speaking_practice' || ar.activityType === 'speaking_with_feedback') &&
+            ar.answers
+        );
+      const improvedFromSpeaking = speakingResult
+        ? getCombinedImprovedTranscript(speakingResult.answers)
+        : '';
+      if (improvedFromSpeaking) {
+        lesson.steps.improvement.improvedText = improvedFromSpeaking;
+        lesson.steps.improvement.targetText = improvedFromSpeaking;
+      }
+    }
 
     return {
       statusCode: 200,

@@ -1491,21 +1491,6 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       return 20
     }
 
-    // Local helper: condense text to CEFR-based range; end at last full sentence, never mid-sentence "..."
-    const condenseTextForLevel = (text: string, level?: string): string => {
-      if (!text || !text.trim()) return ''
-      const target = getTargetWordCount(level)
-      const maxWords = target + 20
-      const words = text.trim().split(/\s+/)
-      if (words.length <= maxWords) return text.trim()
-      const sliced = words.slice(0, maxWords).join(' ')
-      const lastDot = sliced.lastIndexOf('.')
-      const lastExcl = sliced.lastIndexOf('!')
-      const lastQ = sliced.lastIndexOf('?')
-      const lastEnd = Math.max(lastDot, lastExcl, lastQ)
-      return lastEnd >= 0 ? sliced.substring(0, lastEnd + 1).trim() : sliced
-    }
-
     try {
       const level = lessonData.level || user?.level || 'A1'
       const expectedCount = lessonData.prompts?.length || allTranscripts.length
@@ -1541,24 +1526,9 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       throw new Error(result.error || 'Failed to improve transcription');
     } catch (error) {
       console.error('Error generating combined improved version:', error);
-      // Fallback: build a short merged summary across prompts (avoid “prompt 1 only”)
-      const orderedPromptIds = (lessonData.prompts || []).map(p => p.id)
-      const orderedPerPromptImproved = (orderedPromptIds.length > 0 ? orderedPromptIds : Object.keys(feedback))
-        .map((id) => feedback?.[id]?.improved_transcript)
-        .filter(Boolean) as string[]
-
-      const pickFirstSentence = (text: string): string => {
-        const s = (text || '').trim()
-        if (!s) return ''
-        const m = s.match(/^.*?[.!?](\s|$)/)
-        return (m?.[0] || s).trim()
-      }
-
-      const mergedFromImproved = orderedPerPromptImproved.map(pickFirstSentence).filter(Boolean).join(' ')
-      const rawCombined = (mergedFromImproved || allTranscripts.join(' ')).trim()
-      return condenseTextForLevel(rawCombined, lessonData.level || user?.level)
+      throw error;
     }
-  }, [feedback, lessonData.level, user?.level, makeRequestWithRetry]);
+  }, [lessonData.prompts, lessonData.level, transcripts, user?.level, makeRequestWithRetry]);
 
   // Handle completion
   const handleComplete = useCallback(async () => {

@@ -46,6 +46,7 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
   const [condensedDisplayText, setCondensedDisplayText] = useState<string>('')
   const [isLoadingFromDB, setIsLoadingFromDB] = useState(false)
   const [hasTriedLoadingFromDB, setHasTriedLoadingFromDB] = useState(false)
+  const [loadFailed, setLoadFailed] = useState(false)
 
   const speakingHelper = getSpeakingHelper()
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
@@ -70,6 +71,15 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
     if (!text || !text.trim()) return 0;
     return text.trim().split(/\s+/).filter(word => word.length > 0).length;
   }, []);
+
+  const getTargetImprovedText = useCallback((): string => {
+    return (
+      improvedTranscriptRef.current ||
+      improvedTranscript ||
+      lessonData.improvedText ||
+      ''
+    ).trim();
+  }, [improvedTranscript, lessonData.improvedText]);
 
   // Display text as-is - backend should already generate text within word limits
   // No truncation needed since backend handles word count constraints
@@ -97,7 +107,15 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
 
     let foundImproved = false;
 
-    if (savedProgress?.activities) {
+    if (lessonData.improvedText?.trim()) {
+      const improved = lessonData.improvedText.trim();
+      setImprovedTranscript(improved);
+      improvedTranscriptRef.current = improved;
+      setCondensedDisplayText(condenseTextForLevel(improved, lessonData.level));
+      foundImproved = true;
+    }
+
+    if (!foundImproved && savedProgress?.activities) {
       // Find the previous speaking_practice activity - check all activities, not just most recent
       const speakingActivities = savedProgress.activities
         .filter(a => (a.activityType === 'speaking_practice' || a.activityType === 'speaking_with_feedback') && a.result?.answers)
@@ -114,39 +132,13 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
         }))
       });
 
-      const mergeImprovedTranscripts = (improvedTranscripts: Record<string, string>): string => {
-        const keys = Object.keys(improvedTranscripts || {});
-        const sorted = keys.sort((a, b) => {
-          const ai = parseInt((a.match(/\d+/)?.[0] || '0'), 10);
-          const bi = parseInt((b.match(/\d+/)?.[0] || '0'), 10);
-          return ai - bi;
-        });
-        const pickFirstSentence = (text: string): string => {
-          const s = (text || '').trim();
-          if (!s) return '';
-          const m = s.match(/^.*?[.!?](\s|$)/);
-          return (m?.[0] || s).trim();
-        };
-        return sorted
-          .map((k) => improvedTranscripts[k])
-          .filter(Boolean)
-          .map(pickFirstSentence)
-          .filter(Boolean)
-          .join(' ');
-      };
-
-      // Try each speaking activity until we find a combined improved transcript
+      // GPT-combined summary only (from improve-transcription on speaking complete)
       for (const speakingActivity of speakingActivities) {
         const answers = speakingActivity.result?.answers || {};
-        // Prefer the combined summary
         const improved =
-          (typeof answers.improvedTranscript === 'string' && answers.improvedTranscript.trim()
-            ? answers.improvedTranscript
-            : null) ||
-          // If only per-prompt improvements exist, merge them into a short combined summary
-          (answers.improvedTranscripts && typeof answers.improvedTranscripts === 'object'
-            ? mergeImprovedTranscripts(answers.improvedTranscripts)
-            : null);
+          typeof answers.improvedTranscript === 'string' && answers.improvedTranscript.trim()
+            ? answers.improvedTranscript.trim()
+            : null;
         
         if (improved) {
           console.log('🔍 SpeakingImprovement: Improved transcript found', {
@@ -214,46 +206,49 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
     }
   }, [user?.id, lessonData.lessonId, lessonData.improvedText, improvedTranscript, hasTriedLoadingFromDB]);
 
-  // Load improved transcript directly from database (no regeneration needed)
-  const loadFromSpeechJobsByLesson = useCallback(async (): Promise<boolean> => {
-    if (!user?.id || !lessonData.lessonId) return false;
+  const generateCombinedImprovedViaGpt = useCallback(async (
+    transcripts: Record<string, string>,
+    prompts: Array<{ id: string; text: string }>,
+    level: string
+  ): Promise<string> => {
+    const structuredText =
+      prompts.length > 0
+        ? prompts.map((p, idx) => {
+            const answer = transcripts[p.id] || ''
+            return `[Prompt ${idx + 1}] ${p.text}\n[Answer ${idx + 1}] ${answer}`
+          }).join('\n\n')
+        : Object.values(transcripts)
+            .filter(Boolean)
+            .map((t, idx) => `[Answer ${idx + 1}] ${t}`)
+            .join('\n\n')
 
-    try {
-      const response = await makeAuthenticatedRequest(
-        `/.netlify/functions/get-speech-jobs-by-lesson?lesson_id=${encodeURIComponent(lessonData.lessonId)}`,
-        { method: 'GET' }
-      );
-      if (!response.ok) return false;
-
-      const data = await response.json();
-      const jobs = data.jobs || [];
-      const completed = jobs.filter((j: any) => j.status === 'completed' && typeof j.result?.improved_transcript === 'string');
-      if (completed.length === 0) return false;
-
-      // speech_jobs.improved_transcript is per-prompt, not a combined summary.
-      // Only use it if we have nothing else (DB/localStorage combined summary missing).
-      const latest = completed[0];
-      const improvedFromJob = latest.result?.improved_transcript as string;
-
-      console.log('✅ SpeakingImprovement: Loaded improved transcript from speech-jobs-by-lesson', {
-        lessonId: lessonData.lessonId,
-        jobId: latest.id,
-        improvedLength: improvedFromJob.length,
-      });
-
-      const displayText = condenseTextForLevel(improvedFromJob, lessonData.level);
-      setImprovedTranscript(displayText);
-      improvedTranscriptRef.current = displayText;
-      setCondensedDisplayText(displayText);
-      if (latest.transcript) setOriginalTranscript(latest.transcript);
-      return true;
-    } catch (e) {
-      console.warn('SpeakingImprovement: get-speech-jobs-by-lesson failed', e);
-      return false;
+    if (!structuredText.trim()) {
+      throw new Error('No transcripts available to combine')
     }
-  }, [user?.id, lessonData.lessonId, lessonData.level, makeAuthenticatedRequest, condenseTextForLevel]);
 
-  // Load improved transcript directly from get-lesson activity results (submitted lesson)
+    const response = await makeAuthenticatedRequest('/.netlify/functions/improve-transcription', {
+      method: 'POST',
+      body: JSON.stringify({
+        text: structuredText,
+        level,
+        maxWords: getTargetWordCount(level) + 20,
+        segmentCount: prompts.length || Object.keys(transcripts).length,
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to generate combined improved text')
+    }
+
+    const result = await response.json()
+    if (result.improved_text && typeof result.improved_text === 'string' && result.improved_text.trim()) {
+      return result.improved_text.trim()
+    }
+
+    throw new Error(result.error || 'Failed to generate combined improved text')
+  }, [makeAuthenticatedRequest, getTargetWordCount])
+
+  // Load GPT-combined improved transcript from get-lesson activity results
   const loadImprovedTranscriptFromDB = useCallback(async () => {
     if (!user?.id || !lessonData.lessonId || isLoadingFromDB) return;
 
@@ -292,12 +287,18 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
       }
 
       const answers = speakingActivity.answers;
-      
-      // Get improved transcript directly from database (already stored)
-      const improvedFromDB = answers.improvedTranscript;
-      
+      let improvedFromDB =
+        typeof answers.improvedTranscript === 'string' ? answers.improvedTranscript.trim() : '';
+
+      if (!improvedFromDB && answers.transcripts && typeof answers.transcripts === 'object') {
+        const prompts = result.lesson?.steps?.speaking?.prompts || [];
+        const level = lessonData.level || result.lesson?.level || 'A1';
+        console.log('SpeakingImprovement: no combined text in DB, calling improve-transcription...');
+        improvedFromDB = await generateCombinedImprovedViaGpt(answers.transcripts, prompts, level);
+      }
+
       if (!improvedFromDB) {
-        throw new Error('Improved transcript not found in database. It may not have been generated yet.');
+        throw new Error('Combined improved text not found. Complete the speaking activity first.');
       }
 
       console.log('✅ Loaded improved transcript from database:', {
@@ -343,26 +344,20 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
 
       // Don't show notification for automatic loading - it's expected behavior
       console.log('✅ Improved text loaded from database automatically');
+      setLoadFailed(false);
     } catch (error: any) {
       console.error('Error loading improved transcript from database:', error);
-      // Don't show error notification for automatic loading - it's silent fallback
+      setLoadFailed(true);
     } finally {
       setIsLoadingFromDB(false);
     }
-  }, [user?.id, lessonData.lessonId, isLoadingFromDB, makeAuthenticatedRequest]);
+  }, [user?.id, lessonData.lessonId, lessonData.level, isLoadingFromDB, makeAuthenticatedRequest, generateCombinedImprovedViaGpt, condenseTextForLevel]);
 
-  // Auto-load from database if not found in localStorage: try speech-jobs-by-lesson first, then get-lesson activity results
+  // Auto-load from database if not found in localStorage
   useEffect(() => {
     if (!hasTriedLoadingFromDB || improvedTranscript || lessonData.improvedText) return;
-
-    let cancelled = false;
-    (async () => {
-      const fromSpeechJobs = await loadFromSpeechJobsByLesson();
-      if (cancelled || fromSpeechJobs) return;
-      loadImprovedTranscriptFromDB();
-    })();
-    return () => { cancelled = true; };
-  }, [hasTriedLoadingFromDB, improvedTranscript, lessonData.improvedText, loadFromSpeechJobsByLesson, loadImprovedTranscriptFromDB]);
+    loadImprovedTranscriptFromDB();
+  }, [hasTriedLoadingFromDB, improvedTranscript, lessonData.improvedText, loadImprovedTranscriptFromDB]);
 
   // Update display text when improved transcript or level changes
   useEffect(() => {
@@ -442,6 +437,17 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
     setIsStopping(false)
     if (isRecording) return
 
+    const targetText = getTargetImprovedText()
+    if (!targetText) {
+      showNotification(
+        isLoadingFromDB
+          ? 'Improved text is still loading. Please wait a moment.'
+          : 'Complete the speaking activity first so we can show your improved version.',
+        'error'
+      )
+      return
+    }
+
     try {
       setIsRecording(true)
       setCurrentStep('recording')
@@ -508,10 +514,15 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
           const browserRhythm = rhythmSamplerRef.current.getFeatures(
             Math.max(1, Date.now() - recordingStartRef.current)
           )
+          const speechPrompt = getTargetImprovedText()
+          if (!speechPrompt) {
+            throw new Error('No improved transcript available for comparison. Please wait for it to load or complete the speaking activity first.')
+          }
+
           const { transcript } = await submitSpeechJobAndPoll({
             audioBlob,
             recordingDurationSec: durationSec,
-            prompt: lessonData.improvedText,
+            prompt: speechPrompt,
             promptId: 'improvement',
             lessonId: lessonData.lessonId,
             userId: user?.id,
@@ -527,7 +538,7 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
 
           // Check similarity with improved transcript using ai-similarity endpoint
           // Use ref to get current value (closure may have stale value from when recording started)
-          let targetText = improvedTranscriptRef.current || improvedTranscript || lessonData.improvedText
+          let targetText = getTargetImprovedText()
           
           // If still not available, wait a bit for database load to complete
           if (!targetText && isLoadingFromDB) {
@@ -535,7 +546,7 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
             for (let i = 0; i < 20; i++) {
               await new Promise(resolve => setTimeout(resolve, 100))
               // Re-read from ref and state (ref is updated when DB load completes)
-              targetText = improvedTranscriptRef.current || improvedTranscript || lessonData.improvedText
+              targetText = getTargetImprovedText()
               if (targetText) break
             }
           }
@@ -614,7 +625,7 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
       setIsRecording(false)
       setCurrentStep('idle')
     }
-  }, [isRecording, lessonData, showNotification])
+  }, [isRecording, lessonData, showNotification, getTargetImprovedText, isLoadingFromDB, user?.id, improvedTranscript, makeAuthenticatedRequest, attempts])
 
   // Stop recording
   const stopRecording = useCallback(() => {
@@ -713,6 +724,15 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
             <p className="text-sm md:text-lg text-blue-900">
               {condensedDisplayText || condenseTextForLevel(improvedTranscript || lessonData.improvedText, lessonData.level)}
             </p>
+          ) : loadFailed ? (
+            <div className="text-center py-4">
+              <p className="text-sm md:text-lg text-amber-700 mb-2">
+                Improved text not found yet.
+              </p>
+              <p className="text-sm text-amber-600">
+                Go back and complete the speaking activity, then return here.
+              </p>
+            </div>
           ) : (
             <div className="text-center py-4">
               <p className="text-sm md:text-lg text-blue-600 italic mb-2">
