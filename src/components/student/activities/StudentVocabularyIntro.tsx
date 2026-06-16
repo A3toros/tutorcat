@@ -49,7 +49,11 @@ export default function StudentVocabularyIntro({ activity, onComplete }: Student
   }, [activity.vocabulary_items])
 
   const groupByCategory = Boolean(activity.content?.group_by_category)
-  const allowTapThai = Boolean(activity.content?.tap_thai_translation)
+  // Default to enabled when the flag is missing (older lesson rows / migrations not applied yet).
+  const allowTapThai =
+    activity.content?.tap_thai_translation === undefined
+      ? true
+      : Boolean(activity.content?.tap_thai_translation)
   const showThaiAlways = Boolean(activity.content?.show_thai)
   const [revealedThai, setRevealedThai] = useState<Record<string, boolean>>({})
 
