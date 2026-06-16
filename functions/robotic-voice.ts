@@ -1,10 +1,18 @@
 /**
  * Robotic / TTS voice detector (Google Translate speak, AI voice playback).
- * v2: segment logprob stats, pause-at-boundary, browser energy regularity.
+ *
+ * v2.2 vs v2.1:
+ *  - Skip logprob bucket when Whisper emits identical avg_logprob per segment (artifact)
+ *  - Logprob rules require logprob_range > 0 (non-artifact variance)
+ *  - high_boundary_pauses only when logprob bucket already scored
+ *  - regular_energy removed from score (logged only)
+ *  - filler_absence: +5 weak corroboration when logprob fired and word_count >= 20
+ *  - confidence uses bucket count × score, not raw rule count
+ *
  * Log-only by default; blocking requires ROBOTIC_VOICE_MODE=block.
  */
 
-export const ROBOTIC_VOICE_SCORER_VERSION = 'v2'
+export const ROBOTIC_VOICE_SCORER_VERSION = 'v2.2'
 
 export interface BrowserRhythmInput {
   speech_rate?: number
@@ -36,6 +44,8 @@ export interface WhisperVerboseInput {
 export interface RoboticVoiceFeaturesInput {
   whisper_verbose?: WhisperVerboseInput | null
   browser_rhythm?: BrowserRhythmInput | null
+  /** speech_jobs.prompt_id — improvement read-aloud is excluded from would-flag */
+  prompt_id?: string | null
 }
 
 export interface RoboticVoiceResult {
@@ -50,31 +60,35 @@ export interface RoboticVoiceResult {
 
 const FILLER_WORDS = new Set(['um', 'uh', 'er', 'ah', 'like', 'erm', 'hmm'])
 
-const FLAG_THRESHOLD = 75
+const FLAG_THRESHOLD = 85
 const MIN_WORDS_FOR_STRICT_RULES = 10
+const MIN_WORDS_FOR_FILLER_ABSENCE = 20
+const MIN_SEGMENTS_FOR_LOGPROB_RULES = 5
+const LOGPROB_BUCKET_CAP = 40
+const LOGPROB_EQUAL_EPSILON = 1e-6
+
+/** Whisper sometimes repeats the same avg_logprob on every segment (human speech FP in v2). */
+function isLogprobArtifact(logprobs: number[]): boolean {
+  if (logprobs.length < 2) return false
+  const first = logprobs[0]
+  return logprobs.every((lp) => Math.abs(lp - first) < LOGPROB_EQUAL_EPSILON)
+}
 
 function coefficientOfVariation(values: number[]): number | null {
   if (values.length < 2) return null
   const mean = values.reduce((a, b) => a + b, 0) / values.length
   if (mean <= 0) return null
-  const variance = values.reduce((sum, v) => {
-    const d = v - mean
-    return sum + d * d
-  }, 0) / values.length
+  const variance = values.reduce((sum, v) => sum + (v - mean) ** 2, 0) / values.length
   return Math.sqrt(variance) / mean
 }
 
 function stdDev(values: number[]): number | null {
   if (values.length < 2) return null
   const mean = values.reduce((a, b) => a + b, 0) / values.length
-  const variance = values.reduce((sum, v) => {
-    const d = v - mean
-    return sum + d * d
-  }, 0) / values.length
+  const variance = values.reduce((sum, v) => sum + (v - mean) ** 2, 0) / values.length
   return Math.sqrt(variance)
 }
 
-/** Fraction of inter-segment gaps that follow segment text ending in clause punctuation. */
 function boundaryPauseRatio(segments: WhisperSegment[]): number | null {
   if (segments.length < 2) return null
   let gaps = 0
@@ -124,17 +138,23 @@ function whisperDerived(whisper: WhisperVerboseInput | null | undefined) {
     if (FILLER_WORDS.has(cleaned)) fillerCount += 1
   }
 
+  const artifact = isLogprobArtifact(logprobs)
+  const effectiveLogprobs = artifact ? [] : logprobs
+
   const meanLogprob =
-    logprobs.length > 0 ? logprobs.reduce((a, b) => a + b, 0) / logprobs.length : null
-  const minLogprob = logprobs.length > 0 ? Math.min(...logprobs) : null
-  const maxLogprob = logprobs.length > 0 ? Math.max(...logprobs) : null
-  const stdLogprob = stdDev(logprobs)
+    effectiveLogprobs.length > 0
+      ? effectiveLogprobs.reduce((a, b) => a + b, 0) / effectiveLogprobs.length
+      : null
+  const minLogprob = effectiveLogprobs.length > 0 ? Math.min(...effectiveLogprobs) : null
+  const maxLogprob = effectiveLogprobs.length > 0 ? Math.max(...effectiveLogprobs) : null
+  const stdLogprob = stdDev(effectiveLogprobs)
   const logprobRange =
     minLogprob != null && maxLogprob != null ? maxLogprob - minLogprob : null
 
   return {
     word_count: wordCount,
     filler_ratio: wordCount > 0 ? fillerCount / wordCount : 0,
+    filler_count: fillerCount,
     segment_duration_cv: coefficientOfVariation(durations),
     inter_segment_gap_cv: coefficientOfVariation(gaps),
     mean_logprob: meanLogprob,
@@ -144,6 +164,7 @@ function whisperDerived(whisper: WhisperVerboseInput | null | undefined) {
     logprob_range: logprobRange,
     boundary_pause_ratio: boundaryPauseRatio(segments),
     segment_count: segments.length,
+    logprob_is_artifact: artifact,
   }
 }
 
@@ -152,12 +173,106 @@ function getMode(): 'log' | 'block' {
 }
 
 function ruleBucket(rule: string): string {
-  if (rule === 'uniform_asr_ease' || rule === 'easy_asr_mean' || rule === 'no_hard_segments' || rule === 'tts_logprob_combo') {
+  if (
+    rule === 'uniform_asr_ease' ||
+    rule === 'easy_asr_mean' ||
+    rule === 'no_hard_segments' ||
+    rule === 'tts_logprob_combo'
+  ) {
     return 'whisper_logprob'
   }
   if (rule === 'high_boundary_pauses') return 'pause_placement'
-  if (rule === 'regular_energy') return 'energy_cadence'
+  if (rule === 'filler_absence') return 'filler'
   return rule
+}
+
+function scoreLogprobBucket(
+  w: ReturnType<typeof whisperDerived>,
+  enoughSpeech: boolean
+): { points: number; rulesHit: string[]; rawPoints: number } {
+  if (w.logprob_is_artifact) {
+    return { points: 0, rulesHit: [], rawPoints: 0 }
+  }
+
+  const enoughLogprobSegments = w.segment_count >= MIN_SEGMENTS_FOR_LOGPROB_RULES
+  const candidates: Array<{ rule: string; points: number; match: boolean }> = [
+    {
+      rule: 'tts_logprob_combo',
+      points: 20,
+      match:
+        enoughSpeech &&
+        enoughLogprobSegments &&
+        w.std_logprob != null &&
+        w.std_logprob < 0.12 &&
+        w.mean_logprob != null &&
+        w.mean_logprob > -0.4 &&
+        w.min_logprob != null &&
+        w.min_logprob > -0.55 &&
+        w.logprob_range != null &&
+        w.logprob_range > 0 &&
+        w.logprob_range < 0.05,
+    },
+    {
+      rule: 'uniform_asr_ease',
+      points: 35,
+      match:
+        enoughSpeech &&
+        enoughLogprobSegments &&
+        w.logprob_range != null &&
+        w.logprob_range > 0 &&
+        w.logprob_range < 0.05 &&
+        w.std_logprob != null &&
+        w.std_logprob < 0.08,
+    },
+    {
+      rule: 'no_hard_segments',
+      points: 25,
+      match:
+        enoughLogprobSegments &&
+        w.min_logprob != null &&
+        w.min_logprob > -0.5 &&
+        w.std_logprob != null &&
+        w.std_logprob < 0.12 &&
+        w.logprob_range != null &&
+        w.logprob_range > 0 &&
+        w.logprob_range < 0.08,
+    },
+    {
+      rule: 'easy_asr_mean',
+      points: 25,
+      match:
+        enoughSpeech &&
+        enoughLogprobSegments &&
+        w.mean_logprob != null &&
+        w.mean_logprob > -0.37 &&
+        w.logprob_range != null &&
+        w.logprob_range > 0 &&
+        w.logprob_range < 0.08,
+    },
+  ]
+
+  const rulesHit: string[] = []
+  let points = 0
+  let rawPoints = 0
+
+  for (const c of candidates) {
+    if (!c.match) continue
+    rawPoints += c.points
+    if (points >= LOGPROB_BUCKET_CAP) continue
+    const add = Math.min(c.points, LOGPROB_BUCKET_CAP - points)
+    points += add
+    rulesHit.push(c.rule)
+  }
+
+  return { points, rulesHit, rawPoints }
+}
+
+function computeConfidence(score: number, bucketCount: number, wouldFlag: boolean): number {
+  if (bucketCount === 0) return 0
+  const bucketFactor = Math.min(1, bucketCount / 2)
+  const scoreFactor = Math.min(1, score / FLAG_THRESHOLD)
+  const flagBoost = wouldFlag ? 0.1 : 0
+  return Math.min(1, bucketFactor * scoreFactor + flagBoost)
 }
 
 export interface RoboticVoiceDbColumns {
@@ -172,7 +287,9 @@ export function roboticVoiceToDbColumns(rv: RoboticVoiceResult | null): RoboticV
     return { score: null, would_flag: null, flagged: null, rules: null }
   }
   const rulesHit = rv.signals.rules_hit
-  const rules = Array.isArray(rulesHit) ? rulesHit.filter((r): r is string => typeof r === 'string') : []
+  const rules = Array.isArray(rulesHit)
+    ? rulesHit.filter((r): r is string => typeof r === 'string')
+    : []
   return {
     score: rv.score,
     would_flag: Boolean(rv.signals.would_flag),
@@ -185,6 +302,8 @@ export function computeRoboticVoiceScore(input: RoboticVoiceFeaturesInput): Robo
   const mode = getMode()
   const rhythm = input.browser_rhythm || null
   const w = whisperDerived(input.whisper_verbose)
+  const promptId = typeof input.prompt_id === 'string' ? input.prompt_id.trim() : ''
+  const isImprovementReadAloud = promptId === 'improvement'
 
   const energyAutocorrLag1 =
     typeof rhythm?.energy_autocorr_lag1 === 'number' && Number.isFinite(rhythm.energy_autocorr_lag1)
@@ -196,52 +315,21 @@ export function computeRoboticVoiceScore(input: RoboticVoiceFeaturesInput): Robo
       : null
 
   const rulesHit: string[] = []
-  let score = 0
-
   const enoughSpeech = w.word_count >= MIN_WORDS_FOR_STRICT_RULES
   const enoughSegments = w.segment_count >= 3
 
-  // Whisper finds TTS uniformly easy — low variance across segment logprobs.
-  if (enoughSpeech && enoughSegments && w.std_logprob != null && w.std_logprob < 0.1) {
-    score += 35
-    rulesHit.push('uniform_asr_ease')
-  }
+  const logprob = scoreLogprobBucket(w, enoughSpeech)
+  rulesHit.push(...logprob.rulesHit)
+  let score = logprob.points
 
-  // TTS tends to have higher (less negative) mean logprob than disfluent human speech.
-  if (enoughSpeech && w.mean_logprob != null && w.mean_logprob > -0.37) {
-    score += 25
-    rulesHit.push('easy_asr_mean')
-  }
+  const skipBoundaryPauseRule =
+    w.boundary_pause_ratio != null &&
+    w.boundary_pause_ratio >= 1 &&
+    w.segment_count <= 6
 
-  // TTS rarely has very hard segments; humans have occasional disfluent chunks.
   if (
-    enoughSegments &&
-    w.min_logprob != null &&
-    w.min_logprob > -0.5 &&
-    w.std_logprob != null &&
-    w.std_logprob < 0.15
-  ) {
-    score += 25
-    rulesHit.push('no_hard_segments')
-  }
-
-  // Combined logprob signature (calibrated on early labeled batch).
-  if (
-    enoughSpeech &&
-    enoughSegments &&
-    w.std_logprob != null &&
-    w.std_logprob < 0.12 &&
-    w.mean_logprob != null &&
-    w.mean_logprob > -0.4 &&
-    w.min_logprob != null &&
-    w.min_logprob > -0.55
-  ) {
-    score += 20
-    rulesHit.push('tts_logprob_combo')
-  }
-
-  // Pauses that align with clause boundaries (Whisper segments often break at punctuation for TTS).
-  if (
+    logprob.points > 0 &&
+    !skipBoundaryPauseRule &&
     enoughSegments &&
     w.boundary_pause_ratio != null &&
     w.boundary_pause_ratio > 0.65
@@ -250,25 +338,27 @@ export function computeRoboticVoiceScore(input: RoboticVoiceFeaturesInput): Robo
     rulesHit.push('high_boundary_pauses')
   }
 
-  // Metronically regular energy envelope (browser time series).
-  if (energyAutocorrLag1 != null && energyAutocorrLag1 > 0.55) {
-    score += 20
-    rulesHit.push('regular_energy')
-  }
   if (
-    energyAutocorrLag1 == null &&
-    energyAutocorrLag3 != null &&
-    energyAutocorrLag3 > 0.45
+    logprob.points > 0 &&
+    w.word_count >= MIN_WORDS_FOR_FILLER_ABSENCE &&
+    w.filler_count === 0
   ) {
-    score += 10
-    rulesHit.push('regular_energy')
+    score += 5
+    rulesHit.push('filler_absence')
   }
 
   score = Math.min(100, score)
 
-  const bucketCount = new Set(rulesHit.map(ruleBucket)).size
-  const confidence = Math.min(1, rulesHit.length / 4)
-  const wouldFlag = score >= FLAG_THRESHOLD && bucketCount >= 2
+  const buckets = new Set(rulesHit.map(ruleBucket))
+  const bucketCount = buckets.size
+  const hasSubstantiveBucket = buckets.has('whisper_logprob')
+
+  let wouldFlag = score >= FLAG_THRESHOLD && bucketCount >= 2 && hasSubstantiveBucket
+  if (isImprovementReadAloud) {
+    wouldFlag = false
+  }
+
+  const confidence = computeConfidence(score, bucketCount, wouldFlag)
   const flagged = mode === 'block' && wouldFlag
 
   const message = flagged
@@ -284,6 +374,7 @@ export function computeRoboticVoiceScore(input: RoboticVoiceFeaturesInput): Robo
     message,
     signals: {
       scorer_version: ROBOTIC_VOICE_SCORER_VERSION,
+      logprob_is_artifact: w.logprob_is_artifact,
       std_logprob: w.std_logprob ?? -1,
       min_logprob: w.min_logprob ?? -99,
       max_logprob: w.max_logprob ?? -99,
@@ -293,12 +384,18 @@ export function computeRoboticVoiceScore(input: RoboticVoiceFeaturesInput): Robo
       segment_duration_cv: w.segment_duration_cv ?? -1,
       inter_segment_gap_cv: w.inter_segment_gap_cv ?? -1,
       filler_ratio: w.filler_ratio,
+      filler_count: w.filler_count,
       word_count: w.word_count,
       segment_count: w.segment_count,
       energy_autocorr_lag1: energyAutocorrLag1 ?? -1,
       energy_autocorr_lag3: energyAutocorrLag3 ?? -1,
       pitch_variance: typeof rhythm?.pitch_variance === 'number' ? rhythm.pitch_variance : -1,
       pause_entropy: typeof rhythm?.pause_entropy === 'number' ? rhythm.pause_entropy : -1,
+      logprob_bucket_score: logprob.points,
+      logprob_bucket_raw: logprob.rawPoints,
+      skip_boundary_pause_rule: skipBoundaryPauseRule,
+      has_substantive_bucket: hasSubstantiveBucket,
+      skip_would_flag_improvement: isImprovementReadAloud,
       rules_hit: rulesHit,
       would_flag: wouldFlag,
     },

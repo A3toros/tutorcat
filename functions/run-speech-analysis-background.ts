@@ -363,7 +363,10 @@ export default async (req: Request, _context?: unknown): Promise<void> => {
   const featuresInput = await downloadJobFeatures(jobId);
   let roboticVoice: RoboticVoiceResult | null = null;
   if (featuresInput) {
-    roboticVoice = computeRoboticVoiceScore(featuresInput);
+    roboticVoice = computeRoboticVoiceScore({
+      ...featuresInput,
+      prompt_id: job.prompt_id,
+    });
     console.log('run-speech-analysis-background: [robotic_voice]', {
       jobId,
       score: roboticVoice.score,
