@@ -86,7 +86,7 @@ CROSS JOIN (VALUES
   (12, 'student_grammar_error_fix', 'Practice: Fix the mistake', 'Write the correct sentence.', '{}'),
   (13, 'student_grammar_make_question', 'Practice: Make a question', 'Put the words in order to make a question.', '{}'),
   (14, 'student_speaking_cards', 'Speaking: Practice questions', 'Answer each question out loud. AI will listen and give you feedback.', '{"prompts": ["What app you use the most and why do you like it?", "What games do you play on your computer or mobile phone and what do you like about them?", "Do you think children should spend a lot of time online? why?", "Is TikTok good or bad for you? explain why"]}'),
-  (15, 'student_challenge_wheel', 'Challenge: 30-second speak', 'Spin the wheel and speak for 30 seconds.', '{"duration_seconds": 30, "prompts": ["My favorite app", "My screen time", "My online habits", "Apps I dislike", "Games I play", "What I do after school"]}'),
+  (15, 'student_challenge_wheel', 'Challenge: 30-second speaking', 'Spin the wheel and practice speaking for 30 seconds.', '{"duration_seconds": 30, "prompts": ["My favorite app", "My screen time", "My online habits", "Apps I dislike", "Games I play", "What I do after school"]}'),
   (16, 'student_exit_poll', 'Exit ticket', 'Answer before you finish the lesson.', '{}')
 ) AS v(activity_order, activity_type, title, description, content)
 WHERE sl.slug = 'my-online-life';

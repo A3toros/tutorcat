@@ -60,7 +60,8 @@
         "npm:sharp@~0.34.5",
         "npm:tailwindcss@^3.3.0",
         "npm:typescript@5",
-        "npm:wrangler@3"
+        "npm:wrangler@3",
+        "npm:xlsx@~0.18.5"
       ]
     }
   }

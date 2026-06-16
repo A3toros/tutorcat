@@ -18,6 +18,7 @@
     "db:create-admin": "node scripts/create-admin-user.js",
     "db:fix-admin": "node scripts/update-admin-level.js",
     "db:migrate-lesson-schema": "node scripts/run-migration-improve-lesson-schema.js",
+    "sync:character-assets": "powershell -ExecutionPolicy Bypass -File scripts/sync-character-assets.ps1",
     "test:api": "node scripts/test-api.js",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
@@ -49,6 +50,7 @@
     "eslint": "^8.0.0",
     "eslint-config-next": "^14.2.35",
     "framer-motion": "^11.0.0",
+    "html2canvas": "^1.4.1",
     "i18next": "^23.5.0",
     "i18next-browser-languagedetector": "^7.2.0",
     "jsonwebtoken": "^9.0.2",
@@ -65,7 +67,8 @@
     "recharts": "^3.6.0",
     "resend": "^4.0.0",
     "tailwindcss": "^3.3.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20251223.0",

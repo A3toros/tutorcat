@@ -16,6 +16,10 @@ export type StudentActivityType =
   | 'student_grammar_make_question'
   | 'student_speaking_cards'
   | 'student_challenge_wheel'
+  | 'student_character_builder'
+  | 'student_vocab_image_mcq'
+  | 'student_character_description'
+  | 'student_character_story'
   | 'student_exit_poll'
 
 export type StudentSectionId =
@@ -160,6 +164,8 @@ export const STUDENT_SECTIONS: Array<{
       'student_vocab_missing_letters',
       'student_vocab_categorize',
       'student_vocab_speed_tap',
+      'student_character_builder',
+      'student_vocab_image_mcq',
     ],
   },
   { id: 'grammar_builder', label: 'Grammar Builder', activityTypes: ['student_grammar_builder'] },
@@ -173,6 +179,8 @@ export const STUDENT_SECTIONS: Array<{
       'student_grammar_complete',
       'student_grammar_error_fix',
       'student_grammar_make_question',
+      'student_character_description',
+      'student_character_story',
     ],
   },
   { id: 'speaking', label: 'Speaking Cards', activityTypes: ['student_speaking_cards'] },

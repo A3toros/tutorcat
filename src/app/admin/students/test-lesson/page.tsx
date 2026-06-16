@@ -6,9 +6,10 @@ import AdminProtectedRoute from '@/components/auth/AdminProtectedRoute'
 import { Button, Card, LoadingSpinnerModal } from '@/components/ui'
 import { adminApiRequest } from '@/utils/adminApi'
 import StudentActivityRenderer from '@/components/student/StudentActivityRenderer'
-import type { StudentLesson, StudentLessonActivity } from '@/types/student'
+import type { StudentActivityResult, StudentLesson, StudentLessonActivity } from '@/types/student'
 import { UserContext } from '@/components/auth/ProtectedRoute'
 import type { User } from '@/types'
+import { studentLessonTestHeader } from '@/lib/studentTrack'
 
 type LoadState =
   | { kind: 'loading' }
@@ -22,6 +23,7 @@ function AdminTestStudentLessonPageInner() {
 
   const [state, setState] = useState<LoadState>({ kind: 'loading' })
   const [completedOrders, setCompletedOrders] = useState<Set<number>>(new Set())
+  const [activityResults, setActivityResults] = useState<StudentActivityResult[]>([])
   const fakeUser = useMemo<User>(
     () => ({
       id: 'admin-test',
@@ -80,10 +82,10 @@ function AdminTestStudentLessonPageInner() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-2xl font-bold text-slate-900">
-              Test lesson: L{state.lesson.lesson_number} {state.lesson.topic}
+              Test lesson: {studentLessonTestHeader(state.lesson)}
             </h1>
             <p className="text-sm text-slate-600 mt-1">
-              This is a sandbox preview. <strong>No progress is saved.</strong>
+              Preview as a student would see it. <strong>No progress is saved.</strong>
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -92,6 +94,7 @@ function AdminTestStudentLessonPageInner() {
               variant="secondary"
               onClick={() => {
                 setCompletedOrders(new Set())
+                setActivityResults([])
               }}
             >
               Reset local test
@@ -148,10 +151,33 @@ function AdminTestStudentLessonPageInner() {
                     <StudentActivityRenderer
                       lesson={state.lesson}
                       activity={activity}
-                      onComplete={() => {
+                      activities={state.activities}
+                      activityResults={activityResults}
+                      onComplete={(result) => {
                         setCompletedOrders((prev) => {
                           const next = new Set(prev)
                           next.add(activity.activity_order)
+                          return next
+                        })
+                        setActivityResults((prev) => {
+                          const next = prev.filter(
+                            (r) =>
+                              r.activityOrder !== activity.activity_order &&
+                              r.activityId !== activity.id
+                          )
+                          next.push({
+                            activityId: activity.id,
+                            activityType: activity.activity_type,
+                            activityOrder: activity.activity_order,
+                            score: result.score,
+                            maxScore: result.maxScore,
+                            attempts: result.attempts ?? 1,
+                            timeSpent: result.timeSpent,
+                            completed: true,
+                            completedAt: Date.now(),
+                            answers: result.answers,
+                            feedback: result.feedback,
+                          })
                           return next
                         })
                       }}

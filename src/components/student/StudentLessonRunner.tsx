@@ -4,6 +4,8 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button, Card, LoadingSpinnerModal, Modal, ProgressBar } from '@/components/ui'
 import { apiClient } from '@/lib/api'
+import { saveStoredCharacter } from '@/lib/characterBuilder/characterStorage'
+import { getCharacterBuilderAnswers } from '@/lib/characterBuilder/lessonCharacterData'
 import { studentLessonProgressStorage } from '@/services/StudentLessonProgressStorage'
 import { useUser } from '@/components/auth/ProtectedRoute'
 import { STUDENT_DASHBOARD_PATH } from '@/lib/studentRoutes'
@@ -89,6 +91,18 @@ export default function StudentLessonRunner({ lessonId }: Props) {
       setActivities(acts)
       setUserProgress(data.userProgress ?? null)
       setActivityResults(data.activityResults || [])
+
+      if (user?.id && data.activityResults?.length) {
+        const fromDb = getCharacterBuilderAnswers(data.activityResults, acts)
+        if (fromDb) {
+          const builderOrder =
+            acts.find((a) => a.activity_type === 'student_character_builder')?.activity_order ?? 1
+          saveStoredCharacter(user.id, lessonId, {
+            ...fromDb,
+            sourceActivityOrder: builderOrder,
+          })
+        }
+      }
 
       const done = buildCompletedOrders(data.activityResults || [], acts)
 
@@ -317,6 +331,30 @@ export default function StudentLessonRunner({ lessonId }: Props) {
         return next.sort((a, b) => a.activityOrder - b.activityOrder)
       })
 
+      if (currentActivity.activity_type === 'student_character_builder' && user?.id) {
+        const saved = getCharacterBuilderAnswers(
+          [
+            {
+              activityType: currentActivity.activity_type,
+              activityOrder: currentActivity.activity_order,
+              score: result.score,
+              maxScore: result.maxScore,
+              attempts: result.attempts ?? 1,
+              completed: true,
+              answers: result.answers,
+            },
+          ],
+          activities,
+          currentActivity.activity_order
+        )
+        if (saved) {
+          saveStoredCharacter(user.id, lesson.id, {
+            ...saved,
+            sourceActivityOrder: currentActivity.activity_order,
+          })
+        }
+      }
+
       if (user?.id) {
         studentLessonProgressStorage.save(user.id, lesson.id, {
           completedOrders: [...nextDone],
@@ -432,6 +470,8 @@ export default function StudentLessonRunner({ lessonId }: Props) {
               <StudentActivityRenderer
                 activity={currentActivity}
                 lesson={lesson}
+                activityResults={activityResults}
+                activities={activities}
                 onComplete={handleActivityComplete}
               />
             )}

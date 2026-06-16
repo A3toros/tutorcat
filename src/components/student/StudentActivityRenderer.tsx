@@ -18,6 +18,10 @@ import StudentGrammarComplete from './activities/StudentGrammarComplete'
 import StudentGrammarErrorFix from './activities/StudentGrammarErrorFix'
 import StudentSpeakingCards from './activities/StudentSpeakingCards'
 import StudentChallengeWheel from './activities/StudentChallengeWheel'
+import StudentCharacterBuilder from './activities/StudentCharacterBuilder'
+import StudentVocabImageMcq from './activities/StudentVocabImageMcq'
+import StudentCharacterDescription from './activities/StudentCharacterDescription'
+import StudentCharacterStory from './activities/StudentCharacterStory'
 
 const REGISTRY: Record<StudentActivityType, React.ComponentType<StudentActivityProps>> = {
   student_warmup_poll: StudentPollActivity,
@@ -36,15 +40,27 @@ const REGISTRY: Record<StudentActivityType, React.ComponentType<StudentActivityP
   student_grammar_make_question: StudentGrammarMakeQuestion,
   student_speaking_cards: StudentSpeakingCards,
   student_challenge_wheel: StudentChallengeWheel,
+  student_character_builder: StudentCharacterBuilder,
+  student_vocab_image_mcq: StudentVocabImageMcq,
+  student_character_description: StudentCharacterDescription,
+  student_character_story: StudentCharacterStory,
 }
 
 interface Props {
   activity: StudentLessonActivity
   lesson: StudentLesson
+  activityResults?: import('@/types/student').StudentActivityResult[]
+  activities?: StudentLessonActivity[]
   onComplete: StudentActivityProps['onComplete']
 }
 
-export default function StudentActivityRenderer({ activity, lesson, onComplete }: Props) {
+export default function StudentActivityRenderer({
+  activity,
+  lesson,
+  activityResults,
+  activities,
+  onComplete,
+}: Props) {
   const Component = REGISTRY[activity.activity_type as StudentActivityType]
 
   if (!Component) {
@@ -55,5 +71,13 @@ export default function StudentActivityRenderer({ activity, lesson, onComplete }
     )
   }
 
-  return <Component activity={activity} lesson={lesson} onComplete={onComplete} />
+  return (
+    <Component
+      activity={activity}
+      lesson={lesson}
+      activityResults={activityResults}
+      activities={activities}
+      onComplete={onComplete}
+    />
+  )
 }

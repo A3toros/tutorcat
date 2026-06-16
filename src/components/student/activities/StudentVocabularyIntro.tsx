@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Button, Card } from '@/components/ui'
 import StudentVocabImage from '@/components/student/StudentVocabImage'
 import { parseStudentVocabularyItems } from '@/lib/studentLessonNormalize'
-import { resolveStudentVocabImageUrl } from '@/lib/studentVocabImages'
+import { resolveStudentVocabImageUrl, resolveStudentVocabThai } from '@/lib/studentVocabImages'
 import type { StudentActivityProps } from '../activityProps'
 
 const DEFAULT_STUDY_SECONDS = 60
@@ -79,19 +79,21 @@ export default function StudentVocabularyIntro({ activity, onComplete }: Student
             </h3>
           )}
           <div className="grid gap-2 sm:gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {words.map((word) => (
+            {words.map((word) => {
+              const thai = resolveStudentVocabThai(word.english_word, word.thai_translation)
+              return (
               <button
                 key={word.id}
                 type="button"
                 onClick={() => {
-                  if (!allowTapThai || !word.thai_translation) return
+                  if (!allowTapThai || !thai) return
                   setRevealedThai((prev) => ({ ...prev, [word.id]: !prev[word.id] }))
                 }}
                 className={`text-left flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3 ${
-                  allowTapThai && word.thai_translation ? 'hover:bg-purple-50/40 active:bg-purple-50/60' : ''
+                  allowTapThai && thai ? 'hover:bg-purple-50/40 active:bg-purple-50/60' : ''
                 }`}
                 aria-label={
-                  allowTapThai && word.thai_translation
+                  allowTapThai && thai
                     ? `Tap to show Thai for ${word.english_word}`
                     : word.english_word
                 }
@@ -106,17 +108,17 @@ export default function StudentVocabularyIntro({ activity, onComplete }: Student
                   <div className="font-medium text-slate-800 text-sm sm:text-base">
                     {word.english_word}
                   </div>
-                  {(showThaiAlways || revealedThai[word.id]) && word.thai_translation && (
+                  {(showThaiAlways || revealedThai[word.id]) && thai && (
                     <div className="text-xs sm:text-sm text-slate-500 mt-0.5">
-                      {word.thai_translation}
+                      {thai}
                     </div>
                   )}
-                  {allowTapThai && !showThaiAlways && word.thai_translation && !revealedThai[word.id] && (
+                  {allowTapThai && !showThaiAlways && thai && !revealedThai[word.id] && (
                     <div className="text-[11px] text-slate-400 mt-0.5">Tap for Thai</div>
                   )}
                 </div>
               </button>
-            ))}
+            )})}
           </div>
         </div>
       ))}

@@ -82,7 +82,7 @@ CROSS JOIN (VALUES
   (11, 'student_grammar_error_fix', 'Practice: Fix the mistake', 'Write the correct sentence.', '{}'),
   (12, 'student_warmup_poll', 'Polls: Memes & trends', 'Answer all three questions.', '{}'),
   (13, 'student_speaking_cards', 'Speaking: Practice questions', 'Answer each question out loud. AI will listen and give you feedback.', '{"prompts": ["What videos do you watch and why?", "What internet trends do you like and why?", "Who is your favorite creator? Why do you like them?", "Do you share memes? What kind of memes?"]}'),
-  (14, 'student_challenge_wheel', 'Challenge: 30-second speak', 'Spin the wheel and speak for 30 seconds.', '{"duration_seconds": 30, "prompts": ["My favorite meme", "Videos I watch", "Online trends", "My favorite creator", "Content I dislike"]}'),
+  (14, 'student_challenge_wheel', 'Challenge: 30-second speaking', 'Spin the wheel and practice speaking for 30 seconds.', '{"duration_seconds": 30, "prompts": ["My favorite meme", "Videos I watch", "Online trends", "My favorite creator", "Content I dislike"]}'),
   (15, 'student_exit_poll', 'Exit ticket: Emoji feelings', 'Match each emoji to the correct feeling.', '{}')
 ) AS v(activity_order, activity_type, title, description, content)
 WHERE sl.slug = 'meme-culture-internet-trends';

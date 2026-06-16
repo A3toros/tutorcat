@@ -41,7 +41,7 @@ export function effectiveActivityScore(row: {
   const maxScore = Number(row.maxScore) || 0
   const type = row.activityType || ''
 
-  if (type === 'student_speaking_cards') {
+  if (type === 'student_speaking_cards' || type === 'student_character_story') {
     const feedback = row.feedback as Record<string, { overall_score?: number }> | null
     const answers = row.answers as { prompts?: Array<{ score?: number }> } | null
     let sum = 0

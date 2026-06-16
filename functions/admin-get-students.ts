@@ -1,5 +1,6 @@
 import { Handler } from '@netlify/functions'
 import { neon } from '@neondatabase/serverless'
+import { sumEffectiveScores } from './student-lesson-scoring.js'
 
 async function authenticateAdmin(event: any): Promise<boolean> {
   try {
@@ -116,12 +117,6 @@ export const handler: Handler = async (event) => {
               COALESCE(sup.completed, FALSE) as completed,
               COALESCE(sup.score, 0) as score,
               (
-                SELECT COALESCE(SUM(sar.max_score), 0)::int
-                FROM student_lesson_activity_results sar
-                WHERE sar.user_id = u.id
-                  AND sar.student_lesson_id = sl.id
-              ) as max_score_total,
-              (
                 SELECT COUNT(*)::int
                 FROM student_lesson_activities sla
                 WHERE sla.student_lesson_id = sl.id AND sla.active = TRUE
@@ -141,6 +136,34 @@ export const handler: Handler = async (event) => {
             ORDER BY u.id, sl.lesson_number ASC
           `
 
+    const activityResults =
+      studentIds.length === 0
+        ? []
+        : await sql`
+            SELECT
+              user_id::text as user_id,
+              student_lesson_id::text as student_lesson_id,
+              activity_type,
+              score,
+              max_score,
+              answers,
+              feedback
+            FROM student_lesson_activity_results
+            WHERE user_id = ANY(${studentIds}::uuid[])
+          `
+
+    const effectivePctByUserLesson = new Map<string, number>()
+    const resultsByUserLesson = new Map<string, any[]>()
+    for (const row of activityResults as any[]) {
+      const key = `${row.user_id}:${row.student_lesson_id}`
+      const list = resultsByUserLesson.get(key) || []
+      list.push(row)
+      resultsByUserLesson.set(key, list)
+    }
+    for (const [key, rows] of resultsByUserLesson.entries()) {
+      effectivePctByUserLesson.set(key, sumEffectiveScores(rows).percentage)
+    }
+
     const speechCounts =
       studentIds.length === 0
         ? []
@@ -156,17 +179,18 @@ export const handler: Handler = async (event) => {
     const lessonsByUser = new Map<string, any[]>()
     for (const row of lessonRows as any[]) {
       const userId = String(row.user_id)
-      const maxTotal = Number(row.max_score_total) || 0
+      const lessonId = String(row.lesson_id)
+      const completed = Boolean(row.completed)
       const score = Number(row.score) || 0
-      const pct = maxTotal > 0 ? Math.round((score / maxTotal) * 100) : 100
+      const pct = completed ? (effectivePctByUserLesson.get(`${userId}:${lessonId}`) ?? 0) : 0
       const activitiesTotal = Number(row.activities_total) || 0
       const activitiesDone = Number(row.activities_done) || 0
       const item = {
-        lesson_id: String(row.lesson_id),
+        lesson_id: lessonId,
         lesson_number: Number(row.lesson_number),
         topic: row.topic,
         lesson_active: Boolean(row.lesson_active),
-        completed: Boolean(row.completed),
+        completed,
         score_total: score,
         score_percentage: pct,
         activities_done: activitiesDone,

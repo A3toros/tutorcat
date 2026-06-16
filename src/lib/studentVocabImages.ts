@@ -168,6 +168,63 @@ export const LESSON2_IMAGE_URL_BY_WORD: Record<string, string> = {
   popular: COMMONS_FILE_DIRECT['OOjs_UI_icon_star.svg'],
 }
 
+/** Lesson 3 appearance/clothes/colors — verified upload.wikimedia.org URLs (Commons, Jun 2026). */
+export const LESSON3_IMAGE_URL_BY_WORD: Record<string, string> = {
+  tall: 'https://upload.wikimedia.org/wikipedia/commons/4/4d/Yao_Ming.jpg',
+  short: 'https://upload.wikimedia.org/wikipedia/commons/4/47/Little_girl.jpg',
+  young: 'https://upload.wikimedia.org/wikipedia/commons/b/b0/A_young_boy_smiling.jpg',
+  hair: 'https://upload.wikimedia.org/wikipedia/commons/7/75/Long_hair.jpg',
+  eyes: 'https://upload.wikimedia.org/wikipedia/commons/d/d2/Woman_eyes_close-up.jpg',
+  shirt: 'https://upload.wikimedia.org/wikipedia/commons/0/09/T-shirt.jpg',
+  pants: 'https://upload.wikimedia.org/wikipedia/commons/5/5a/Jeans.jpg',
+  shoes: 'https://upload.wikimedia.org/wikipedia/commons/a/a7/Running_shoes.jpg',
+  jacket: 'https://upload.wikimedia.org/wikipedia/commons/9/93/Leather_jacket.jpg',
+  dress: 'https://upload.wikimedia.org/wikipedia/commons/6/63/Dress.jpg',
+  blue: 'https://upload.wikimedia.org/wikipedia/commons/d/d7/Sky.jpg',
+  green: 'https://upload.wikimedia.org/wikipedia/commons/e/e1/Green_leaves.jpg',
+  brown: 'https://upload.wikimedia.org/wikipedia/commons/1/1f/Wood.jpg',
+  black: 'https://upload.wikimedia.org/wikipedia/commons/5/50/Black_colour.jpg',
+  blond: 'https://upload.wikimedia.org/wikipedia/commons/f/f9/Blonde_hair.jpg',
+  // Personality (lesson 3 activity 4)
+  friendly: 'https://upload.wikimedia.org/wikipedia/commons/3/3e/Twemoji12_1f91d.svg',
+  kind: 'https://upload.wikimedia.org/wikipedia/commons/8/82/Twemoji12_2764.svg',
+  funny: 'https://upload.wikimedia.org/wikipedia/commons/c/c8/Twemoji12_1f606.svg',
+  clever: 'https://upload.wikimedia.org/wikipedia/commons/8/84/Light_bulb_icon_red.svg',
+  creative: 'https://upload.wikimedia.org/wikipedia/commons/f/f4/Twemoji_270f.svg',
+  helpful: 'https://upload.wikimedia.org/wikipedia/commons/7/78/Twemoji12_1f64c.svg',
+  serious: 'https://upload.wikimedia.org/wikipedia/commons/c/cf/Twemoji12_1f610.svg',
+  quiet: 'https://upload.wikimedia.org/wikipedia/commons/2/22/Twemoji12_1f92b.svg',
+  confident: 'https://upload.wikimedia.org/wikipedia/commons/8/82/Twemoji12_1f60e.svg',
+  shy: 'https://upload.wikimedia.org/wikipedia/commons/a/a0/Twemoji12_1f633.svg',
+  lazy: 'https://upload.wikimedia.org/wikipedia/commons/4/40/Twemoji12_1f634.svg',
+  rude: 'https://upload.wikimedia.org/wikipedia/commons/f/f0/Twemoji12_1f621.svg',
+  selfish: 'https://upload.wikimedia.org/wikipedia/commons/b/bb/Twemoji_1f4b0.svg',
+  mean: 'https://upload.wikimedia.org/wikipedia/commons/e/ec/Twemoji12_1f624.svg',
+}
+
+/** Lesson 3 personality vocab — Thai when DB row is missing translation. */
+export const LESSON3_PERSONALITY_THAI_BY_WORD: Record<string, string> = {
+  friendly: 'เป็นมิตร',
+  kind: 'ใจดี',
+  funny: 'ตลก',
+  clever: 'ฉลาด',
+  creative: 'สร้างสรรค์',
+  helpful: 'ช่วยเหลือ',
+  serious: 'จริงจัง',
+  quiet: 'เงียบ',
+  confident: 'มั่นใจ',
+  shy: 'ขี้อาย',
+  lazy: 'ขี้เกียจ',
+  rude: 'ไม่สุภาพ',
+  selfish: 'เห็นแก่ตัว',
+  mean: 'ใจร้าย',
+}
+
+export function lesson3VocabImageUrl(englishWord: string): string {
+  const key = englishWord.trim().toLowerCase()
+  return LESSON3_IMAGE_URL_BY_WORD[key] || ''
+}
+
 export function lesson2VocabImageUrl(englishWord: string): string {
   const key = englishWord.trim().toLowerCase()
   return LESSON2_IMAGE_URL_BY_WORD[key] || ''
@@ -181,12 +238,23 @@ export function lesson1VocabImageUrl(englishWord: string): string {
   return file ? fileToImageUrl(file) : ''
 }
 
+export function resolveStudentVocabThai(
+  englishWord: string,
+  dbThai?: string | null
+): string {
+  if (dbThai?.trim()) return dbThai.trim()
+  return LESSON3_PERSONALITY_THAI_BY_WORD[englishWord.trim().toLowerCase()] || ''
+}
+
 /** Prefer canonical lesson-1 direct URLs; ignore stale/broken DB paths. */
 export function resolveStudentVocabImageUrl(
   englishWord: string,
   dbUrl?: string | null,
 ): string {
-  const mapped = lesson2VocabImageUrl(englishWord) || lesson1VocabImageUrl(englishWord)
+  const mapped =
+    lesson3VocabImageUrl(englishWord) ||
+    lesson2VocabImageUrl(englishWord) ||
+    lesson1VocabImageUrl(englishWord)
   if (mapped) return mapped
   if (!dbUrl) return ''
   if (dbUrl.includes('upload.wikimedia.org/')) return dbUrl

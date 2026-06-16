@@ -6,6 +6,7 @@ import AdminProtectedRoute from '@/components/auth/AdminProtectedRoute'
 import { Button, Card, Table, Header, Body, Row, Head, Cell } from '@/components/ui'
 import { useNotification } from '@/contexts/NotificationContext'
 import { adminApiRequest } from '@/utils/adminApi'
+import { studentLessonListTitle } from '@/lib/studentTrack'
 
 type StudentLessonScore = {
   lesson_id: string
@@ -128,6 +129,47 @@ export default function AdminStudentsPage() {
 
   const class115 = useMemo(() => students.filter((s) => s.class === '1/15').sort(bySchoolId), [students])
   const class116 = useMemo(() => students.filter((s) => s.class === '1/16').sort(bySchoolId), [students])
+
+  const lessonNumbers = useMemo(() => {
+    const fromTrack = trackLessons.map((l) => l.lesson_number)
+    const fromStudents = students.flatMap((s) => (s.lessons || []).map((l) => l.lesson_number))
+    const unique = [...new Set([...fromTrack, ...fromStudents])]
+    return unique.sort((a, b) => a - b)
+  }, [trackLessons, students])
+
+  const handleExportScores = useCallback(async () => {
+    if (!students.length) {
+      showNotification('No students to export.', 'error')
+      return
+    }
+    try {
+      const { exportStudentScoresWorkbook } = await import('@/lib/exportStudentScoresXlsx')
+      exportStudentScoresWorkbook({
+        class115: class115.map((s) => ({
+          school_student_id: s.school_student_id,
+          nickname: s.nickname,
+          lessons: (s.lessons || []).map((l) => ({
+            lesson_number: l.lesson_number,
+            score_percentage: l.score_percentage,
+            completed: Boolean(l.completed),
+          })),
+        })),
+        class116: class116.map((s) => ({
+          school_student_id: s.school_student_id,
+          nickname: s.nickname,
+          lessons: (s.lessons || []).map((l) => ({
+            lesson_number: l.lesson_number,
+            score_percentage: l.score_percentage,
+            completed: Boolean(l.completed),
+          })),
+        })),
+        lessonNumbers,
+      })
+      showNotification('Scores exported.', 'success')
+    } catch (e) {
+      showNotification((e as Error).message || 'Export failed', 'error')
+    }
+  }, [students, class115, class116, lessonNumbers, showNotification])
 
   const lessonKey = (studentId: string, lessonId: string) => `${studentId}:${lessonId}`
 
@@ -416,9 +458,19 @@ export default function AdminStudentsPage() {
             <Button variant="secondary" size="sm" onClick={() => router.push('/admin/dashboard')}>
               ← Back to Dashboard
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => { load(); loadTrackLessons() }} disabled={loading}>
-              Refresh
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleExportScores}
+                disabled={loading || !students.length}
+              >
+                Export scores
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => { load(); loadTrackLessons() }} disabled={loading}>
+                Refresh
+              </Button>
+            </div>
           </div>
 
           <Card className="p-5 bg-gradient-to-br from-white to-purple-50 border-purple-200">
@@ -433,7 +485,8 @@ export default function AdminStudentsPage() {
               <div>
                 <h2 className="text-lg font-semibold text-slate-800">Student track lessons</h2>
                 <p className="text-sm text-slate-600 mt-0.5">
-                  Only <strong>active</strong> lessons appear on the student dashboard. New lessons start inactive.
+                  Only <strong>active</strong> lessons appear on the student dashboard. Use <strong>Test</strong> to
+                  preview a lesson as a student (no progress saved).
                 </p>
               </div>
             </div>
@@ -450,7 +503,7 @@ export default function AdminStudentsPage() {
                   >
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-slate-800">
-                        L{lesson.lesson_number} · {lesson.topic}
+                        {studentLessonListTitle(lesson)}
                       </p>
                       <p className="text-xs text-slate-500">
                         {lesson.slug || 'no slug'} · {lesson.activity_count} activities

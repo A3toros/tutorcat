@@ -2,7 +2,37 @@
 
 import React, { useState } from 'react'
 import { Button, Card } from '@/components/ui'
+import StudentVocabImage from '@/components/student/StudentVocabImage'
 import type { StudentActivityProps } from '../activityProps'
+
+function isImagePrompt(question: string): boolean {
+  const q = question.trim()
+  return (
+    q.startsWith('http') ||
+    q.startsWith('/') ||
+    q.includes('upload.wikimedia.org') ||
+    q.includes('commons.wikimedia.org/wiki/Special:FilePath/')
+  )
+}
+
+function PollPrompt({ question }: { question: string }) {
+  if (isImagePrompt(question)) {
+    return (
+      <div className="flex justify-center mb-3">
+        <div className="h-20 w-20 sm:h-24 sm:w-24 rounded-lg overflow-hidden bg-slate-100 border border-slate-200 flex items-center justify-center">
+          <StudentVocabImage src={question.trim()} alt="Vocabulary picture" />
+        </div>
+      </div>
+    )
+  }
+
+  const isEmoji = /^[\p{Extended_Pictographic}\uFE0F\u200D\s]+$/u.test(question.trim())
+  if (isEmoji) {
+    return <p className="text-4xl sm:text-5xl text-center mb-3 leading-none">{question}</p>
+  }
+
+  return <p className="font-medium text-slate-800 mb-3">{question}</p>
+}
 
 export default function StudentPollActivity({ activity, onComplete }: StudentActivityProps) {
   const polls = activity.poll_items || []
@@ -47,7 +77,7 @@ export default function StudentPollActivity({ activity, onComplete }: StudentAct
       <div className="space-y-6">
         {polls.map((poll) => (
           <div key={poll.id}>
-            <p className="font-medium text-slate-800 mb-3">{poll.question}</p>
+            <PollPrompt question={poll.question} />
             <div className="grid gap-2 sm:grid-cols-2">
               {(poll.options || []).map((opt) => (
                 <button
