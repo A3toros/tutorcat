@@ -49,7 +49,8 @@ export default function AdminRobotDetectPage() {
   const [onlyWouldFlag, setOnlyWouldFlag] = useState(false)
   const [onlyScored, setOnlyScored] = useState(true)
   const [minScore, setMinScore] = useState('0')
-  const [sort, setSort] = useState('score_desc')
+  // Default to newest-first so fresh recordings are visible (v2.2 often scores 0).
+  const [sort, setSort] = useState('created_desc')
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null)
   const [playingJobId, setPlayingJobId] = useState<string | null>(null)
   const [loadingAudioJobId, setLoadingAudioJobId] = useState<string | null>(null)

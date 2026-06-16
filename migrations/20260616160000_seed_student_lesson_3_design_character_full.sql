@@ -96,10 +96,10 @@ CROSS JOIN (VALUES
           "correct": "shirt"
         },
         {
-          "image_url": "/characters/mouth/thumb05.png",
-          "prompt": "This mouth looks ___.",
-          "choices": ["happy", "angry", "tall", "friendly"],
-          "correct": "happy"
+          "image_url": "/characters/hair/thumb34.png",
+          "prompt": "This character has ___ hair.",
+          "choices": ["short", "long", "curly", "blond"],
+          "correct": "long"
         }
       ]
     }$mcq$,

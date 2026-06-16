@@ -12,7 +12,7 @@
  * Log-only by default; blocking requires ROBOTIC_VOICE_MODE=block.
  */
 
-export const ROBOTIC_VOICE_SCORER_VERSION = 'v2.2'
+export const ROBOTIC_VOICE_SCORER_VERSION = 'v2.2.1'
 
 export interface BrowserRhythmInput {
   speech_rate?: number
@@ -66,6 +66,10 @@ const MIN_WORDS_FOR_FILLER_ABSENCE = 20
 const MIN_SEGMENTS_FOR_LOGPROB_RULES = 5
 const LOGPROB_BUCKET_CAP = 40
 const LOGPROB_EQUAL_EPSILON = 1e-6
+// If Whisper reports identical avg_logprob per segment, treat short answers as low-information.
+// For longer audio, constant logprobs can still be a meaningful signal (especially for TTS).
+const MAX_SEGMENTS_FOR_ALL_EQUAL_SKIP = 4
+const MIN_SEGMENTS_TO_ALLOW_RANGE_ZERO = 8
 
 /** Whisper sometimes repeats the same avg_logprob on every segment (human speech FP in v2). */
 function isLogprobArtifact(logprobs: number[]): boolean {
@@ -139,15 +143,14 @@ function whisperDerived(whisper: WhisperVerboseInput | null | undefined) {
   }
 
   const artifact = isLogprobArtifact(logprobs)
-  const effectiveLogprobs = artifact ? [] : logprobs
 
   const meanLogprob =
-    effectiveLogprobs.length > 0
-      ? effectiveLogprobs.reduce((a, b) => a + b, 0) / effectiveLogprobs.length
+    logprobs.length > 0
+      ? logprobs.reduce((a, b) => a + b, 0) / logprobs.length
       : null
-  const minLogprob = effectiveLogprobs.length > 0 ? Math.min(...effectiveLogprobs) : null
-  const maxLogprob = effectiveLogprobs.length > 0 ? Math.max(...effectiveLogprobs) : null
-  const stdLogprob = stdDev(effectiveLogprobs)
+  const minLogprob = logprobs.length > 0 ? Math.min(...logprobs) : null
+  const maxLogprob = logprobs.length > 0 ? Math.max(...logprobs) : null
+  const stdLogprob = stdDev(logprobs)
   const logprobRange =
     minLogprob != null && maxLogprob != null ? maxLogprob - minLogprob : null
 
@@ -190,11 +193,23 @@ function scoreLogprobBucket(
   w: ReturnType<typeof whisperDerived>,
   enoughSpeech: boolean
 ): { points: number; rulesHit: string[]; rawPoints: number } {
-  if (w.logprob_is_artifact) {
+  // Many human answers end up with identical avg_logprob across a few segments.
+  // Treat those short answers as low-information instead of scoring them as TTS.
+  if (w.logprob_is_artifact && w.segment_count <= MAX_SEGMENTS_FOR_ALL_EQUAL_SKIP) {
     return { points: 0, rulesHit: [], rawPoints: 0 }
   }
 
   const enoughLogprobSegments = w.segment_count >= MIN_SEGMENTS_FOR_LOGPROB_RULES
+  const allowRangeZero = w.segment_count >= MIN_SEGMENTS_TO_ALLOW_RANGE_ZERO
+  const hasTightRange =
+    w.logprob_range != null &&
+    (w.logprob_range > 0 || allowRangeZero) &&
+    w.logprob_range < 0.05
+  const hasModerateRange =
+    w.logprob_range != null &&
+    (w.logprob_range > 0 || allowRangeZero) &&
+    w.logprob_range < 0.08
+
   const candidates: Array<{ rule: string; points: number; match: boolean }> = [
     {
       rule: 'tts_logprob_combo',
@@ -208,9 +223,7 @@ function scoreLogprobBucket(
         w.mean_logprob > -0.4 &&
         w.min_logprob != null &&
         w.min_logprob > -0.55 &&
-        w.logprob_range != null &&
-        w.logprob_range > 0 &&
-        w.logprob_range < 0.05,
+        hasTightRange,
     },
     {
       rule: 'uniform_asr_ease',
@@ -218,9 +231,7 @@ function scoreLogprobBucket(
       match:
         enoughSpeech &&
         enoughLogprobSegments &&
-        w.logprob_range != null &&
-        w.logprob_range > 0 &&
-        w.logprob_range < 0.05 &&
+        hasTightRange &&
         w.std_logprob != null &&
         w.std_logprob < 0.08,
     },
@@ -233,9 +244,7 @@ function scoreLogprobBucket(
         w.min_logprob > -0.5 &&
         w.std_logprob != null &&
         w.std_logprob < 0.12 &&
-        w.logprob_range != null &&
-        w.logprob_range > 0 &&
-        w.logprob_range < 0.08,
+        hasModerateRange,
     },
     {
       rule: 'easy_asr_mean',
@@ -245,9 +254,7 @@ function scoreLogprobBucket(
         enoughLogprobSegments &&
         w.mean_logprob != null &&
         w.mean_logprob > -0.37 &&
-        w.logprob_range != null &&
-        w.logprob_range > 0 &&
-        w.logprob_range < 0.08,
+        hasModerateRange,
     },
   ]
 
