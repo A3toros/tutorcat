@@ -34,11 +34,25 @@ function isSelectionCorrect(
   )
 }
 
+function targetWordLabel(title?: string | null, description?: string | null): string {
+  const haystack = `${title ?? ''} ${description ?? ''}`.toLowerCase()
+  if (haystack.includes('content word')) return 'content words'
+  if (haystack.includes('activity word')) return 'activity words'
+  return 'correct words'
+}
+
 export default function StudentSpeedTap({ activity, onComplete }: StudentActivityProps) {
   const content = useMemo(() => parseActivityContent(activity.content), [activity.content])
 
   const targets = useMemo(() => readStringArray(content.targets), [content.targets])
   const distractors = useMemo(() => readStringArray(content.distractors), [content.distractors])
+  const wordLabel = useMemo(
+    () => targetWordLabel(activity.title, activity.description),
+    [activity.title, activity.description]
+  )
+  const instructions =
+    activity.description?.trim() ||
+    `Words move across the screen. Tap all ${wordLabel} only (tap again to unselect). Hold the row to pause it. Press Continue when you are done.`
 
   /** Fixed order: activity words first, then distractors (loops on the snake track). */
   const allWords = useMemo(
@@ -89,7 +103,7 @@ export default function StudentSpeedTap({ activity, onComplete }: StudentActivit
 
     setAttempts((n) => n + 1)
     setError(
-      'Select every activity word, and do not select any other words. Try again!'
+      `Select every ${wordLabel.slice(0, -1)}, and do not select any other words. Try again!`
     )
     setSelected(new Set())
     setTrackKey((k) => k + 1)
@@ -133,11 +147,7 @@ export default function StudentSpeedTap({ activity, onComplete }: StudentActivit
       <h2 className="text-lg sm:text-xl font-semibold text-slate-800 mb-2">
         {activity.title || 'Activity words'}
       </h2>
-      <p className="text-slate-600 text-sm mb-4">
-        Words move across the screen. Tap <strong>all</strong> activity words only (tap again
-        to unselect). Hold the row to pause it. Press <strong>Continue</strong> when you are
-        done.
-      </p>
+      <p className="text-slate-600 text-sm mb-4">{instructions}</p>
 
       {targets.length === 0 ? (
         <p className="text-sm text-amber-800">This activity has no words configured yet.</p>

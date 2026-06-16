@@ -74,7 +74,7 @@ CROSS JOIN (VALUES
   (3, 'student_vocab_picture_match', 'Match: Picture → word', 'Tap a picture, then tap the matching word.', '{}'),
   (4, 'student_vocab_missing_letters', 'Spell: Missing letters', 'Type the full word.', '{"sentences": [{"template": "m__e", "answer": "meme"}, {"template": "tr__d", "answer": "trend"}, {"template": "v__al", "answer": "viral"}, {"template": "cr__tor", "answer": "creator"}, {"template": "fo__ower", "answer": "follower"}]}'),
   (5, 'student_vocab_categorize', 'Sort: Word categories', 'Tap a word, then tap its category.', '{"buckets": ["People", "Actions", "Content"]}'),
-  (6, 'student_vocab_speed_tap', 'Speed: Content words', 'Click all content words, then tap Continue.', '{"targets": ["meme", "video", "trend", "stream"], "distractors": ["creator", "watch", "funny"]}'),
+  (6, 'student_vocab_speed_tap', 'Speed: Content words', 'Words move across the screen. Tap all content words only (tap again to unselect). Hold the row to pause it. Press Continue when you are done.', '{"targets": ["meme", "video", "trend"], "distractors": ["creator", "watch", "funny", "stream"]}'),
   (7, 'student_grammar_builder', 'Grammar: Rules', 'Read the rules, then practice.', '{}'),
   (8, 'student_grammar_drag_order', 'Practice: Sentence order', 'Put the words in the correct order.', '{}'),
   (9, 'student_grammar_mcq', 'Practice: Choose answer', 'Pick the correct word.', '{}'),
