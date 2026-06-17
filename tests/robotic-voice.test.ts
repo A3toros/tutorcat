@@ -1,4 +1,4 @@
-import { computeRoboticVoiceScore } from './robotic-voice'
+import { computeRoboticVoiceScore } from '../functions/robotic-voice'
 
 function seg(
   i: number,
