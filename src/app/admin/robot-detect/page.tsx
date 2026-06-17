@@ -6,6 +6,7 @@ import { Play, Pause } from 'lucide-react'
 import { Card, Button, Table, Header, Body, Row, Head, Cell, Input, Select } from '@/components/ui'
 import { useNotification } from '@/contexts/NotificationContext'
 import { adminApiRequest } from '@/utils/adminApi'
+import { isAdminTtsCheckLessonId } from '@/lib/adminTtsCheckTopics'
 
 interface RobotDetectItem {
   job_id: string
@@ -133,6 +134,9 @@ export default function AdminRobotDetectPage() {
             <Button variant="secondary" size="sm" onClick={() => router.push('/admin/transcripts')}>
               Transcripts
             </Button>
+            <Button variant="primary" size="sm" onClick={() => router.push('/admin/robot-detect/check-tts')}>
+              Check TTS
+            </Button>
             <div>
               <h1 className="text-2xl font-bold text-slate-800">Robot Detect</h1>
               <p className="text-slate-600 text-sm">
@@ -254,9 +258,11 @@ export default function AdminRobotDetectPage() {
                     const userLabel =
                       item.user_username || item.user_email || item.user_id?.slice(0, 8) || '—'
                     const lessonLabel =
-                      item.student_lesson_number != null && item.student_lesson_topic
-                        ? `L${item.student_lesson_number}: ${item.student_lesson_topic}`
-                        : item.lesson_id || '—'
+                      isAdminTtsCheckLessonId(item.lesson_id)
+                        ? 'TTS Check (admin)'
+                        : item.student_lesson_number != null && item.student_lesson_topic
+                          ? `L${item.student_lesson_number}: ${item.student_lesson_topic}`
+                          : item.lesson_id || '—'
                     const rules = Array.isArray(item.robotic_voice_rules) ? item.robotic_voice_rules : []
                     const expanded = expandedJobId === item.job_id
 

@@ -114,7 +114,7 @@ const handler: Handler = async (event) => {
           ? percentageByLesson.get(String(row.id)) ?? null
           : null,
         progress_percentage: Boolean(row.completed) ? 100 : progressPct,
-        locked: lessonNumber > currentLesson,
+        locked: false,
       };
     });
 

@@ -36,6 +36,7 @@
         "npm:eslint-config-next@^14.2.35",
         "npm:eslint@8",
         "npm:framer-motion@11",
+        "npm:html2canvas@^1.4.1",
         "npm:i18next-browser-languagedetector@^7.2.0",
         "npm:i18next@^23.5.0",
         "npm:jest-environment-jsdom@^30.2.0",

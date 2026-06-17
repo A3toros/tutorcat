@@ -32,6 +32,9 @@ interface SpeakingWithFeedbackData {
 interface SpeakingWithFeedbackProps {
   lessonData: SpeakingWithFeedbackData;
   onComplete: (result?: any) => void;
+  /** Admin robot-detect calibration: skip lesson submit / improve-transcript; still runs speech-job pipeline. */
+  adminCalibrationMode?: boolean;
+  onSpeechJobCreated?: (jobId: string, promptId: string) => void;
 }
 
 type ProcessingStep = 'idle' | 'recording' | 'transcribing' | 'analyzing' | 'feedback' | 'error';
@@ -66,7 +69,7 @@ function triggerSpeechAnalysisBackground(jobId: string): void {
   }).catch(() => {});
 }
 
-const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onComplete }) => {
+const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onComplete, adminCalibrationMode = false, onSpeechJobCreated }) => {
   const { user } = useAuth();
   const { makeAuthenticatedRequest } = useApi();
   const { showNotification } = useNotification();
@@ -92,6 +95,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
   const [isQuestionRepetitionError, setIsQuestionRepetitionError] = useState(false);
   const [isDeliveryReadError, setIsDeliveryReadError] = useState(false);
   const [isResending, setIsResending] = useState(false);
+  const [speechJobIds, setSpeechJobIds] = useState<Record<string, string>>({});
 
   /** Minimum spoken_pct (0–100) to allow; below this we prompt re-record (reading instead of speaking). */
   const DELIVERY_SPOKEN_PCT_MIN = 70;
@@ -364,7 +368,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
 
   // On mount/reload: restore transcripts and feedback from DB so we don't nullify progress
   useEffect(() => {
-    if (!user?.id || !lessonData.lessonId) return;
+    if (adminCalibrationMode || !user?.id || !lessonData.lessonId) return;
 
     let cancelled = false;
     (async () => {
@@ -406,7 +410,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       }
     })();
     return () => { cancelled = true; };
-  }, [user?.id, lessonData.lessonId, makeAuthenticatedRequest]);
+  }, [user?.id, lessonData.lessonId, adminCalibrationMode, makeAuthenticatedRequest]);
 
   // Request microphone permission
   const requestMicPermission = async () => {
@@ -612,7 +616,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       setCurrentStep('feedback');
 
       // Store improved transcript in localStorage for speaking improvement activity
-      if (result.improved_transcript && user?.id && lessonData.lessonId) {
+      if (!adminCalibrationMode && result.improved_transcript && user?.id && lessonData.lessonId) {
         try {
           const savedProgress = lessonProgressStorage.loadProgress(user.id, lessonData.lessonId);
           const updatedActivities = savedProgress?.activities || [];
@@ -786,6 +790,9 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
       if (!jobId) {
         throw new Error('No job ID returned from server.');
       }
+
+      setSpeechJobIds((prev) => ({ ...prev, [promptId]: jobId }));
+      onSpeechJobCreated?.(jobId, promptId);
 
       triggerSpeechAnalysisBackground(jobId);
 
@@ -1249,6 +1256,9 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
         return;
       }
 
+      setSpeechJobIds((prev) => ({ ...prev, [promptId]: jobId }));
+      onSpeechJobCreated?.(jobId, promptId);
+
       triggerSpeechAnalysisBackground(jobId);
 
       const pollResult = async (): Promise<{ status: string; result?: any; error?: string; transcript?: string }> => {
@@ -1380,6 +1390,9 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
 
       const { jobId } = await res.json();
       if (!jobId) throw new Error('No job ID returned.');
+
+      setSpeechJobIds((prev) => ({ ...prev, [promptId]: jobId }));
+      onSpeechJobCreated?.(jobId, promptId);
 
       triggerSpeechAnalysisBackground(jobId);
 
@@ -1538,11 +1551,22 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
     const timeSpent = Math.round((Date.now() - startTime) / 1000);
 
     try {
-      // Collect all transcripts from all prompts
       const allTranscripts = Object.values(transcripts).filter(Boolean) as string[];
-      
+
       if (allTranscripts.length === 0) {
         throw new Error('No transcripts available');
+      }
+
+      if (adminCalibrationMode) {
+        onComplete({
+          activityOrder: lessonData.activityOrder,
+          timeSpent,
+          transcripts,
+          feedback,
+          jobIds: speechJobIds,
+        });
+        setIsGeneratingImproved(false);
+        return;
       }
 
       // If some transcripts are missing (unexpected), proceed with what we have.
@@ -1684,7 +1708,7 @@ const SpeakingWithFeedback = memo<SpeakingWithFeedbackProps>(({ lessonData, onCo
     } finally {
       setIsGeneratingImproved(false);
     }
-  }, [user, lessonData, startTime, transcripts, feedback, isGeneratingImproved, generateCombinedImprovedVersion, makeAuthenticatedRequest, showNotification, onComplete]);
+  }, [user, lessonData, startTime, transcripts, feedback, speechJobIds, isGeneratingImproved, adminCalibrationMode, generateCombinedImprovedVersion, makeAuthenticatedRequest, showNotification, onComplete]);
 
   if (!promptText) {
     return (

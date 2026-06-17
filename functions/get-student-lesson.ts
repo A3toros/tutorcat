@@ -2,6 +2,7 @@ import { Handler } from '@netlify/functions';
 import { neon } from '@neondatabase/serverless';
 import { getHeaders } from './cors-headers';
 import { requireStudentAuth } from './student-auth.js';
+import { sumEffectiveScores } from './student-lesson-scoring.js';
 
 const handler: Handler = async (event) => {
   const headers = getHeaders(event, false);
@@ -161,21 +162,39 @@ const handler: Handler = async (event) => {
       feedback: r.feedback,
     }));
 
-    const progressPercentage =
+    const activityProgressPct =
       totalActivities > 0
         ? Math.min(100, Math.round((completedActivityCount / totalActivities) * 100))
         : 0;
+    const scorePct =
+      results.length > 0
+        ? sumEffectiveScores(
+            results as Array<{
+              activity_type?: string
+              score?: number
+              max_score?: number
+              answers?: unknown
+              feedback?: unknown
+            }>
+          ).percentage
+        : null;
+    const progressPercentage =
+      progressResult[0]?.completed
+        ? 100
+        : scorePct !== null && completedActivityCount > 0
+          ? scorePct
+          : activityProgressPct;
 
     const userProgress = progressResult[0]
       ? {
           ...progressResult[0],
-          progress_percentage: progressResult[0].completed ? 100 : progressPercentage,
+          progress_percentage: progressPercentage,
         }
       : completedActivityCount > 0
         ? {
             user_id: userId,
             student_lesson_id: lessonId,
-            score: progressPercentage,
+            score: Number(scorePct ?? activityProgressPct),
             completed: false,
             progress_percentage: progressPercentage,
           }

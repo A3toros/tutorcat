@@ -1,0 +1,41 @@
+---
+description: When editing a student lesson, only change that lesson — never touch others
+alwaysApply: true
+---
+
+# Student lesson isolation
+
+When working on **any** student lesson (Lesson 1, 2, 3, …), **only change that lesson**. Lessons 1 and 2 must never be affected by Lesson 3 work (or vice versa).
+
+## Database / migrations
+
+- Every seed or patch must be scoped to **one slug**, e.g. `WHERE slug = 'design-your-own-character'`.
+- Prefer **DELETE + re-insert for that slug only** (CASCADE is fine). Never truncate or bulk-update across lessons.
+- **Never** run `UPDATE student_lesson_activities` filtered only by `activity_order`, `activity_type`, or `lesson_number` without also joining `student_lessons` and filtering by **slug**.
+- **Never** run SQL against the database unless the user explicitly asks.
+- When suggesting manual SQL, include the slug filter in every `UPDATE`/`DELETE` and say which lesson it targets.
+
+```sql
+-- ✅ GOOD: scoped to one lesson
+UPDATE student_lesson_activities la
+SET content = ...
+FROM student_lessons sl
+WHERE sl.id = la.student_lesson_id
+  AND sl.slug = 'design-your-own-character'
+  AND la.activity_order = 3;
+
+-- ❌ BAD: hits the same activity_order in ALL lessons
+UPDATE student_lesson_activities
+SET content = ...
+WHERE activity_order = 3;
+```
+
+## Files and code
+
+- Edit only the migration(s) for the lesson being worked on. Do not rewrite L1/L2 seed files when fixing L3.
+- Shared activity components are fine; lesson-specific content lives in that lesson’s seed JSON, not copied into other lessons’ rows.
+
+## Before handing off SQL
+
+- Confirm the slug matches the lesson being changed.
+- Confirm no statement could match rows belonging to another lesson.
