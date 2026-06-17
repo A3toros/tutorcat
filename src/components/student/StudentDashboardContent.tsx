@@ -112,16 +112,13 @@ export default function StudentDashboardContent() {
                       </span>
                     )}
                     <Button
-                      disabled={lesson.locked}
                       onClick={() => router.push(`/student/lessons?lessonId=${lesson.id}`)}
                     >
-                      {lesson.locked ? 'Locked' : lesson.completed ? 'Review' : 'Start'}
+                      {lesson.completed ? 'Review' : 'Start'}
                     </Button>
                   </div>
                 </div>
-                {!lesson.locked && (
-                  <ProgressBar className="mt-3" progress={lesson.progress_percentage} />
-                )}
+                <ProgressBar className="mt-3" progress={lesson.progress_percentage} />
               </Card>
             ))}
           </div>
