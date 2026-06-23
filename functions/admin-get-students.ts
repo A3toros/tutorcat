@@ -182,7 +182,17 @@ export const handler: Handler = async (event) => {
       const lessonId = String(row.lesson_id)
       const completed = Boolean(row.completed)
       const score = Number(row.score) || 0
-      const pct = completed ? (effectivePctByUserLesson.get(`${userId}:${lessonId}`) ?? 0) : 0
+      const userLessonKey = `${userId}:${lessonId}`
+      const activityRows = resultsByUserLesson.get(userLessonKey)
+      let pct = 0
+      if (completed) {
+        if (activityRows && activityRows.length > 0) {
+          pct = effectivePctByUserLesson.get(userLessonKey) ?? 0
+        } else if (score > 0 && score <= 10) {
+          // Manual progress override: score stored as 0–10 maps to export column (×10 → %)
+          pct = score * 10
+        }
+      }
       const activitiesTotal = Number(row.activities_total) || 0
       const activitiesDone = Number(row.activities_done) || 0
       const item = {
