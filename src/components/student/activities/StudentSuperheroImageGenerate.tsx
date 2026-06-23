@@ -8,8 +8,10 @@ import {
   generateSuperheroImageRequest,
   hasSuperheroSelfie,
 } from '@/lib/superheroAi'
+import SuperheroSelfiePicker from './SuperheroSelfiePicker'
 
-const DEFAULT_IMAGE_DESCRIPTION = 'Generate an original cartoon portrait of your superhero.'
+const DEFAULT_IMAGE_DESCRIPTION =
+  'Add your photo, then generate an original cartoon portrait based on your answers and appearance.'
 
 function isAdminLessonTestMode(): boolean {
   return typeof window !== 'undefined' && Boolean((window as Window & { __ADMIN_LESSON_TEST_MODE?: boolean }).__ADMIN_LESSON_TEST_MODE)
@@ -26,32 +28,37 @@ export default function StudentSuperheroImageGenerate({
     [activityResults]
   )
   const hasProfile = bundle.profile_sentences.length > 0
-  const hasSelfie = hasSuperheroSelfie(bundle)
 
+  const [selfie, setSelfie] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null)
   const [promptUsed, setPromptUsed] = useState<string | null>(null)
   const [model, setModel] = useState<string | null>(null)
 
+  const hasSelfie = hasSuperheroSelfie({ ...bundle, selfie_data_url: selfie })
+
   const handleGenerate = async () => {
+    if (!selfie) {
+      setError('Add your photo first, then tap Generate my hero.')
+      return
+    }
     setLoading(true)
     setError(null)
     const adminTest = isAdminLessonTestMode()
+    const requestBundle = { ...bundle, selfie_data_url: selfie }
     const res = await generateSuperheroImageRequest(
       adminTest
-        ? { bundle, useAdminApi: true }
-        : { studentLessonId: lesson.id }
+        ? { bundle: requestBundle, useAdminApi: true }
+        : { studentLessonId: lesson.id, selfie_data_url: selfie }
     )
     setLoading(false)
     if (!res.success || !res.data) {
       setError(
         res.error ||
-          (!hasSelfie
-            ? 'Add your hero face photo first (activity #14).'
-            : !hasProfile
-              ? 'Complete the Powers & weakness sentences activity first.'
-              : 'Could not generate image. Try again.')
+          (!hasProfile
+            ? 'Complete the Powers & weakness sentences activity first.'
+            : 'Could not generate image. Try again.')
       )
       return
     }
@@ -61,13 +68,14 @@ export default function StudentSuperheroImageGenerate({
   }
 
   const handleContinue = () => {
-    if (!imageDataUrl) return
+    if (!imageDataUrl || !selfie) return
     onComplete({
       score: 1,
       maxScore: 1,
       attempts: 1,
       answers: {
         status: 'complete',
+        selfie_data_url: selfie,
         image_data_url: imageDataUrl,
         image_url: null,
         provider: model,
@@ -78,7 +86,7 @@ export default function StudentSuperheroImageGenerate({
     })
   }
 
-  const canGenerate = hasProfile && hasSelfie
+  const canGenerate = hasProfile && hasSelfie && !loading
 
   return (
     <Card className="p-4 sm:p-6 max-w-lg mx-auto">
@@ -94,11 +102,8 @@ export default function StudentSuperheroImageGenerate({
           Finish activity #11 (Powers & weakness sentences) first.
         </p>
       )}
-      {!hasSelfie && !isAdminLessonTestMode() && (
-        <p className="text-sm text-amber-700 mb-3">
-          Finish activity #14 (Your hero face) — take a photo or choose from gallery.
-        </p>
-      )}
+
+      <SuperheroSelfiePicker photo={selfie} onPhotoChange={setSelfie} disabled={loading} />
 
       <div className="min-h-48 rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 flex items-center justify-center mb-4 overflow-hidden">
         {loading ? (
@@ -113,21 +118,21 @@ export default function StudentSuperheroImageGenerate({
             className="max-h-64 w-full object-contain"
           />
         ) : (
-          <p className="text-slate-400 text-sm px-4 text-center">Your portrait will appear here.</p>
+          <p className="text-slate-400 text-sm px-4 text-center">Your superhero portrait will appear here.</p>
         )}
       </div>
 
       {error && <p className="text-sm text-amber-700 mb-3">{error}</p>}
 
       {!imageDataUrl && (
-        <Button className="w-full mb-2" onClick={handleGenerate} disabled={loading || !canGenerate}>
+        <Button className="w-full mb-2" onClick={handleGenerate} disabled={!canGenerate}>
           {loading ? 'Generating…' : 'Generate my hero'}
         </Button>
       )}
 
       {imageDataUrl && (
         <>
-          <Button className="w-full mb-2" variant="secondary" onClick={handleGenerate} disabled={loading}>
+          <Button className="w-full mb-2" variant="secondary" onClick={handleGenerate} disabled={loading || !selfie}>
             {loading ? 'Regenerating…' : 'Try again'}
           </Button>
           <Button className="w-full" onClick={handleContinue}>

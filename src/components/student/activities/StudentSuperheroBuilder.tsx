@@ -125,7 +125,7 @@ export default function StudentSuperheroBuilder({ activity, onComplete }: Studen
     )
   }
 
-  const selected = current ? responses[current.id] : ''
+  const selected = current ? (responses[current.id] ?? '') : ''
 
   return (
     <Card className="p-4 sm:p-6 max-w-lg mx-auto">
@@ -139,12 +139,15 @@ export default function StudentSuperheroBuilder({ activity, onComplete }: Studen
         <>
           <p className="text-slate-700 font-medium mb-3">{current.prompt}</p>
           <Select
+            key={current.id}
             id={`quiz-${current.id}`}
             value={selected}
             onChange={(e) => handleSelect(current.id, e.target.value)}
-            className="min-h-[48px] text-base w-full mb-4"
+            className={`min-h-[48px] text-base w-full mb-4 ${!selected ? 'text-slate-400' : ''}`}
           >
-            <option value="">Choose an answer…</option>
+            <option value="" disabled hidden>
+              Choose an answer…
+            </option>
             {current.options.map((opt) => (
               <option key={opt.id} value={opt.id}>
                 {opt.label}

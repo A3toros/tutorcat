@@ -68,7 +68,7 @@ INSERT INTO student_lessons (
   1
 );
 
--- Activities 1–18
+-- Activities 1–17
 INSERT INTO student_lesson_activities (student_lesson_id, activity_type, activity_order, title, description, content, estimated_time_seconds)
 SELECT sl.id, v.activity_type, v.activity_order, v.title, v.description, v.content::jsonb, v.estimated_time_seconds
 FROM student_lessons sl
@@ -109,7 +109,7 @@ CROSS JOIN (VALUES
     5,
     'student_vocab_categorize',
     'Sort: Hero trait vs villain trait',
-    'Tap a word, then tap its category.',
+    'Tap a word, then tap its category. Words are shuffled.',
     '{"buckets": ["Hero trait", "Villain trait"]}'::text,
     180
   ),
@@ -207,14 +207,6 @@ CROSS JOIN (VALUES
   ),
   (
     14,
-    'student_selfie_capture',
-    'Your hero face',
-    'Add a photo for your hero portrait. Tap Start, then take a new photo or choose one from your gallery.',
-    '{}'::text,
-    180
-  ),
-  (
-    15,
     'student_alignment_reveal',
     'Are you a hero or a villain?',
     'The Magic Hat will decide your fate.',
@@ -222,15 +214,15 @@ CROSS JOIN (VALUES
     180
   ),
   (
-    16,
+    15,
     'student_superhero_image_generate',
     'What would you be like as a superhero based on your answers and appearance?',
-    'Generate an original cartoon portrait of your superhero.',
+    'Add your photo, then generate an original cartoon portrait of your superhero.',
     '{}'::text,
-    240
+    300
   ),
   (
-    17,
+    16,
     'student_challenge_wheel',
     'Power wheel 30s',
     'Spin the wheel and practice speaking for 30 seconds.',
@@ -238,7 +230,7 @@ CROSS JOIN (VALUES
     300
   ),
   (
-    18,
+    17,
     'student_exit_poll',
     'Exit: picture → word',
     'Match each picture to the correct word before you finish.',
@@ -355,7 +347,7 @@ CROSS JOIN (VALUES
 ) AS v(correct_sentence, words_array, sort_order)
 WHERE sl.slug = 'create-your-superhero' AND la.activity_order = 10;
 
--- Exit ticket (activity 18)
+-- Exit ticket (activity 17)
 INSERT INTO student_poll_items (activity_id, question, options, allow_multiple, correct_option_id, sort_order)
 SELECT la.id, v.question, v.options::jsonb, FALSE, v.correct_id, v.sort_order
 FROM student_lesson_activities la
@@ -392,7 +384,7 @@ CROSS JOIN (VALUES
     5
   )
 ) AS v(question, options, correct_id, sort_order)
-WHERE sl.slug = 'create-your-superhero' AND la.activity_order = 18;
+WHERE sl.slug = 'create-your-superhero' AND la.activity_order = 17;
 
 COMMIT;
 

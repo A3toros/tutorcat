@@ -48,7 +48,7 @@ const handler: Handler = async (event) => {
   }
 
   try {
-    let body: { studentLessonId?: string; bundle?: unknown };
+    let body: { studentLessonId?: string; bundle?: unknown; selfie_data_url?: string };
     try {
       body = JSON.parse(event.body || '{}');
     } catch {
@@ -68,7 +68,7 @@ const handler: Handler = async (event) => {
       selfieHints = await describeSelfieForCartoon(openai, bundle.selfie_data_url!);
     } catch (e) {
       console.warn('Selfie vision hints failed:', e);
-      throw new Error('Could not read your photo. Retake activity #14 or choose another image.');
+      throw new Error('Could not read your photo. Try another image or take a new photo.');
     }
 
     const prompt = buildImagePrompt(bundle, selfieHints);

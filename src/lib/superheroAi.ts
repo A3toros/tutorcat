@@ -49,7 +49,6 @@ export function buildSuperheroAiBundleFromResults(
   const quiz = answersForOrder(results, 7)
   const profile = answersForOrder(results, 11)
   const moral = answersForOrder(results, 12)
-  const selfie = answersForOrder(results, 14)
 
   const profileSlots: SuperheroProfileSlot[] = []
   const rawSentences = profile?.sentences
@@ -85,12 +84,6 @@ export function buildSuperheroAiBundleFromResults(
     }
   }
 
-  const skippedSelfie = selfie?.skipped === true
-  const selfieDataUrl =
-    !skippedSelfie && typeof selfie?.selfie_data_url === 'string'
-      ? selfie.selfie_data_url
-      : null
-
   return {
     quiz_matched_hero_id:
       typeof quiz?.matched_hero_id === 'string' ? quiz.matched_hero_id : undefined,
@@ -99,7 +92,7 @@ export function buildSuperheroAiBundleFromResults(
     profile_slots: profileSlots,
     character_description: profileSentences.join('\n'),
     moral_summary: moralSummary,
-    selfie_data_url: selfieDataUrl,
+    selfie_data_url: null,
   }
 }
 
@@ -174,12 +167,18 @@ export async function classifyHeroAlignmentRequest(opts: {
 export async function generateSuperheroImageRequest(opts: {
   studentLessonId?: string
   bundle?: SuperheroAiBundle
+  selfie_data_url?: string | null
   useAdminApi?: boolean
 }): Promise<{ success: boolean; data?: GenerateSuperheroImageResult; error?: string }> {
   const body: Record<string, unknown> = {}
-  if (opts.bundle) body.bundle = opts.bundle
-  else if (opts.studentLessonId) body.studentLessonId = opts.studentLessonId
-  else return { success: false, error: 'Missing lesson or profile data.' }
+  if (opts.bundle) {
+    body.bundle = opts.bundle
+  } else if (opts.studentLessonId) {
+    body.studentLessonId = opts.studentLessonId
+    if (opts.selfie_data_url) body.selfie_data_url = opts.selfie_data_url
+  } else {
+    return { success: false, error: 'Missing lesson or profile data.' }
+  }
 
   const url = `${apiBase()}/.netlify/functions/generate-superhero-image`
   const init: RequestInit = {

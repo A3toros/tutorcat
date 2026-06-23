@@ -8,6 +8,15 @@ import type { StudentActivityProps } from '../activityProps'
 const touchChip =
   'min-h-[44px] touch-manipulation select-none [-webkit-tap-highlight-color:transparent]'
 
+function shuffleWords<T>(items: T[]): T[] {
+  const shuffled = [...items]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+  }
+  return shuffled
+}
+
 const RETRY_RESET_MS = 2000
 
 export default function StudentWordCategorize({ activity, onComplete }: StudentActivityProps) {
@@ -23,10 +32,11 @@ export default function StudentWordCategorize({ activity, onComplete }: StudentA
       word: v.english_word,
       category: v.category || '',
     }))
-    if (fromItems.length) return fromItems
-    const fromContent = activity.content?.words as Array<{ word: string; category: string }>
-    return fromContent || []
-  }, [activity])
+    const list = fromItems.length
+      ? fromItems
+      : (activity.content?.words as Array<{ word: string; category: string }>) || []
+    return shuffleWords(list)
+  }, [activity.id, activity.vocabulary_items, activity.content?.words])
 
   const [assignments, setAssignments] = useState<Record<string, string>>({})
   const [selectedWord, setSelectedWord] = useState<string | null>(null)

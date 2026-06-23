@@ -110,7 +110,6 @@ export function buildBundleFromActivityAnswers(
   const quiz = byOrder.get(7);
   const profile = byOrder.get(11);
   const moral = byOrder.get(12);
-  const selfie = byOrder.get(14);
 
   const profileSlots: SuperheroProfileSlot[] = [];
   const rawSentences = profile?.sentences;
@@ -143,12 +142,6 @@ export function buildBundleFromActivityAnswers(
     }
   }
 
-  const skippedSelfie = selfie?.skipped === true;
-  const selfieDataUrl =
-    !skippedSelfie && typeof selfie?.selfie_data_url === 'string'
-      ? selfie.selfie_data_url
-      : null;
-
   return {
     quiz_matched_hero_id:
       typeof quiz?.matched_hero_id === 'string' ? quiz.matched_hero_id : undefined,
@@ -157,7 +150,7 @@ export function buildBundleFromActivityAnswers(
     profile_slots: profileSlots,
     character_description: profileSentences.join('\n'),
     moral_summary: moralSummary,
-    selfie_data_url: selfieDataUrl,
+    selfie_data_url: null,
   };
 }
 
@@ -178,7 +171,7 @@ export async function loadBundleForStudentLesson(
     FROM student_lesson_activity_results
     WHERE user_id = ${userId}
       AND student_lesson_id = ${studentLessonId}
-      AND activity_order IN (7, 11, 12, 14)
+      AND activity_order IN (7, 11, 12)
     ORDER BY activity_order ASC
   `;
 
@@ -239,7 +232,7 @@ export function buildImagePrompt(bundle: SuperheroAiBundle, selfieHints: string 
 
 export function assertSelfiePresent(bundle: SuperheroAiBundle): void {
   if (!bundle.selfie_data_url?.startsWith('data:image/')) {
-    throw new Error('Add your hero face photo first (activity #14).');
+    throw new Error('Add your photo before generating your superhero portrait.');
   }
 }
 
@@ -314,7 +307,7 @@ export async function describeSelfieForCartoon(
 
 export async function resolveSuperheroAiBundle(
   event: { headers?: { cookie?: string } },
-  body: { studentLessonId?: string; bundle?: unknown }
+  body: { studentLessonId?: string; bundle?: unknown; selfie_data_url?: string }
 ): Promise<{ bundle: SuperheroAiBundle; mode: 'student' | 'admin' }> {
   const inlineBundle = body.bundle ? parseBundleInput(body.bundle) : null;
 
@@ -342,5 +335,11 @@ export async function resolveSuperheroAiBundle(
 
   const sql = neon(databaseUrl);
   const bundle = await loadBundleForStudentLesson(sql, auth.user.id, body.studentLessonId);
+  if (
+    typeof body.selfie_data_url === 'string' &&
+    body.selfie_data_url.startsWith('data:image/')
+  ) {
+    bundle.selfie_data_url = body.selfie_data_url;
+  }
   return { bundle, mode: 'student' };
 }
