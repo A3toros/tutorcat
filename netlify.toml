@@ -22,6 +22,10 @@
   [functions."run-speech-analysis-background"]
     # Netlify background function (filename -background): callers get 202 immediately, runs up to 15 min
     timeout = 900
+  [functions."classify-hero-alignment"]
+    timeout = 45
+  [functions."generate-superhero-image"]
+    timeout = 90
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"

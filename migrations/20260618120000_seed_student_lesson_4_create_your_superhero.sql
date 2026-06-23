@@ -209,23 +209,23 @@ CROSS JOIN (VALUES
     14,
     'student_selfie_capture',
     'Your hero face',
-    'Take a selfie for your hero project (optional — you can skip).',
+    'Add a photo for your hero portrait. Tap Start, then take a new photo or choose one from your gallery.',
     '{}'::text,
     180
   ),
   (
     15,
     'student_alignment_reveal',
-    'Hero or villain? AI verdict',
-    'See what the AI thinks about your character choices.',
+    'Are you a hero or a villain?',
+    'The Magic Hat will decide your fate.',
     $al${"demo_alignment": "hero", "demo_reason": "You help people and make kind choices. Your answers sound like a hero!"}$al$,
     180
   ),
   (
     16,
     'student_superhero_image_generate',
-    'AI draws your character',
-    'Generate an original cartoon portrait of your superhero (coming soon).',
+    'What would you be like as a superhero based on your answers and appearance?',
+    'Generate an original cartoon portrait of your superhero.',
     '{}'::text,
     240
   ),
@@ -335,7 +335,7 @@ SELECT la.id, 'mcq', v.prompt, v.correct, v.options::jsonb, v.sort_order
 FROM student_lesson_activities la
 JOIN student_lessons sl ON sl.id = la.student_lesson_id
 CROSS JOIN (VALUES
-  ('My hero ___ fly.', 'can', '{"choices": ["can", "can't", "cans"], "correct": "can"}', 1),
+  ('My hero ___ fly.', 'can', '{"choices": ["can", "can''t not", "cans"], "correct": "can"}', 1),
   ('A normal person ___ read minds.', 'can''t', '{"choices": ["can", "can''t", "is"], "correct": "can''t"}', 2),
   ('She ___ able to run fast.', 'is', '{"choices": ["is", "are", "am"], "correct": "is"}', 3),
   ('He ___ turn invisible. He is too weak.', 'can''t', '{"choices": ["can", "can''t", "doesn''t"], "correct": "can''t"}', 4)

@@ -943,6 +943,14 @@ export default function AdminDashboardContent() {
                 <Button
                   variant="secondary"
                   size="sm"
+                  onClick={() => router.push('/admin/superhero-ai-test')}
+                  className="bg-indigo-50 text-indigo-800 border border-indigo-200 hover:bg-indigo-100"
+                >
+                  Superhero AI
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={() => router.push('/admin/students')}
                   className="bg-purple-50 text-purple-800 border border-purple-200 hover:bg-purple-100"
                 >
