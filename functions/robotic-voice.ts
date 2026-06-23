@@ -1,16 +1,17 @@
 /**
  * Robotic / TTS voice detector (Google Translate speak, AI voice playback).
  *
- * v2.3.3 (calibrated on ChatGPT TTS admin samples):
- *  - Single-segment + flat pitch (pitch_variance < 0.035): 55 base
- *  - Relaxed easy-ASR band (mean_logprob ≈ -0.29 to -0.33 seen on real AI voice)
- *  - Removed "like" from filler list ("I like shopping" is content, not a filler)
- *  - Ultra-flat pitch bonus (+15 when pitch_variance < 0.002)
+ * v2.3.4 (calibrated on admin GTTS + student human FPs):
+ *  - Multi-segment short path: flat pitch alone no longer corroborates TTS
+ *    (rehearsed human speech matches rhythm); require very-easy ASR or mean ≤ -0.40
+ *  - No low_pitch_tts when segment_count ≤ 2 or mean_logprob > -0.40
+ *
+ * v2.3.3: single-segment easy ASR, filler list fix, ultra-flat pitch bonus.
  *
  * Log-only by default; blocking requires ROBOTIC_VOICE_MODE=block.
  */
 
-export const ROBOTIC_VOICE_SCORER_VERSION = 'v2.3.3'
+export const ROBOTIC_VOICE_SCORER_VERSION = 'v2.3.4'
 
 export interface BrowserRhythmInput {
   speech_rate?: number
@@ -222,10 +223,21 @@ function veryEasyAsrSingleSegment(w: ReturnType<typeof whisperDerived>): boolean
   return w.mean_logprob > -0.34 && w.min_logprob > -0.4
 }
 
-/** Stricter band for multi-segment short answers — avoids human 3-seg at ≈ -0.32. */
+/** Stricter band for 3–4 segment short answers — avoids human at ≈ -0.32. */
 function veryEasyAsrMultiSegment(w: ReturnType<typeof whisperDerived>): boolean {
   if (w.mean_logprob == null || w.min_logprob == null) return false
   return w.mean_logprob > -0.3 && w.min_logprob > -0.38
+}
+
+/** 2-segment GTTS band (admin ≈ -0.328); rhythm-only corroboration removed in v2.3.4. */
+function veryEasyAsrTwoSegment(w: ReturnType<typeof whisperDerived>): boolean {
+  if (w.mean_logprob == null || w.min_logprob == null) return false
+  return w.mean_logprob > -0.33 && w.min_logprob > -0.38
+}
+
+/** GTTS often sits below rehearsed human flat speech (≈ -0.35..-0.40). */
+function isGtssLikeHardAsr(w: ReturnType<typeof whisperDerived>): boolean {
+  return w.mean_logprob != null && w.mean_logprob <= -0.4
 }
 
 /** @deprecated alias used in signals */
@@ -244,10 +256,23 @@ function hasTtsRhythmCorroboration(rhythm: BrowserRhythmInput | null): boolean {
 function shortTtsCorroborated(
   w: ReturnType<typeof whisperDerived>,
   rhythm: BrowserRhythmInput | null,
-  multiSegment: boolean
+  mode: 'single' | 'two_segment' | 'multi_segment'
 ): boolean {
+  if (mode === 'two_segment') {
+    return veryEasyAsrTwoSegment(w)
+  }
+  if (mode === 'multi_segment') {
+    if (veryEasyAsrMultiSegment(w)) return true
+    return hasTtsRhythmCorroboration(rhythm) && isGtssLikeHardAsr(w)
+  }
   if (hasTtsRhythmCorroboration(rhythm)) return true
-  return multiSegment ? veryEasyAsrMultiSegment(w) : veryEasyAsrSingleSegment(w)
+  return veryEasyAsrSingleSegment(w)
+}
+
+function allowLowPitchTtsBonus(w: ReturnType<typeof whisperDerived>): boolean {
+  if (w.segment_count === 1) return true
+  if (w.segment_count === 2) return veryEasyAsrTwoSegment(w)
+  return w.mean_logprob == null || w.mean_logprob <= -0.4
 }
 
 /** Google Translate / AI TTS playback scoring. */
@@ -269,7 +294,7 @@ function scoreArtifactTtsBucket(
         Number.isFinite(rhythm.pitch_variance) &&
         rhythm.pitch_variance >= 0 &&
         rhythm.pitch_variance < 0.035
-      if (shortTtsCorroborated(w, rhythm, false) || veryEasySingle) {
+      if (shortTtsCorroborated(w, rhythm, 'single') || veryEasySingle) {
         const rawPoints = veryEasySingle ? 58 : rhythmPitch ? 55 : 48
         return {
           points: rawPoints,
@@ -306,7 +331,7 @@ function scoreArtifactTtsBucket(
     w.segment_count <= MAX_SEGMENTS_FOR_ALL_EQUAL_SKIP &&
     w.word_count >= MIN_WORDS_FOR_ARTIFACT_TTS_SHORT
   ) {
-    if (!shortTtsCorroborated(w, rhythm, true)) {
+    if (!shortTtsCorroborated(w, rhythm, 'multi_segment')) {
       return { points: 0, rulesHit: [], rawPoints: 0, shortSkippedNoCorroboration: true }
     }
     const rawPoints = 50
@@ -318,7 +343,7 @@ function scoreArtifactTtsBucket(
   }
 
   if (w.segment_count === 2 && w.word_count >= MIN_WORDS_FOR_ARTIFACT_TTS_SHORT) {
-    if (!shortTtsCorroborated(w, rhythm, true)) {
+    if (!shortTtsCorroborated(w, rhythm, 'two_segment')) {
       return { points: 0, rulesHit: [], rawPoints: 0, shortSkippedNoCorroboration: true }
     }
     const rawPoints = 55
@@ -510,7 +535,9 @@ export function computeRoboticVoiceScore(input: RoboticVoiceFeaturesInput): Robo
     rulesHit.push('filler_absence')
   }
 
+  const allowLowPitchTts = allowLowPitchTtsBonus(w)
   if (
+    allowLowPitchTts &&
     artifactTts.points >= 38 &&
     pitchVariance != null &&
     pitchVariance < 0.02 &&

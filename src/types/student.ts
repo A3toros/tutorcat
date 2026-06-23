@@ -20,6 +20,11 @@ export type StudentActivityType =
   | 'student_vocab_image_mcq'
   | 'student_character_description'
   | 'student_character_story'
+  | 'student_superhero_builder'
+  | 'student_superhero_profile'
+  | 'student_selfie_capture'
+  | 'student_alignment_reveal'
+  | 'student_superhero_image_generate'
   | 'student_exit_poll'
 
 export type StudentSectionId =
@@ -166,6 +171,7 @@ export const STUDENT_SECTIONS: Array<{
       'student_vocab_speed_tap',
       'student_character_builder',
       'student_vocab_image_mcq',
+      'student_superhero_builder',
     ],
   },
   { id: 'grammar_builder', label: 'Grammar Builder', activityTypes: ['student_grammar_builder'] },
@@ -181,9 +187,19 @@ export const STUDENT_SECTIONS: Array<{
       'student_grammar_make_question',
       'student_character_description',
       'student_character_story',
+      'student_superhero_profile',
     ],
   },
-  { id: 'speaking', label: 'Speaking Cards', activityTypes: ['student_speaking_cards'] },
+  {
+    id: 'speaking',
+    label: 'Speaking Cards',
+    activityTypes: [
+      'student_speaking_cards',
+      'student_selfie_capture',
+      'student_alignment_reveal',
+      'student_superhero_image_generate',
+    ],
+  },
   { id: 'challenge', label: 'Challenge Wheel', activityTypes: ['student_challenge_wheel'] },
   { id: 'exit', label: 'Exit Ticket', activityTypes: ['student_exit_poll'] },
 ]

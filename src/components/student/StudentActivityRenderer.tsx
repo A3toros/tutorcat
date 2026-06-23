@@ -22,6 +22,11 @@ import StudentCharacterBuilder from './activities/StudentCharacterBuilder'
 import StudentVocabImageMcq from './activities/StudentVocabImageMcq'
 import StudentCharacterDescription from './activities/StudentCharacterDescription'
 import StudentCharacterStory from './activities/StudentCharacterStory'
+import StudentSuperheroBuilder from './activities/StudentSuperheroBuilder'
+import StudentSuperheroProfile from './activities/StudentSuperheroProfile'
+import StudentSelfieCapture from './activities/StudentSelfieCapture'
+import StudentAlignmentReveal from './activities/StudentAlignmentReveal'
+import StudentSuperheroImageGenerate from './activities/StudentSuperheroImageGenerate'
 
 const REGISTRY: Record<StudentActivityType, React.ComponentType<StudentActivityProps>> = {
   student_warmup_poll: StudentPollActivity,
@@ -44,6 +49,11 @@ const REGISTRY: Record<StudentActivityType, React.ComponentType<StudentActivityP
   student_vocab_image_mcq: StudentVocabImageMcq,
   student_character_description: StudentCharacterDescription,
   student_character_story: StudentCharacterStory,
+  student_superhero_builder: StudentSuperheroBuilder,
+  student_superhero_profile: StudentSuperheroProfile,
+  student_selfie_capture: StudentSelfieCapture,
+  student_alignment_reveal: StudentAlignmentReveal,
+  student_superhero_image_generate: StudentSuperheroImageGenerate,
 }
 
 interface Props {

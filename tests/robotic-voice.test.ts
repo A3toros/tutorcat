@@ -37,7 +37,58 @@ function variableLogprobSegments(count: number): ReturnType<typeof seg>[] {
   return out
 }
 
-describe('robotic-voice v2.3.3', () => {
+describe('robotic-voice v2.3.4', () => {
+  describe('v2.3.4 human FP regressions (2026-06-18)', () => {
+    it('does not flag Ploy 52467 personality card (3 seg, mean -0.359, flat pitch)', () => {
+      const text =
+        'I am a friendly person and I like to help my friends when they need something.'
+      const r = computeRoboticVoiceScore({
+        whisper_verbose: {
+          text,
+          segments: [
+            seg(0, 'I am a friendly person and I like to help my friends', 0, 4, -0.359),
+            seg(1, 'when they need something.', 4, 6, -0.359),
+            seg(2, '', 6, 6.1, -0.359),
+          ].filter((s) => s.text),
+        },
+        browser_rhythm: { pitch_variance: 0.0011, energy_autocorr_lag1: 0.12 },
+      })
+      expect(r.score).toBeLessThan(70)
+      expect(r.signals.would_flag).toBe(false)
+      expect(r.signals.rules_hit).not.toContain('low_pitch_tts')
+    })
+
+    it('does not flag 51731 parents/work 2-seg (mean -0.449, rhythm-only v2.3.3 FP)', () => {
+      const text =
+        'My parents work in a hospital and they help sick people every day.'
+      const r = computeRoboticVoiceScore({
+        whisper_verbose: {
+          text,
+          segments: [
+            seg(0, 'My parents work in a hospital and they help sick people', 0, 5, -0.449),
+            seg(1, 'every day.', 5, 6, -0.449),
+          ],
+        },
+        browser_rhythm: { pitch_variance: 0.0008, energy_autocorr_lag1: 0.15 },
+      })
+      expect(r.score).toBeLessThan(70)
+      expect(r.signals.would_flag).toBe(false)
+      expect(r.signals.score_skip_reason).toBe('artifact_short_no_corroboration')
+    })
+
+    it('still flags admin GTTS party 3-seg (mean -0.42) via hard-ASR rhythm path', () => {
+      const segments = flatSegments(3, -0.42, 6)
+      const text = segments.map((s) => s.text).join(' ')
+      const r = computeRoboticVoiceScore({
+        whisper_verbose: { text, segments, duration: 8 },
+        browser_rhythm: { pitch_variance: 0.00044, energy_autocorr_lag1: 0.09 },
+      })
+      expect(r.score).toBeGreaterThanOrEqual(70)
+      expect(r.signals.would_flag).toBe(true)
+      expect(r.signals.rules_hit).toContain('tts_flat_logprob_short')
+    })
+  })
+
   describe('admin ChatGPT TTS calibration samples (2026-06-17)', () => {
     it('single-segment mall shopping prompt (b7232152 pattern)', () => {
       const text =
@@ -204,10 +255,10 @@ describe('robotic-voice v2.3.3', () => {
     expect(r.signals.skip_would_flag_improvement).toBe(true)
   })
 
-  it('reports scorer version v2.3.3', () => {
+  it('reports scorer version v2.3.4', () => {
     const r = computeRoboticVoiceScore({
       whisper_verbose: { text: 'hello', segments: [seg(0, 'hello.', 0, 1, -0.3)] },
     })
-    expect(r.signals.scorer_version).toBe('v2.3.3')
+    expect(r.signals.scorer_version).toBe('v2.3.4')
   })
 })
