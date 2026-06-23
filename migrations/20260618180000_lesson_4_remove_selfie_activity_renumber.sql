@@ -46,7 +46,7 @@ WHERE la.student_lesson_id = sl.id
   AND la.activity_order IN (115, 116, 117, 118);
 
 UPDATE student_lesson_activities la
-SET description = 'Add your photo, then generate an original cartoon portrait of your superhero.'
+SET description = 'The Magic Hat will generate your superhero portrait based on your choices.'
 FROM student_lessons sl
 WHERE la.student_lesson_id = sl.id
   AND sl.slug = 'create-your-superhero'

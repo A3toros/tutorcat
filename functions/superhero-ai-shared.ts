@@ -20,6 +20,9 @@ export interface SuperheroAiBundle {
   profile_slots: SuperheroProfileSlot[];
   character_description: string;
   moral_summary: string[];
+  alignment?: HeroAlignment;
+  alignment_reasons?: string[];
+  alignment_traits?: string[];
   selfie_data_url?: string | null;
 }
 
@@ -110,6 +113,7 @@ export function buildBundleFromActivityAnswers(
   const quiz = byOrder.get(7);
   const profile = byOrder.get(11);
   const moral = byOrder.get(12);
+  const alignmentRow = byOrder.get(14);
 
   const profileSlots: SuperheroProfileSlot[] = [];
   const rawSentences = profile?.sentences;
@@ -142,6 +146,22 @@ export function buildBundleFromActivityAnswers(
     }
   }
 
+  const alignmentRaw =
+    typeof alignmentRow?.alignment_ai === 'string'
+      ? alignmentRow.alignment_ai.toLowerCase()
+      : '';
+  const alignment: HeroAlignment | undefined =
+    alignmentRaw === 'villain' || alignmentRaw === 'anti-hero' || alignmentRaw === 'hero'
+      ? alignmentRaw
+      : undefined;
+  const alignmentReason =
+    typeof alignmentRow?.alignment_ai_reason === 'string'
+      ? alignmentRow.alignment_ai_reason.trim()
+      : '';
+  const alignmentTraits = Array.isArray(alignmentRow?.alignment_ai_traits)
+    ? alignmentRow.alignment_ai_traits.filter((t): t is string => typeof t === 'string')
+    : [];
+
   return {
     quiz_matched_hero_id:
       typeof quiz?.matched_hero_id === 'string' ? quiz.matched_hero_id : undefined,
@@ -150,6 +170,9 @@ export function buildBundleFromActivityAnswers(
     profile_slots: profileSlots,
     character_description: profileSentences.join('\n'),
     moral_summary: moralSummary,
+    alignment,
+    alignment_reasons: alignmentReason ? [alignmentReason] : [],
+    alignment_traits: alignmentTraits,
     selfie_data_url: null,
   };
 }
@@ -171,7 +194,7 @@ export async function loadBundleForStudentLesson(
     FROM student_lesson_activity_results
     WHERE user_id = ${userId}
       AND student_lesson_id = ${studentLessonId}
-      AND activity_order IN (7, 11, 12)
+      AND activity_order IN (7, 11, 12, 14)
     ORDER BY activity_order ASC
   `;
 
@@ -210,24 +233,114 @@ Student data:
 ${JSON.stringify(payload, null, 2)}`;
 }
 
-export function buildImagePrompt(bundle: SuperheroAiBundle, selfieHints: string | null): string {
+export function buildImagePrompt(
+  bundle: SuperheroAiBundle,
+  facialFeatures: string,
+  lookDesign: string
+): string {
   const lines = [
-    'Original comic-book superhero character for an English class project.',
-    'Student character description:',
+    'Photorealistic portrait photo of an original superhero for an English class project.',
+    'CRITICAL — must be the SAME person with nearly identical face: same face shape, eyes, nose, mouth, hairline, and skin tone as described below.',
+    facialFeatures,
+    'Subtle flattering enhancements only: soft cinematic lighting, clear skin, confident heroic expression — slightly more handsome/beautiful but unmistakably the same person.',
+    'Student powers and personality (from their own answers):',
     bundle.character_description,
+    'Original superhero look to generate (not any famous comic character):',
+    lookDesign,
+    'Style: photorealistic photography, natural skin texture, cinematic lighting, sharp focus on the face, three-quarter portrait, subtle original heroic costume.',
+    'Do NOT depict any existing copyrighted character, trademarked hero, or a different person.',
+    'Do NOT include text, logos, or watermarks.',
   ];
-  if (bundle.moral_summary.length) {
-    lines.push('Moral choices (context only):', bundle.moral_summary.join('; '));
-  }
-  if (selfieHints) {
-    lines.push(`Cartoon look hints (generic, not a real person): ${selfieHints}`);
-  }
-  lines.push(
-    'Style: colorful cartoon illustration, full body, dynamic heroic pose, plain light background.',
-    'Do NOT depict any existing copyrighted character, celebrity, or trademarked hero.',
-    'Do NOT include text, logos, or watermarks.'
-  );
   return lines.join('\n');
+}
+
+export function buildImageEditPrompt(lookDesign: string): string {
+  return [
+    'Transform this photo into a photorealistic original superhero portrait.',
+    'CRITICAL: Keep the EXACT same person — same face shape, eyes, nose, mouth, jaw, hair, and skin tone. The result must look like almost the same face from the input photo.',
+    'Apply only subtle flattering enhancements: soft cinematic lighting, clear healthy skin, confident heroic expression — slightly more handsome or beautiful, but still unmistakably the same individual.',
+    `Add this original superhero costume and mood (not any famous hero): ${lookDesign}`,
+    'Photorealistic portrait photography, three-quarter view, sharp focus on the face, plain cinematic background.',
+    'Do NOT change identity to a different person. Do NOT depict copyrighted characters. No text or logos.',
+  ].join('\n');
+}
+
+export function dataUrlToImageFile(dataUrl: string): File {
+  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) {
+    throw new Error('Invalid image data');
+  }
+  const mime = match[1];
+  const buf = Buffer.from(match[2], 'base64');
+  const ext = mime.includes('png') ? 'png' : mime.includes('webp') ? 'webp' : 'jpg';
+  return new File([buf], `selfie.${ext}`, { type: mime });
+}
+
+/** gpt-image-1 supports input_fidelity; mini does not. */
+export function resolveSelfieEditModel(model: string): string {
+  if (/^gpt-image-1$/i.test(model) || /^gpt-image-1\./i.test(model)) {
+    return model;
+  }
+  if (/^gpt-image/i.test(model) || model === 'chatgpt-image-latest') {
+    return 'gpt-image-1';
+  }
+  return model;
+}
+
+export function supportsSelfieEditHighFidelity(model: string): boolean {
+  return /^gpt-image/i.test(model) || model === 'chatgpt-image-latest';
+}
+
+export interface SuperheroLookRationale {
+  look_design: string;
+  why_chosen: string;
+}
+
+export async function buildSuperheroLookRationale(
+  openai: OpenAI,
+  bundle: SuperheroAiBundle
+): Promise<SuperheroLookRationale> {
+  const payload = {
+    profile_sentences: bundle.profile_sentences,
+    moral_choices: bundle.moral_summary,
+    magic_hat_alignment: bundle.alignment ?? null,
+    magic_hat_traits: bundle.alignment_traits ?? [],
+    magic_hat_reason: bundle.alignment_reasons?.join(' ') ?? null,
+  };
+
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    response_format: { type: 'json_object' },
+    messages: [
+      {
+        role: 'user',
+        content: `You help a children's English class design an ORIGINAL superhero portrait (never Batman, Spider-Man, etc.).
+
+From the student's answers, respond with JSON only:
+{
+  "look_design": "One short paragraph for an image generator: original costume colors, power visuals, mood. No trademark names.",
+  "why_chosen": "2-3 short simple English sentences (CEFR A2) telling the student WHY this superhero look fits their personality and choices. Use 'you'."
+}
+
+Student data:
+${JSON.stringify(payload, null, 2)}`,
+      },
+    ],
+    max_tokens: 320,
+  });
+
+  const raw = response.choices[0]?.message?.content?.trim() || '{}';
+  const parsed = JSON.parse(raw) as Record<string, unknown>;
+  const lookDesign =
+    typeof parsed.look_design === 'string' && parsed.look_design.trim()
+      ? parsed.look_design.trim()
+      : 'Original heroic costume with colors that match their powers and loyal personality.';
+  const whyChosen =
+    typeof parsed.why_chosen === 'string' && parsed.why_chosen.trim()
+      ? parsed.why_chosen.trim()
+      : 'Your answers show a brave, original hero — so we gave you a look that matches your powers and kind choices.';
+
+  return { look_design: lookDesign, why_chosen: whyChosen };
 }
 
 export function assertSelfiePresent(bundle: SuperheroAiBundle): void {
@@ -281,10 +394,10 @@ export function getOpenAIClient(): OpenAI {
   return new OpenAI({ apiKey: key });
 }
 
-export async function describeSelfieForCartoon(
+export async function describeSelfieFacialFeatures(
   openai: OpenAI,
   dataUrl: string
-): Promise<string | null> {
+): Promise<string> {
   const response = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
     messages: [
@@ -294,27 +407,86 @@ export async function describeSelfieForCartoon(
           {
             type: 'text',
             text:
-              'For a children\'s cartoon superhero illustration, describe only generic features: hair color/style, approximate age group, expression mood. Do NOT name real people or celebrities. Maximum two short phrases.',
+              'Describe this person\'s face for an image model that must recreate the SAME identity: face shape, eye color/shape/spacing, nose, mouth, jawline, hair color/length/style, skin tone, approximate age. Be precise. Do NOT describe clothing. Do NOT name celebrities. Reply with 4-6 short phrases separated by semicolons.',
           },
-          { type: 'image_url', image_url: { url: dataUrl, detail: 'low' } },
+          { type: 'image_url', image_url: { url: dataUrl, detail: 'high' } },
         ],
       },
     ],
-    max_tokens: 80,
+    max_tokens: 120,
   });
-  return response.choices[0]?.message?.content?.trim() || null;
+  const text = response.choices[0]?.message?.content?.trim();
+  if (!text) {
+    throw new Error('Could not read facial features from your photo.');
+  }
+  return text;
+}
+
+/** @deprecated Use describeSelfieFacialFeatures */
+export async function describeSelfieForCartoon(
+  openai: OpenAI,
+  dataUrl: string
+): Promise<string | null> {
+  try {
+    return await describeSelfieFacialFeatures(openai, dataUrl);
+  } catch {
+    return null;
+  }
+}
+
+export interface SuperheroImageJobInput {
+  mode: 'student' | 'admin';
+  selfie_data_url: string;
+  bundle?: SuperheroAiBundle | null;
+}
+
+export async function loadBundleForSuperheroImageJob(
+  sql: NeonQueryFunction<false, false>,
+  job: {
+    user_id: string | null;
+    student_lesson_id: string | null;
+    input_json: unknown;
+  }
+): Promise<SuperheroAiBundle> {
+  const input = (job.input_json || {}) as Partial<SuperheroImageJobInput>;
+  if (!input.selfie_data_url?.startsWith('data:image/')) {
+    throw new Error('Job is missing selfie photo');
+  }
+
+  if (input.mode === 'admin' && input.bundle) {
+    return { ...input.bundle, selfie_data_url: input.selfie_data_url };
+  }
+
+  if (!job.user_id || !job.student_lesson_id) {
+    throw new Error('Invalid job configuration');
+  }
+
+  const bundle = await loadBundleForStudentLesson(sql, job.user_id, job.student_lesson_id);
+  bundle.selfie_data_url = input.selfie_data_url;
+  return bundle;
 }
 
 export async function resolveSuperheroAiBundle(
   event: { headers?: { cookie?: string } },
   body: { studentLessonId?: string; bundle?: unknown; selfie_data_url?: string }
-): Promise<{ bundle: SuperheroAiBundle; mode: 'student' | 'admin' }> {
+): Promise<{
+  bundle: SuperheroAiBundle;
+  mode: 'student' | 'admin';
+  userId?: string;
+  studentLessonId?: string;
+}> {
   const inlineBundle = body.bundle ? parseBundleInput(body.bundle) : null;
 
   if (inlineBundle) {
     const admin = await requireAdminAuth(event);
     if (!admin.ok) {
       throw new Error('Admin authentication required for test bundle');
+    }
+    if (
+      typeof body.selfie_data_url === 'string' &&
+      body.selfie_data_url.startsWith('data:image/')
+    ) {
+      inlineBundle.selfie_data_url = body.selfie_data_url;
     }
     return { bundle: inlineBundle, mode: 'admin' };
   }
@@ -341,5 +513,10 @@ export async function resolveSuperheroAiBundle(
   ) {
     bundle.selfie_data_url = body.selfie_data_url;
   }
-  return { bundle, mode: 'student' };
+  return {
+    bundle,
+    mode: 'student',
+    userId: auth.user.id,
+    studentLessonId: body.studentLessonId,
+  };
 }

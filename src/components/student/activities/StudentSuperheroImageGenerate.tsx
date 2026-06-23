@@ -9,9 +9,10 @@ import {
   hasSuperheroSelfie,
 } from '@/lib/superheroAi'
 import SuperheroSelfiePicker from './SuperheroSelfiePicker'
+import { downloadDataUrl } from '@/lib/downloadDataUrl'
 
 const DEFAULT_IMAGE_DESCRIPTION =
-  'Add your photo, then generate an original cartoon portrait based on your answers and appearance.'
+  'The Magic Hat will generate your superhero portrait based on your choices.'
 
 function isAdminLessonTestMode(): boolean {
   return typeof window !== 'undefined' && Boolean((window as Window & { __ADMIN_LESSON_TEST_MODE?: boolean }).__ADMIN_LESSON_TEST_MODE)
@@ -31,8 +32,10 @@ export default function StudentSuperheroImageGenerate({
 
   const [selfie, setSelfie] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [pollStatus, setPollStatus] = useState<'processing' | 'generating' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null)
+  const [whyChosen, setWhyChosen] = useState<string | null>(null)
   const [promptUsed, setPromptUsed] = useState<string | null>(null)
   const [model, setModel] = useState<string | null>(null)
 
@@ -44,15 +47,17 @@ export default function StudentSuperheroImageGenerate({
       return
     }
     setLoading(true)
+    setPollStatus('processing')
     setError(null)
     const adminTest = isAdminLessonTestMode()
     const requestBundle = { ...bundle, selfie_data_url: selfie }
     const res = await generateSuperheroImageRequest(
       adminTest
-        ? { bundle: requestBundle, useAdminApi: true }
-        : { studentLessonId: lesson.id, selfie_data_url: selfie }
+        ? { bundle: requestBundle, useAdminApi: true, onPollStatus: (s) => setPollStatus(s) }
+        : { studentLessonId: lesson.id, selfie_data_url: selfie, onPollStatus: (s) => setPollStatus(s) }
     )
     setLoading(false)
+    setPollStatus(null)
     if (!res.success || !res.data) {
       setError(
         res.error ||
@@ -63,6 +68,7 @@ export default function StudentSuperheroImageGenerate({
       return
     }
     setImageDataUrl(res.data.image_data_url)
+    setWhyChosen(res.data.why_chosen ?? null)
     setPromptUsed(res.data.prompt_used)
     setModel(res.data.model)
   }
@@ -80,6 +86,7 @@ export default function StudentSuperheroImageGenerate({
         image_url: null,
         provider: model,
         prompt_used: promptUsed,
+        why_chosen: whyChosen,
         skipped: false,
         savedAt: new Date().toISOString(),
       },
@@ -108,7 +115,9 @@ export default function StudentSuperheroImageGenerate({
       <div className="min-h-48 rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 flex items-center justify-center mb-4 overflow-hidden">
         {loading ? (
           <p className="text-slate-600 text-sm px-4 text-center animate-pulse">
-            Drawing your hero… this can take 20–40 seconds.
+            {pollStatus === 'generating'
+              ? 'Drawing your superhero portrait… almost done.'
+              : 'Starting your portrait… this can take up to a minute.'}
           </p>
         ) : imageDataUrl ? (
           /* eslint-disable-next-line @next/next/no-img-element */
@@ -122,6 +131,12 @@ export default function StudentSuperheroImageGenerate({
         )}
       </div>
 
+      {whyChosen && imageDataUrl && (
+        <p className="text-sm text-slate-700 mb-4 rounded-lg bg-indigo-50 border border-indigo-100 px-3 py-2">
+          {whyChosen}
+        </p>
+      )}
+
       {error && <p className="text-sm text-amber-700 mb-3">{error}</p>}
 
       {!imageDataUrl && (
@@ -132,6 +147,14 @@ export default function StudentSuperheroImageGenerate({
 
       {imageDataUrl && (
         <>
+          <Button
+            className="w-full mb-2"
+            variant="secondary"
+            onClick={() => downloadDataUrl(imageDataUrl, 'my-superhero.png')}
+            disabled={loading}
+          >
+            Save photo
+          </Button>
           <Button className="w-full mb-2" variant="secondary" onClick={handleGenerate} disabled={loading || !selfie}>
             {loading ? 'Regenerating…' : 'Try again'}
           </Button>

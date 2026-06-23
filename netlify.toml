@@ -24,8 +24,16 @@
     timeout = 900
   [functions."classify-hero-alignment"]
     timeout = 45
+  [functions."superhero-image-job"]
+    timeout = 30
+  [functions."superhero-image-result"]
+    timeout = 10
+  [functions."run-superhero-image-background"]
+    timeout = 900
+  [functions."superhero-image-process"]
+    timeout = 900
   [functions."generate-superhero-image"]
-    timeout = 90
+    timeout = 10
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"

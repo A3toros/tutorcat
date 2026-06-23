@@ -217,7 +217,7 @@ CROSS JOIN (VALUES
     15,
     'student_superhero_image_generate',
     'What would you be like as a superhero based on your answers and appearance?',
-    'Add your photo, then generate an original cartoon portrait of your superhero.',
+    'The Magic Hat will generate your superhero portrait based on your choices.',
     '{}'::text,
     300
   ),

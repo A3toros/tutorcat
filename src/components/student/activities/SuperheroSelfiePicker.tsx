@@ -135,8 +135,15 @@ export default function SuperheroSelfiePicker({ photo, onPhotoChange, disabled }
 
     try {
       stopCamera()
+      const mobile = isMobileDevice()
       const media = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'user' } },
+        video: mobile
+          ? {
+              facingMode: { ideal: 'user' },
+              width: { ideal: 1080 },
+              height: { ideal: 1920 },
+            }
+          : { facingMode: { ideal: 'user' } },
         audio: false,
       })
       streamRef.current = media
@@ -188,13 +195,17 @@ export default function SuperheroSelfiePicker({ photo, onPhotoChange, disabled }
       {phase === 'preview' && preview ? (
         <div className="mb-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={preview} alt="Your photo" className="rounded-lg max-h-40 mx-auto border" />
+          <img
+            src={preview}
+            alt="Your photo"
+            className="rounded-lg mx-auto border object-cover max-sm:aspect-[3/4] max-sm:max-h-[min(70vh,28rem)] max-sm:w-full max-w-xs sm:max-h-40 sm:w-auto"
+          />
         </div>
       ) : phase === 'live' && stream ? (
         <>
           <video
             ref={videoRef}
-            className="w-full min-h-40 rounded-lg bg-black mb-2 max-h-48 object-cover"
+            className="w-full mx-auto rounded-lg bg-black mb-2 object-cover max-sm:aspect-[3/4] max-sm:max-h-[min(70vh,28rem)] max-sm:max-w-xs sm:min-h-40 sm:max-h-48"
             playsInline
             muted
             autoPlay

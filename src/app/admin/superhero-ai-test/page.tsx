@@ -14,6 +14,7 @@ import {
   type SuperheroAiBundle,
 } from '@/lib/superheroAi'
 import { compressImageSourceToDataUrl, fileToImage } from '@/lib/compressImageToDataUrl'
+import { downloadDataUrl } from '@/lib/downloadDataUrl'
 
 const DEFAULT_DESCRIPTION = SAMPLE_SUPERHERO_BUNDLE.character_description
 
@@ -22,7 +23,6 @@ export default function AdminSuperheroAiTestPage() {
   const { showNotification } = useNotification()
 
   const [description, setDescription] = useState(DEFAULT_DESCRIPTION)
-  const [moralLine, setMoralLine] = useState(SAMPLE_SUPERHERO_BUNDLE.moral_summary[0] ?? '')
   const [selfiePreview, setSelfiePreview] = useState<string | null>(null)
   const [classifyLoading, setClassifyLoading] = useState(false)
   const [imageLoading, setImageLoading] = useState(false)
@@ -43,10 +43,9 @@ export default function AdminSuperheroAiTestPage() {
         word: '',
       })),
       character_description: lines.join('\n'),
-      moral_summary: moralLine.trim() ? [moralLine.trim()] : [],
       selfie_data_url: selfiePreview,
     }
-  }, [description, moralLine, selfiePreview])
+  }, [description, selfiePreview])
 
   const handleSelfieFile = async (file: File | undefined) => {
     if (!file) return
@@ -129,17 +128,9 @@ export default function AdminSuperheroAiTestPage() {
               </Button>
             </div>
 
-            <div>
-              <label htmlFor="moral" className="block text-sm font-medium text-slate-700 mb-1">
-                Moral choice summary (optional)
-              </label>
-              <input
-                id="moral"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                value={moralLine}
-                onChange={(e) => setMoralLine(e.target.value)}
-              />
-            </div>
+            <p className="text-sm text-slate-600">
+              The Magic Hat will generate your superhero portrait based on your choices.
+            </p>
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -214,7 +205,10 @@ export default function AdminSuperheroAiTestPage() {
           {imageResult && (
             <Card className="p-5">
               <h2 className="font-semibold text-slate-800 mb-2">Image result</h2>
-              <p className="text-xs text-slate-600 mb-2">Model: {imageResult.model}</p>
+              <p className="text-xs text-slate-600 mb-2">
+                Model: {imageResult.model}
+                {imageResult.generation_method ? ` · ${imageResult.generation_method}` : ''}
+              </p>
               {imageResult.image_data_url && (
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img
@@ -223,8 +217,25 @@ export default function AdminSuperheroAiTestPage() {
                   className="max-h-80 mx-auto rounded border"
                 />
               )}
-              {imageResult.selfie_hints && (
-                <p className="text-xs text-slate-600 mt-2">Selfie hints: {imageResult.selfie_hints}</p>
+              {imageResult.image_data_url && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => downloadDataUrl(imageResult.image_data_url!, 'superhero-test.png')}
+                >
+                  Save photo
+                </Button>
+              )}
+              {imageResult.why_chosen && (
+                <p className="text-sm text-slate-700 mt-3 rounded-lg bg-indigo-50 border border-indigo-100 px-3 py-2">
+                  {imageResult.why_chosen}
+                </p>
+              )}
+              {imageResult.facial_features && (
+                <p className="text-xs text-slate-600 mt-2">
+                  Facial features preserved: {imageResult.facial_features}
+                </p>
               )}
               <details className="mt-3">
                 <summary className="text-xs text-slate-500 cursor-pointer">Prompt sent</summary>
