@@ -1,17 +1,19 @@
 /**
  * Robotic / TTS voice detector (Google Translate speak, AI voice playback).
  *
- * v2.3.4 (calibrated on admin GTTS + student human FPs):
- *  - Multi-segment short path: flat pitch alone no longer corroborates TTS
- *    (rehearsed human speech matches rhythm); require very-easy ASR or mean ≤ -0.40
- *  - No low_pitch_tts when segment_count ≤ 2 or mean_logprob > -0.40
+ * v2.3.5 (production human FP fix 2026-06-23):
+ *  - GTTS-hard multi path requires logprob_is_artifact (exact equal), not near-flat rehearsed speech
+ *  - Single-segment: crystal mean > -0.30; admin band (-0.32,-0.30] needs rhythm
+ *  - Skip boundary_pause bonus when ratio=1 and not exact artifact (rehearsed human pattern)
+ *
+ * v2.3.4: multi-segment rhythm-only removed for 2-seg; GTTS-hard for multi (too broad — fixed in v2.3.5)
  *
  * v2.3.3: single-segment easy ASR, filler list fix, ultra-flat pitch bonus.
  *
  * Log-only by default; blocking requires ROBOTIC_VOICE_MODE=block.
  */
 
-export const ROBOTIC_VOICE_SCORER_VERSION = 'v2.3.4'
+export const ROBOTIC_VOICE_SCORER_VERSION = 'v2.3.5'
 
 export interface BrowserRhythmInput {
   speech_rate?: number
@@ -235,9 +237,27 @@ function veryEasyAsrTwoSegment(w: ReturnType<typeof whisperDerived>): boolean {
   return w.mean_logprob > -0.33 && w.min_logprob > -0.38
 }
 
-/** GTTS often sits below rehearsed human flat speech (≈ -0.35..-0.40). */
+/** Admin single-segment TTS band (ChatGPT ≈ -0.30 to -0.32); rhythm required. */
+function isAdminTtsSingleBand(w: ReturnType<typeof whisperDerived>): boolean {
+  return (
+    w.mean_logprob != null &&
+    w.mean_logprob > -0.32 &&
+    w.mean_logprob <= -0.3
+  )
+}
+
+/** Crystal-clear single-segment TTS (very high Whisper confidence, ≈ -0.29). */
+function isCrystalClearSingleTts(w: ReturnType<typeof whisperDerived>): boolean {
+  return w.mean_logprob != null && w.mean_logprob > -0.3
+}
+
+/** GTTS often sits below rehearsed human flat speech; require exact artifact, not near-flat drift. */
 function isGtssLikeHardAsr(w: ReturnType<typeof whisperDerived>): boolean {
-  return w.mean_logprob != null && w.mean_logprob <= -0.4
+  return (
+    w.logprob_is_artifact &&
+    w.mean_logprob != null &&
+    w.mean_logprob <= -0.4
+  )
 }
 
 /** @deprecated alias used in signals */
@@ -265,14 +285,15 @@ function shortTtsCorroborated(
     if (veryEasyAsrMultiSegment(w)) return true
     return hasTtsRhythmCorroboration(rhythm) && isGtssLikeHardAsr(w)
   }
-  if (hasTtsRhythmCorroboration(rhythm)) return true
-  return veryEasyAsrSingleSegment(w)
+  if (isCrystalClearSingleTts(w)) return true
+  if (hasTtsRhythmCorroboration(rhythm) && isAdminTtsSingleBand(w)) return true
+  return false
 }
 
 function allowLowPitchTtsBonus(w: ReturnType<typeof whisperDerived>): boolean {
-  if (w.segment_count === 1) return true
+  if (w.segment_count === 1) return isAdminTtsSingleBand(w) || isCrystalClearSingleTts(w)
   if (w.segment_count === 2) return veryEasyAsrTwoSegment(w)
-  return w.mean_logprob == null || w.mean_logprob <= -0.4
+  return w.logprob_is_artifact && w.mean_logprob != null && w.mean_logprob <= -0.4
 }
 
 /** Google Translate / AI TTS playback scoring. */
@@ -288,14 +309,13 @@ function scoreArtifactTtsBucket(
   // ChatGPT TTS often collapses to a single Whisper segment.
   if (w.segment_count === 1 && w.word_count >= MIN_WORDS_FOR_ARTIFACT_TTS_SHORT) {
     if (w.mean_logprob != null && w.mean_logprob > -0.35) {
-      const veryEasySingle = w.mean_logprob > -0.33
       const rhythmPitch =
         typeof rhythm?.pitch_variance === 'number' &&
         Number.isFinite(rhythm.pitch_variance) &&
         rhythm.pitch_variance >= 0 &&
         rhythm.pitch_variance < 0.035
-      if (shortTtsCorroborated(w, rhythm, 'single') || veryEasySingle) {
-        const rawPoints = veryEasySingle ? 58 : rhythmPitch ? 55 : 48
+      if (shortTtsCorroborated(w, rhythm, 'single')) {
+        const rawPoints = isCrystalClearSingleTts(w) ? 58 : rhythmPitch ? 55 : 48
         return {
           points: rawPoints,
           rulesHit: ['tts_easy_single_segment'],
@@ -512,7 +532,7 @@ export function computeRoboticVoiceScore(input: RoboticVoiceFeaturesInput): Robo
     w.boundary_pause_ratio != null &&
     w.boundary_pause_ratio >= 1 &&
     w.segment_count <= 6 &&
-    artifactTts.points === 0
+    (artifactTts.points === 0 || !w.logprob_is_artifact)
 
   if (
     logprobBucketActive &&

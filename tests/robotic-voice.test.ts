@@ -37,7 +37,44 @@ function variableLogprobSegments(count: number): ReturnType<typeof seg>[] {
   return out
 }
 
-describe('robotic-voice v2.3.4', () => {
+describe('robotic-voice v2.3.5', () => {
+  describe('v2.3.5 production human FP regressions (2026-06-23)', () => {
+    it('52468 hero vs villain — near-flat rehearsed 3-seg human (ceb2f18d)', () => {
+      const text =
+        'my hero is very strong and kind one day a villain try to rob a bank my hero feel to the bank'
+      const r = computeRoboticVoiceScore({
+        whisper_verbose: {
+          text,
+          segments: [
+            seg(0, 'my hero is very strong and kind.', 0, 3, -0.4325278401374817),
+            seg(1, 'one day a villain try to rob a bank.', 3, 6, -0.43255725502967834),
+            seg(2, 'my hero feel to the bank and find the villain.', 6, 10, -0.4325474500656128),
+          ],
+        },
+        browser_rhythm: { pitch_variance: 0.001836994112737629, energy_autocorr_lag1: 0.524 },
+      })
+      expect(r.signals.logprob_is_artifact).toBe(false)
+      expect(r.signals.logprob_is_near_flat).toBe(true)
+      expect(r.score).toBeLessThan(70)
+      expect(r.signals.would_flag).toBe(false)
+    })
+
+    it('111111 cheat-on-test — rehearsed single-seg human at mean -0.349 (f504a9d6)', () => {
+      const text =
+        "If my friends ask me to cheat, I will honestly say that I don't like this because I'm an honest student."
+      const r = computeRoboticVoiceScore({
+        whisper_verbose: {
+          text,
+          segments: [seg(0, text, 0, 10, -0.3488578498363495)],
+        },
+        browser_rhythm: { pitch_variance: 0.0033735607643804602, energy_autocorr_lag1: 0.274 },
+      })
+      expect(r.score).toBeLessThan(70)
+      expect(r.signals.would_flag).toBe(false)
+      expect(r.signals.rules_hit).not.toContain('tts_easy_single_segment')
+    })
+  })
+
   describe('v2.3.4 human FP regressions (2026-06-18)', () => {
     it('does not flag Ploy 52467 personality card (3 seg, mean -0.359, flat pitch)', () => {
       const text =
@@ -255,10 +292,10 @@ describe('robotic-voice v2.3.4', () => {
     expect(r.signals.skip_would_flag_improvement).toBe(true)
   })
 
-  it('reports scorer version v2.3.4', () => {
+  it('reports scorer version v2.3.5', () => {
     const r = computeRoboticVoiceScore({
       whisper_verbose: { text: 'hello', segments: [seg(0, 'hello.', 0, 1, -0.3)] },
     })
-    expect(r.signals.scorer_version).toBe('v2.3.4')
+    expect(r.signals.scorer_version).toBe('v2.3.5')
   })
 })
