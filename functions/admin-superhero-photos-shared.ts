@@ -2,6 +2,40 @@ import { createSignedSuperheroUrl } from './superhero-supabase-storage.js';
 
 export const LESSON_4_SLUG = 'create-your-superhero';
 
+const SELFIE_EXT_CANDIDATES = ['.jpg', '.jpeg', '.png', '.webp'];
+
+async function firstSignedUrl(paths: string[]): Promise<string | null> {
+  for (const path of paths) {
+    const url = await createSignedSuperheroUrl(path);
+    if (url) return url;
+  }
+  return null;
+}
+
+function portraitPathCandidates(answers: Record<string, unknown>): string[] {
+  const paths: string[] = [];
+  if (typeof answers.portrait_storage_path === 'string' && answers.portrait_storage_path.trim()) {
+    paths.push(answers.portrait_storage_path.trim());
+  }
+  const jobId = typeof answers.job_id === 'string' ? answers.job_id.trim() : null;
+  if (jobId) paths.push(`${jobId}/portrait.png`);
+  return [...new Set(paths)];
+}
+
+function selfiePathCandidates(answers: Record<string, unknown>): string[] {
+  const paths: string[] = [];
+  if (typeof answers.selfie_storage_path === 'string' && answers.selfie_storage_path.trim()) {
+    paths.push(answers.selfie_storage_path.trim());
+  }
+  const jobId = typeof answers.job_id === 'string' ? answers.job_id.trim() : null;
+  if (jobId) {
+    for (const ext of SELFIE_EXT_CANDIDATES) {
+      paths.push(`${jobId}/selfie${ext}`);
+    }
+  }
+  return [...new Set(paths)];
+}
+
 export async function authenticateAdminPhotos(event: {
   headers?: { cookie?: string };
 }): Promise<boolean> {
@@ -32,33 +66,35 @@ export async function resolveSuperheroPhotoFromAnswers(
   answers: Record<string, unknown>,
   completedAt: string
 ): Promise<ResolvedSuperheroPhoto | null> {
-  const portraitPath =
-    typeof answers.portrait_storage_path === 'string' ? answers.portrait_storage_path : null;
-  const selfiePath =
-    typeof answers.selfie_storage_path === 'string' ? answers.selfie_storage_path : null;
-
   let imageUrl: string | null = null;
   let selfieUrl: string | null = null;
 
-  if (portraitPath) {
-    imageUrl = await createSignedSuperheroUrl(portraitPath);
-  } else if (
+  if (
     typeof answers.image_data_url === 'string' &&
     answers.image_data_url.startsWith('data:image/')
   ) {
     imageUrl = answers.image_data_url;
+  } else {
+    imageUrl = await firstSignedUrl(portraitPathCandidates(answers));
   }
 
-  if (selfiePath) {
-    selfieUrl = await createSignedSuperheroUrl(selfiePath);
-  } else if (
+  if (
     typeof answers.selfie_data_url === 'string' &&
     answers.selfie_data_url.startsWith('data:image/')
   ) {
     selfieUrl = answers.selfie_data_url;
+  } else {
+    selfieUrl = await firstSignedUrl(selfiePathCandidates(answers));
   }
 
-  if (!imageUrl) return null;
+  if (!imageUrl) {
+    const jobId = typeof answers.job_id === 'string' ? answers.job_id : 'unknown';
+    console.warn('admin-superhero-photos: could not sign portrait URL', {
+      jobId,
+      portrait_storage_path: answers.portrait_storage_path ?? null,
+    });
+    return null;
+  }
 
   return {
     completed_at: completedAt,
@@ -67,6 +103,28 @@ export async function resolveSuperheroPhotoFromAnswers(
     why_chosen: typeof answers.why_chosen === 'string' ? answers.why_chosen : null,
     provider: typeof answers.provider === 'string' ? answers.provider : null,
   };
+}
+
+export async function resolveSuperheroPhotoFromJobResult(
+  jobId: string,
+  resultJson: unknown,
+  completedAt: string
+): Promise<ResolvedSuperheroPhoto | null> {
+  const result =
+    resultJson && typeof resultJson === 'object' && !Array.isArray(resultJson)
+      ? (resultJson as Record<string, unknown>)
+      : {};
+  return resolveSuperheroPhotoFromAnswers(
+    {
+      job_id: jobId,
+      portrait_storage_path: result.portrait_storage_path,
+      selfie_storage_path: result.selfie_storage_path,
+      why_chosen: result.why_chosen,
+      provider: result.model,
+      image_data_url: result.image_data_url,
+    },
+    completedAt
+  );
 }
 
 export const CLASS_1_15 = [
