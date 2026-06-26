@@ -1,6 +1,11 @@
 import { neon } from '@neondatabase/serverless';
-import { loadBundleForSuperheroImageJob } from './superhero-ai-shared.js';
+import { loadBundleForSuperheroImageJob, type SuperheroImageJobInput } from './superhero-ai-shared.js';
 import { runSuperheroImagePipeline } from './superhero-image-worker.js';
+import {
+  superheroPortraitPath,
+  uploadSuperheroDataUrl,
+  type StoredSuperheroResult,
+} from './superhero-supabase-storage.js';
 
 export type SuperheroImageJobProcessOutcome = 'completed' | 'failed' | 'skipped' | 'lost_race';
 
@@ -59,11 +64,33 @@ export async function processSuperheroImageJob(jobId: string): Promise<Superhero
     const bundle = await loadBundleForSuperheroImageJob(sql, job);
     const result = await runSuperheroImagePipeline(bundle);
 
+    const input = (job.input_json || {}) as Partial<SuperheroImageJobInput>;
+    const selfieStoragePath =
+      typeof input.selfie_storage_path === 'string' ? input.selfie_storage_path : null;
+    if (!selfieStoragePath) {
+      throw new Error('Job is missing selfie storage path');
+    }
+
+    const portraitPath = superheroPortraitPath(jobId);
+    await uploadSuperheroDataUrl(portraitPath, result.image_data_url);
+
+    const storedResult: StoredSuperheroResult = {
+      job_id: jobId,
+      portrait_storage_path: portraitPath,
+      selfie_storage_path: selfieStoragePath,
+      model: result.model,
+      generation_method: result.generation_method,
+      prompt_used: result.prompt_used,
+      facial_features: result.facial_features,
+      look_design: result.look_design,
+      why_chosen: result.why_chosen,
+    };
+
     await sql`
       UPDATE superhero_image_jobs
       SET
         status = 'completed',
-        result_json = ${JSON.stringify(result)}::jsonb,
+        result_json = ${JSON.stringify(storedResult)}::jsonb,
         error = NULL,
         updated_at = NOW()
       WHERE id = ${jobId}

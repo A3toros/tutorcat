@@ -12,6 +12,7 @@ import {
   type ClassifyHeroAlignmentResult,
   type GenerateSuperheroImageResult,
   type SuperheroAiBundle,
+  resolveSuperheroImageDisplayUrl,
 } from '@/lib/superheroAi'
 import { compressImageSourceToDataUrl, fileToImage } from '@/lib/compressImageToDataUrl'
 import { downloadDataUrl } from '@/lib/downloadDataUrl'
@@ -209,20 +210,25 @@ export default function AdminSuperheroAiTestPage() {
                 Model: {imageResult.model}
                 {imageResult.generation_method ? ` · ${imageResult.generation_method}` : ''}
               </p>
-              {imageResult.image_data_url && (
+              {resolveSuperheroImageDisplayUrl(imageResult) && (
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img
-                  src={imageResult.image_data_url}
+                  src={resolveSuperheroImageDisplayUrl(imageResult)!}
                   alt="Generated test hero"
                   className="max-h-80 mx-auto rounded border"
                 />
               )}
-              {imageResult.image_data_url && (
+              {resolveSuperheroImageDisplayUrl(imageResult) && (
                 <Button
                   variant="secondary"
                   size="sm"
                   className="mt-3"
-                  onClick={() => downloadDataUrl(imageResult.image_data_url!, 'superhero-test.png')}
+                  onClick={() =>
+                    downloadDataUrl(
+                      resolveSuperheroImageDisplayUrl(imageResult)!,
+                      'superhero-test.png'
+                    )
+                  }
                 >
                   Save photo
                 </Button>

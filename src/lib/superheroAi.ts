@@ -30,8 +30,12 @@ export interface ClassifyHeroAlignmentResult {
 }
 
 export interface GenerateSuperheroImageResult {
+  job_id?: string | null
   image_data_url: string | null
   image_url: string | null
+  selfie_url?: string | null
+  portrait_storage_path?: string | null
+  selfie_storage_path?: string | null
   model: string
   prompt_used: string
   facial_features?: string | null
@@ -40,6 +44,19 @@ export interface GenerateSuperheroImageResult {
   generation_method?: 'edit' | 'generate' | null
   /** @deprecated use facial_features */
   selfie_hints?: string | null
+}
+
+export function resolveSuperheroImageDisplayUrl(result: {
+  image_url?: string | null
+  image_data_url?: string | null
+}): string | null {
+  if (typeof result.image_url === 'string' && result.image_url.startsWith('http')) {
+    return result.image_url
+  }
+  if (typeof result.image_data_url === 'string' && result.image_data_url.startsWith('data:image/')) {
+    return result.image_data_url
+  }
+  return null
 }
 
 function answersForOrder(
@@ -264,11 +281,18 @@ export async function generateSuperheroImageRequest(opts: {
     return { success: false, error: poll.error || 'Image generation failed' }
   }
 
-  if (!poll.data?.image_data_url) {
+  const displayUrl = poll.data ? resolveSuperheroImageDisplayUrl(poll.data) : null
+  if (!displayUrl) {
     return { success: false, error: 'Image generation completed without image data.' }
   }
 
-  return { success: true, data: poll.data }
+  return {
+    success: true,
+    data: {
+      ...(poll.data as GenerateSuperheroImageResult),
+      job_id: poll.data?.job_id ?? jobId,
+    },
+  }
 }
 
 const SUPERHERO_IMAGE_POLL_INTERVAL_MS = 2500

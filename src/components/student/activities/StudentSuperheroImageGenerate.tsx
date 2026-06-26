@@ -7,6 +7,7 @@ import {
   buildSuperheroAiBundleFromResults,
   generateSuperheroImageRequest,
   hasSuperheroSelfie,
+  resolveSuperheroImageDisplayUrl,
 } from '@/lib/superheroAi'
 import SuperheroSelfiePicker from './SuperheroSelfiePicker'
 import { downloadDataUrl } from '@/lib/downloadDataUrl'
@@ -34,7 +35,10 @@ export default function StudentSuperheroImageGenerate({
   const [loading, setLoading] = useState(false)
   const [pollStatus, setPollStatus] = useState<'processing' | 'generating' | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [imageDataUrl, setImageDataUrl] = useState<string | null>(null)
+  const [imageDisplayUrl, setImageDisplayUrl] = useState<string | null>(null)
+  const [portraitStoragePath, setPortraitStoragePath] = useState<string | null>(null)
+  const [selfieStoragePath, setSelfieStoragePath] = useState<string | null>(null)
+  const [jobId, setJobId] = useState<string | null>(null)
   const [whyChosen, setWhyChosen] = useState<string | null>(null)
   const [promptUsed, setPromptUsed] = useState<string | null>(null)
   const [model, setModel] = useState<string | null>(null)
@@ -67,23 +71,26 @@ export default function StudentSuperheroImageGenerate({
       )
       return
     }
-    setImageDataUrl(res.data.image_data_url)
+    setImageDisplayUrl(resolveSuperheroImageDisplayUrl(res.data))
+    setPortraitStoragePath(res.data.portrait_storage_path ?? null)
+    setSelfieStoragePath(res.data.selfie_storage_path ?? null)
+    setJobId(res.data.job_id ?? null)
     setWhyChosen(res.data.why_chosen ?? null)
     setPromptUsed(res.data.prompt_used)
     setModel(res.data.model)
   }
 
   const handleContinue = () => {
-    if (!imageDataUrl || !selfie) return
+    if (!imageDisplayUrl || !selfie) return
     onComplete({
       score: 1,
       maxScore: 1,
       attempts: 1,
       answers: {
         status: 'complete',
-        selfie_data_url: selfie,
-        image_data_url: imageDataUrl,
-        image_url: null,
+        job_id: jobId,
+        portrait_storage_path: portraitStoragePath,
+        selfie_storage_path: selfieStoragePath,
         provider: model,
         prompt_used: promptUsed,
         why_chosen: whyChosen,
@@ -119,10 +126,10 @@ export default function StudentSuperheroImageGenerate({
               ? 'Drawing your superhero portrait… almost done.'
               : 'Starting your portrait… this can take up to a minute.'}
           </p>
-        ) : imageDataUrl ? (
+        ) : imageDisplayUrl ? (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img
-            src={imageDataUrl}
+            src={imageDisplayUrl}
             alt="Generated superhero"
             className="max-h-64 w-full object-contain"
           />
@@ -131,7 +138,7 @@ export default function StudentSuperheroImageGenerate({
         )}
       </div>
 
-      {whyChosen && imageDataUrl && (
+      {whyChosen && imageDisplayUrl && (
         <p className="text-sm text-slate-700 mb-4 rounded-lg bg-indigo-50 border border-indigo-100 px-3 py-2">
           {whyChosen}
         </p>
@@ -139,18 +146,18 @@ export default function StudentSuperheroImageGenerate({
 
       {error && <p className="text-sm text-amber-700 mb-3">{error}</p>}
 
-      {!imageDataUrl && (
+      {!imageDisplayUrl && (
         <Button className="w-full mb-2" onClick={handleGenerate} disabled={!canGenerate}>
           {loading ? 'Generating…' : 'Generate my hero'}
         </Button>
       )}
 
-      {imageDataUrl && (
+      {imageDisplayUrl && (
         <>
           <Button
             className="w-full mb-2"
             variant="secondary"
-            onClick={() => downloadDataUrl(imageDataUrl, 'my-superhero.png')}
+            onClick={() => downloadDataUrl(imageDisplayUrl, 'my-superhero.png')}
             disabled={loading}
           >
             Save photo

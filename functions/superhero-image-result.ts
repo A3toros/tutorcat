@@ -2,6 +2,7 @@ import { Handler } from '@netlify/functions';
 import { neon } from '@neondatabase/serverless';
 import { getHeaders } from './cors-headers';
 import { superheroImageProcessUrl } from './superhero-image-job-runner.js';
+import { hydrateSuperheroResultForClient } from './superhero-supabase-storage.js';
 
 const STALE_GENERATING_SECONDS = 90;
 
@@ -107,8 +108,19 @@ const handler: Handler = async (event) => {
   const payload: Record<string, unknown> = {
     success: true,
     status: statusToReturn,
+    job_id: id,
   };
-  if (job.result_json != null) payload.data = job.result_json;
+
+  if (job.result_json != null) {
+    const raw = job.result_json as Record<string, unknown>;
+    if (typeof raw.portrait_storage_path === 'string') {
+      payload.data = await hydrateSuperheroResultForClient(id, raw);
+    } else if (typeof raw.image_data_url === 'string') {
+      payload.data = { ...raw, job_id: id };
+    } else {
+      payload.data = raw;
+    }
+  }
   if (job.error != null) payload.error = job.error;
 
   return {

@@ -6,6 +6,11 @@ import {
   resolveSuperheroAiBundle,
   type SuperheroImageJobInput,
 } from './superhero-ai-shared.js';
+import {
+  parseDataUrl,
+  superheroSelfiePath,
+  uploadSuperheroDataUrl,
+} from './superhero-supabase-storage.js';
 
 const handler: Handler = async (event) => {
   const headers = getHeaders(event, true);
@@ -44,7 +49,6 @@ const handler: Handler = async (event) => {
 
     const inputJson: SuperheroImageJobInput = {
       mode: resolved.mode,
-      selfie_data_url: resolved.bundle.selfie_data_url!,
       bundle: resolved.mode === 'admin' ? resolved.bundle : null,
     };
 
@@ -71,6 +75,28 @@ const handler: Handler = async (event) => {
     if (!jobId) {
       throw new Error('Failed to create image job');
     }
+
+    const selfieDataUrl = resolved.bundle.selfie_data_url!;
+    const { ext } = parseDataUrl(selfieDataUrl);
+    const selfiePath = superheroSelfiePath(jobId, ext);
+    await uploadSuperheroDataUrl(selfiePath, selfieDataUrl);
+
+    const slimBundle =
+      resolved.mode === 'admin' && resolved.bundle
+        ? { ...resolved.bundle, selfie_data_url: null }
+        : null;
+
+    const storedInput: SuperheroImageJobInput = {
+      mode: resolved.mode,
+      selfie_storage_path: selfiePath,
+      bundle: slimBundle,
+    };
+
+    await sql`
+      UPDATE superhero_image_jobs
+      SET input_json = ${JSON.stringify(storedInput)}::jsonb, updated_at = NOW()
+      WHERE id = ${jobId}
+    `;
 
     return {
       statusCode: 200,

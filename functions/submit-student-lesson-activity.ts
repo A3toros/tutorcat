@@ -21,6 +21,15 @@ interface Submission {
 const isValidUUID = (str: string | undefined): boolean =>
   !!str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 
+function sanitizeActivityAnswers(activityType: string, answers: unknown): unknown {
+  if (activityType !== 'student_superhero_image_generate') return answers;
+  if (!answers || typeof answers !== 'object' || Array.isArray(answers)) return answers;
+  const copy = { ...(answers as Record<string, unknown>) };
+  delete copy.image_data_url;
+  delete copy.selfie_data_url;
+  return copy;
+}
+
 async function upsertActivityResult(
   sql: NeonQueryFunction<false, false>,
   params: {
@@ -183,7 +192,9 @@ const handler: Handler = async (event) => {
     const activityScore = submission.score ?? 0;
     const activityMaxScore = submission.maxScore ?? 0;
     const completedAt = submission.completedAt || new Date().toISOString();
-    const answersJson = JSON.stringify(submission.answers ?? {});
+    const answersJson = JSON.stringify(
+      sanitizeActivityAnswers(submission.activityType, submission.answers ?? {})
+    );
     const feedbackJson = JSON.stringify(submission.feedback ?? {});
 
     await upsertActivityResult(sql, {

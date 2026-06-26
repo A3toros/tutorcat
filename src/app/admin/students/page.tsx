@@ -6,6 +6,7 @@ import AdminProtectedRoute from '@/components/auth/AdminProtectedRoute'
 import { Button, Card, Table, Header, Body, Row, Head, Cell } from '@/components/ui'
 import { useNotification } from '@/contexts/NotificationContext'
 import { adminApiRequest } from '@/utils/adminApi'
+import { downloadDataUrl } from '@/lib/downloadDataUrl'
 import { studentLessonListTitle } from '@/lib/studentTrack'
 
 type StudentLessonScore = {
@@ -47,6 +48,18 @@ type TranscriptItem = {
   status: string
 }
 
+type SuperheroPhotoEntry = {
+  user_id: string
+  school_student_id: string | null
+  nickname: string
+  class: '1/15' | '1/16' | null
+  completed_at: string
+  image_url: string
+  selfie_url: string | null
+  why_chosen: string | null
+  provider: string | null
+}
+
 function bySchoolId(a: AdminStudent, b: AdminStudent) {
   return String(a.school_student_id || '').localeCompare(String(b.school_student_id || ''))
 }
@@ -66,6 +79,9 @@ export default function AdminStudentsPage() {
   const [transcriptsByStudent, setTranscriptsByStudent] = useState<Record<string, TranscriptItem[]>>({})
   const [audioUrlByJob, setAudioUrlByJob] = useState<Record<string, string>>({})
   const [loadingAudioJob, setLoadingAudioJob] = useState<string | null>(null)
+  const [allPhotos, setAllPhotos] = useState<SuperheroPhotoEntry[]>([])
+  const [photosPanelOpen, setPhotosPanelOpen] = useState(false)
+  const [loadingAllPhotos, setLoadingAllPhotos] = useState(false)
 
   const loadTrackLessons = useCallback(async () => {
     try {
@@ -209,6 +225,32 @@ export default function AdminStudentsPage() {
     if (!parts.length) parts.push('not started')
     return parts.join(', ')
   }
+
+  const loadAllPhotos = useCallback(async () => {
+    setLoadingAllPhotos(true)
+    try {
+      const res = await adminApiRequest('/.netlify/functions/admin-get-all-superhero-photos', {
+        method: 'GET',
+      })
+      const data = await res.json()
+      if (!data?.success) throw new Error(data?.error || 'Failed to load photos')
+      setAllPhotos(Array.isArray(data.photos) ? data.photos : [])
+    } catch (e) {
+      showNotification((e as Error).message || 'Failed to load photos', 'error')
+    } finally {
+      setLoadingAllPhotos(false)
+    }
+  }, [showNotification])
+
+  const togglePhotosPanel = useCallback(() => {
+    setPhotosPanelOpen((open) => {
+      const next = !open
+      if (next && allPhotos.length === 0) {
+        void loadAllPhotos()
+      }
+      return next
+    })
+  }, [allPhotos.length, loadAllPhotos])
 
   const loadTranscripts = useCallback(
     async (student: AdminStudent) => {
@@ -462,6 +504,14 @@ export default function AdminStudentsPage() {
               <Button
                 variant="secondary"
                 size="sm"
+                onClick={togglePhotosPanel}
+                disabled={loadingAllPhotos}
+              >
+                {loadingAllPhotos ? 'Loading photos…' : photosPanelOpen ? 'Hide photos' : 'Photos'}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={handleExportScores}
                 disabled={loading || !students.length}
               >
@@ -476,9 +526,98 @@ export default function AdminStudentsPage() {
           <Card className="p-5 bg-gradient-to-br from-white to-purple-50 border-purple-200">
             <h1 className="text-2xl font-bold text-slate-900">Students</h1>
             <p className="text-sm text-slate-600 mt-1">
-              Nickname + student ID. Expand a student to see lesson activity progress and speech recordings.
+              Nickname + student ID. Expand a student to see lesson progress and speech recordings. Use{' '}
+              <span className="font-medium text-slate-700">Photos</span> for all Lesson 4 superhero portraits.
             </p>
           </Card>
+
+          {photosPanelOpen ? (
+            <Card className="p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-800">Superhero portraits (Lesson 4)</h2>
+                  <p className="text-sm text-slate-600 mt-0.5">
+                    Latest saved selfie + generated portrait per student.
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void loadAllPhotos()}
+                  disabled={loadingAllPhotos}
+                >
+                  Refresh photos
+                </Button>
+              </div>
+              {loadingAllPhotos ? (
+                <p className="text-sm text-slate-500">Loading photos…</p>
+              ) : allPhotos.length === 0 ? (
+                <p className="text-sm text-slate-500">No superhero portraits saved yet.</p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {allPhotos.map((photo) => (
+                    <div
+                      key={`${photo.user_id}-${photo.completed_at}`}
+                      className="rounded-lg border border-purple-100 bg-white p-3"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-800 tabular-nums">
+                            {photo.school_student_id || '—'}
+                            {photo.nickname ? ` · ${photo.nickname}` : ''}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {photo.class ? `Class ${photo.class} · ` : ''}
+                            {new Date(photo.completed_at).toLocaleString()}
+                            {photo.provider ? ` · ${photo.provider}` : ''}
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() =>
+                            downloadDataUrl(
+                              photo.image_url,
+                              `${photo.school_student_id || photo.nickname || 'student'}-superhero.png`
+                            )
+                          }
+                        >
+                          Download
+                        </Button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        {photo.selfie_url ? (
+                          <div>
+                            <p className="text-xs font-medium text-slate-500 mb-1">Selfie</p>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={photo.selfie_url}
+                              alt={`Selfie — ${photo.nickname || photo.school_student_id || 'student'}`}
+                              className="max-h-40 w-full object-contain rounded border bg-slate-50"
+                            />
+                          </div>
+                        ) : null}
+                        <div className={photo.selfie_url ? '' : 'col-span-2'}>
+                          <p className="text-xs font-medium text-slate-500 mb-1">Superhero portrait</p>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={photo.image_url}
+                            alt={`Superhero portrait — ${photo.nickname || photo.school_student_id || 'student'}`}
+                            className="max-h-40 w-full object-contain rounded border bg-slate-50"
+                          />
+                        </div>
+                      </div>
+                      {photo.why_chosen ? (
+                        <p className="text-sm text-slate-700 mt-2 rounded bg-indigo-50/80 px-2 py-1.5 line-clamp-3">
+                          {photo.why_chosen}
+                        </p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+          ) : null}
 
           <Card className="p-5">
             <div className="flex items-center justify-between gap-3 mb-3">

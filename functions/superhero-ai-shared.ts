@@ -436,8 +436,23 @@ export async function describeSelfieForCartoon(
 
 export interface SuperheroImageJobInput {
   mode: 'student' | 'admin';
-  selfie_data_url: string;
+  /** @deprecated legacy jobs only — new jobs use selfie_storage_path */
+  selfie_data_url?: string;
+  selfie_storage_path?: string;
   bundle?: SuperheroAiBundle | null;
+}
+
+async function resolveSelfieDataUrlFromJobInput(
+  input: Partial<SuperheroImageJobInput>
+): Promise<string> {
+  if (input.selfie_data_url?.startsWith('data:image/')) {
+    return input.selfie_data_url;
+  }
+  if (typeof input.selfie_storage_path === 'string' && input.selfie_storage_path.trim()) {
+    const { downloadSuperheroDataUrl } = await import('./superhero-supabase-storage.js');
+    return downloadSuperheroDataUrl(input.selfie_storage_path);
+  }
+  throw new Error('Job is missing selfie photo');
 }
 
 export async function loadBundleForSuperheroImageJob(
@@ -449,12 +464,10 @@ export async function loadBundleForSuperheroImageJob(
   }
 ): Promise<SuperheroAiBundle> {
   const input = (job.input_json || {}) as Partial<SuperheroImageJobInput>;
-  if (!input.selfie_data_url?.startsWith('data:image/')) {
-    throw new Error('Job is missing selfie photo');
-  }
+  const selfieDataUrl = await resolveSelfieDataUrlFromJobInput(input);
 
   if (input.mode === 'admin' && input.bundle) {
-    return { ...input.bundle, selfie_data_url: input.selfie_data_url };
+    return { ...input.bundle, selfie_data_url: selfieDataUrl };
   }
 
   if (!job.user_id || !job.student_lesson_id) {
@@ -462,7 +475,7 @@ export async function loadBundleForSuperheroImageJob(
   }
 
   const bundle = await loadBundleForStudentLesson(sql, job.user_id, job.student_lesson_id);
-  bundle.selfie_data_url = input.selfie_data_url;
+  bundle.selfie_data_url = selfieDataUrl;
   return bundle;
 }
 

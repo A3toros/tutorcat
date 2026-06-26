@@ -1,6 +1,7 @@
 # Dependencies
 node_modules
 scripts
+backups
 # Local env files
 .env
 .env*.local
