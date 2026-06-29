@@ -245,12 +245,10 @@ export default function AdminStudentsPage() {
   const togglePhotosPanel = useCallback(() => {
     setPhotosPanelOpen((open) => {
       const next = !open
-      if (next && allPhotos.length === 0) {
-        void loadAllPhotos()
-      }
+      if (next) void loadAllPhotos()
       return next
     })
-  }, [allPhotos.length, loadAllPhotos])
+  }, [loadAllPhotos])
 
   const loadTranscripts = useCallback(
     async (student: AdminStudent) => {
@@ -532,12 +530,19 @@ export default function AdminStudentsPage() {
           </Card>
 
           {photosPanelOpen ? (
-            <Card className="p-5">
-              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <Card className="p-5 flex flex-col max-h-[85vh]">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4 shrink-0">
                 <div>
-                  <h2 className="text-lg font-semibold text-slate-800">Superhero portraits (Lesson 4)</h2>
+                  <h2 className="text-lg font-semibold text-slate-800">
+                    Superhero portraits (Lesson 4)
+                    {!loadingAllPhotos && allPhotos.length > 0 ? (
+                      <span className="ml-2 text-sm font-normal text-slate-500">
+                        ({allPhotos.length} student{allPhotos.length === 1 ? '' : 's'})
+                      </span>
+                    ) : null}
+                  </h2>
                   <p className="text-sm text-slate-600 mt-0.5">
-                    Latest saved selfie + generated portrait per student.
+                    Latest saved selfie + generated portrait per student. Scroll to see all.
                   </p>
                 </div>
                 <Button
@@ -549,12 +554,13 @@ export default function AdminStudentsPage() {
                   Refresh photos
                 </Button>
               </div>
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 -mr-1">
               {loadingAllPhotos ? (
                 <p className="text-sm text-slate-500">Loading photos…</p>
               ) : allPhotos.length === 0 ? (
                 <p className="text-sm text-slate-500">No superhero portraits saved yet.</p>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 pb-1">
                   {allPhotos.map((photo) => (
                     <div
                       key={`${photo.user_id}-${photo.completed_at}`}
@@ -616,6 +622,7 @@ export default function AdminStudentsPage() {
                   ))}
                 </div>
               )}
+              </div>
             </Card>
           ) : null}
 
