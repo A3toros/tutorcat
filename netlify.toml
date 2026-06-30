@@ -34,6 +34,10 @@
     timeout = 900
   [functions."generate-superhero-image"]
     timeout = 10
+  [functions."admin-get-all-superhero-photos"]
+    timeout = 60
+  [functions."admin-get-student-superhero-photos"]
+    timeout = 30
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"

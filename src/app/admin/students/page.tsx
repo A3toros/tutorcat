@@ -245,6 +245,15 @@ export default function AdminStudentsPage() {
       const res = await adminApiRequest('/.netlify/functions/admin-get-all-superhero-photos', {
         method: 'GET',
       })
+      const contentType = res.headers.get('content-type') || ''
+      if (!contentType.includes('application/json')) {
+        const preview = (await res.text()).slice(0, 120)
+        throw new Error(
+          res.ok
+            ? 'Photos API returned non-JSON. Restart netlify dev (port 8888) and try again.'
+            : `Photos API error ${res.status}. ${preview.startsWith('<!DOCTYPE') ? 'Got HTML instead of JSON — is netlify dev running?' : preview}`
+        )
+      }
       const data = await res.json()
       if (!data?.success) throw new Error(data?.error || 'Failed to load photos')
       setAllPhotos(Array.isArray(data.photos) ? data.photos : [])
