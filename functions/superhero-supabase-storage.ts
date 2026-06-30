@@ -61,6 +61,46 @@ export async function uploadSuperheroDataUrl(path: string, dataUrl: string): Pro
   return uploadSuperheroBuffer(path, buffer, contentType);
 }
 
+export async function listSuperheroPortraitPathsInBucket(): Promise<string[]> {
+  const supabase = getSuperheroSupabaseClient();
+  if (!supabase) return [];
+
+  const paths: string[] = [];
+  const folderNames: string[] = [];
+  let offset = 0;
+
+  while (true) {
+    const { data, error } = await supabase.storage.from(SUPERHERO_SUPABASE_BUCKET).list('', {
+      limit: 1000,
+      offset,
+    });
+    if (error) {
+      console.error('listSuperheroPortraitPathsInBucket: list root failed', error.message);
+      break;
+    }
+    if (!data?.length) break;
+
+    for (const item of data) {
+      const name = item.name ?? '';
+      if (!name) continue;
+      if (name.includes('.')) {
+        if (/\.(png|jpe?g|webp)$/i.test(name)) paths.push(name);
+      } else {
+        folderNames.push(name);
+      }
+    }
+
+    offset += data.length;
+    if (data.length < 1000) break;
+  }
+
+  for (const folder of folderNames) {
+    paths.push(`${folder}/portrait.png`);
+  }
+
+  return [...new Set(paths)];
+}
+
 export async function createSignedSuperheroUrl(
   path: string,
   expiresSec = SIGNED_URL_EXPIRES_SEC

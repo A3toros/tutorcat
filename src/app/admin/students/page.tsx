@@ -49,15 +49,27 @@ type TranscriptItem = {
 }
 
 type SuperheroPhotoEntry = {
-  user_id: string
+  user_id: string | null
   school_student_id: string | null
   nickname: string
   class: '1/15' | '1/16' | null
+  job_id: string | null
+  portrait_path: string | null
+  source?: string
   completed_at: string
   image_url: string
   selfie_url: string | null
   why_chosen: string | null
   provider: string | null
+}
+
+type SuperheroPhotoStats = {
+  activity_rows: number
+  job_rows: number
+  bucket_portraits: number
+  candidates: number
+  shown: number
+  skipped: number
 }
 
 function bySchoolId(a: AdminStudent, b: AdminStudent) {
@@ -80,6 +92,7 @@ export default function AdminStudentsPage() {
   const [audioUrlByJob, setAudioUrlByJob] = useState<Record<string, string>>({})
   const [loadingAudioJob, setLoadingAudioJob] = useState<string | null>(null)
   const [allPhotos, setAllPhotos] = useState<SuperheroPhotoEntry[]>([])
+  const [photoStats, setPhotoStats] = useState<SuperheroPhotoStats | null>(null)
   const [photosPanelOpen, setPhotosPanelOpen] = useState(false)
   const [loadingAllPhotos, setLoadingAllPhotos] = useState(false)
 
@@ -235,6 +248,7 @@ export default function AdminStudentsPage() {
       const data = await res.json()
       if (!data?.success) throw new Error(data?.error || 'Failed to load photos')
       setAllPhotos(Array.isArray(data.photos) ? data.photos : [])
+      setPhotoStats(data.stats ?? null)
     } catch (e) {
       showNotification((e as Error).message || 'Failed to load photos', 'error')
     } finally {
@@ -530,20 +544,27 @@ export default function AdminStudentsPage() {
           </Card>
 
           {photosPanelOpen ? (
-            <Card className="p-5 flex flex-col max-h-[85vh]">
-              <div className="flex flex-wrap items-center justify-between gap-3 mb-4 shrink-0">
+            <Card className="p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
                 <div>
                   <h2 className="text-lg font-semibold text-slate-800">
                     Superhero portraits (Lesson 4)
                     {!loadingAllPhotos && allPhotos.length > 0 ? (
                       <span className="ml-2 text-sm font-normal text-slate-500">
-                        ({allPhotos.length} student{allPhotos.length === 1 ? '' : 's'})
+                        ({allPhotos.length} photo{allPhotos.length === 1 ? '' : 's'})
                       </span>
                     ) : null}
                   </h2>
                   <p className="text-sm text-slate-600 mt-0.5">
-                    Latest saved selfie + generated portrait per student. Scroll to see all.
+                    All portraits from saved progress, completed jobs, and the superheros bucket.
                   </p>
+                  {photoStats && !loadingAllPhotos ? (
+                    <p className="text-xs text-slate-500 mt-1">
+                      Bucket: {photoStats.bucket_portraits} · Jobs: {photoStats.job_rows} · Activity
+                      saves: {photoStats.activity_rows}
+                      {photoStats.skipped > 0 ? ` · ${photoStats.skipped} could not load` : ''}
+                    </p>
+                  ) : null}
                 </div>
                 <Button
                   variant="ghost"
@@ -554,16 +575,19 @@ export default function AdminStudentsPage() {
                   Refresh photos
                 </Button>
               </div>
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 -mr-1">
+              <div
+                className="overflow-y-auto overscroll-contain rounded-lg border border-slate-200 bg-slate-50/50 p-3"
+                style={{ maxHeight: '70vh' }}
+              >
               {loadingAllPhotos ? (
                 <p className="text-sm text-slate-500">Loading photos…</p>
               ) : allPhotos.length === 0 ? (
                 <p className="text-sm text-slate-500">No superhero portraits saved yet.</p>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 pb-1">
-                  {allPhotos.map((photo) => (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {allPhotos.map((photo, idx) => (
                     <div
-                      key={`${photo.user_id}-${photo.completed_at}`}
+                      key={`${photo.job_id || photo.user_id || 'photo'}-${photo.completed_at}-${idx}`}
                       className="rounded-lg border border-purple-100 bg-white p-3"
                     >
                       <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
