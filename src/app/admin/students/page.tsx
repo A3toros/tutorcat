@@ -49,27 +49,15 @@ type TranscriptItem = {
 }
 
 type SuperheroPhotoEntry = {
-  user_id: string | null
+  user_id: string
   school_student_id: string | null
   nickname: string
   class: '1/15' | '1/16' | null
-  job_id: string | null
-  portrait_path: string | null
-  source?: string
   completed_at: string
   image_url: string
   selfie_url: string | null
   why_chosen: string | null
   provider: string | null
-}
-
-type SuperheroPhotoStats = {
-  activity_rows: number
-  job_rows: number
-  bucket_portraits: number
-  candidates: number
-  shown: number
-  skipped: number
 }
 
 function bySchoolId(a: AdminStudent, b: AdminStudent) {
@@ -92,7 +80,6 @@ export default function AdminStudentsPage() {
   const [audioUrlByJob, setAudioUrlByJob] = useState<Record<string, string>>({})
   const [loadingAudioJob, setLoadingAudioJob] = useState<string | null>(null)
   const [allPhotos, setAllPhotos] = useState<SuperheroPhotoEntry[]>([])
-  const [photoStats, setPhotoStats] = useState<SuperheroPhotoStats | null>(null)
   const [photosPanelOpen, setPhotosPanelOpen] = useState(false)
   const [loadingAllPhotos, setLoadingAllPhotos] = useState(false)
 
@@ -245,19 +232,9 @@ export default function AdminStudentsPage() {
       const res = await adminApiRequest('/.netlify/functions/admin-get-all-superhero-photos', {
         method: 'GET',
       })
-      const contentType = res.headers.get('content-type') || ''
-      if (!contentType.includes('application/json')) {
-        const preview = (await res.text()).slice(0, 120)
-        throw new Error(
-          res.ok
-            ? 'Photos API returned non-JSON. Restart netlify dev (port 8888) and try again.'
-            : `Photos API error ${res.status}. ${preview.startsWith('<!DOCTYPE') ? 'Got HTML instead of JSON — is netlify dev running?' : preview}`
-        )
-      }
       const data = await res.json()
       if (!data?.success) throw new Error(data?.error || 'Failed to load photos')
       setAllPhotos(Array.isArray(data.photos) ? data.photos : [])
-      setPhotoStats(data.stats ?? null)
     } catch (e) {
       showNotification((e as Error).message || 'Failed to load photos', 'error')
     } finally {
@@ -565,15 +542,8 @@ export default function AdminStudentsPage() {
                     ) : null}
                   </h2>
                   <p className="text-sm text-slate-600 mt-0.5">
-                    All portraits from saved progress, completed jobs, and the superheros bucket.
+                    Latest saved selfie + portrait per student (from Lesson 4 activity #15).
                   </p>
-                  {photoStats && !loadingAllPhotos ? (
-                    <p className="text-xs text-slate-500 mt-1">
-                      Bucket: {photoStats.bucket_portraits} · Jobs: {photoStats.job_rows} · Activity
-                      saves: {photoStats.activity_rows}
-                      {photoStats.skipped > 0 ? ` · ${photoStats.skipped} could not load` : ''}
-                    </p>
-                  ) : null}
                 </div>
                 <Button
                   variant="ghost"
@@ -594,9 +564,9 @@ export default function AdminStudentsPage() {
                 <p className="text-sm text-slate-500">No superhero portraits saved yet.</p>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {allPhotos.map((photo, idx) => (
+                  {allPhotos.map((photo) => (
                     <div
-                      key={`${photo.job_id || photo.user_id || 'photo'}-${photo.completed_at}-${idx}`}
+                      key={`${photo.user_id}-${photo.completed_at}`}
                       className="rounded-lg border border-purple-100 bg-white p-3"
                     >
                       <div className="flex flex-wrap items-start justify-between gap-2 mb-2">

@@ -35,7 +35,7 @@
   [functions."generate-superhero-image"]
     timeout = 10
   [functions."admin-get-all-superhero-photos"]
-    timeout = 60
+    timeout = 30
   [functions."admin-get-student-superhero-photos"]
     timeout = 30
 
