@@ -1,6 +1,30 @@
 /**
  * Robotic / TTS voice detector (Google Translate speak, AI voice playback).
  *
+ * v2.3.10 (hard-band human FP 2026-07-03):
+ *  - Strong human pacing (seg_cv ≥ 0.5 or gap_cv ≥ 0.35) overrides playback block in reading inference
+ *  - Easy-band human: widen energy_autocorr gate for 3+ seg artifact (e1 < 0.35)
+ *  - Playback voicing corroboration requires mean_no_speech_prob ≥ 0.03 (GTTS has pauses; mic speech does not)
+ *
+ * v2.3.9 (GTTS vs read-aloud 2026-07-02):
+ *  - Use Whisper mean_no_speech_prob to disambiguate GTTS playback vs human read-aloud
+ *  - Multi-seg GTTS-hard path: allow low no_speech + low pitch corroboration (even if timing uneven)
+ *
+ * v2.3.8 (easy-band human FP 2026-07-02):
+ *  - Easy-band human (mean > -0.34): high seg_cv, low energy_autocorr, or 2-seg uneven timing
+ *  - 2-seg very-easy TTS path requires mechanical timing or strong energy autocorr
+ *  - Keeps confirmed student TTS (title) + admin crystal/easy samples
+ *
+ * v2.3.7 (production would-flag audit 2026-06-28):
+ *  - Widen reading band to mean (-0.52, -0.34] — all 42 production would-flags were human read-aloud
+ *  - Human pacing threshold lowered to segment/gap CV ≥ 0.15
+ *  - Short multi-seg GTTS-hard path requires mechanical timing (GTTS is even; humans vary)
+ *
+ * v2.3.6 (reading vs TTS 2026-06-28):
+ *  - delivery_mode: speaking | reading | tts (improvement prompt → reading)
+ *  - Rehearsed read-aloud: flat artifact logprob in human band (-0.52,-0.38] + segment/gap CV
+ *  - Suppress artifact-TTS scoring / would-flag for inferred reading (not improvement score)
+ *
  * v2.3.5 (production human FP fix 2026-06-23):
  *  - GTTS-hard multi path requires logprob_is_artifact (exact equal), not near-flat rehearsed speech
  *  - Single-segment: crystal mean > -0.30; admin band (-0.32,-0.30] needs rhythm
@@ -13,7 +37,9 @@
  * Log-only by default; blocking requires ROBOTIC_VOICE_MODE=block.
  */
 
-export const ROBOTIC_VOICE_SCORER_VERSION = 'v2.3.5'
+export const ROBOTIC_VOICE_SCORER_VERSION = 'v2.3.10'
+
+export type SpeechDeliveryMode = 'speaking' | 'reading' | 'tts'
 
 export interface BrowserRhythmInput {
   speech_rate?: number
@@ -135,6 +161,7 @@ function whisperDerived(whisper: WhisperVerboseInput | null | undefined) {
   const durations: number[] = []
   const gaps: number[] = []
   const logprobs: number[] = []
+  const noSpeech: number[] = []
 
   for (let i = 0; i < segments.length; i++) {
     const seg = segments[i]
@@ -151,6 +178,8 @@ function whisperDerived(whisper: WhisperVerboseInput | null | undefined) {
     }
     const lp = Number(seg?.avg_logprob)
     if (Number.isFinite(lp)) logprobs.push(lp)
+    const ns = Number(seg?.no_speech_prob)
+    if (Number.isFinite(ns) && ns >= 0 && ns <= 1) noSpeech.push(ns)
   }
 
   let fillerCount = 0
@@ -169,6 +198,8 @@ function whisperDerived(whisper: WhisperVerboseInput | null | undefined) {
   const stdLogprob = stdDev(logprobs)
   const logprobRange =
     minLogprob != null && maxLogprob != null ? maxLogprob - minLogprob : null
+  const meanNoSpeechProb =
+    noSpeech.length > 0 ? noSpeech.reduce((a, b) => a + b, 0) / noSpeech.length : null
 
   return {
     word_count: wordCount,
@@ -176,6 +207,7 @@ function whisperDerived(whisper: WhisperVerboseInput | null | undefined) {
     filler_count: fillerCount,
     segment_duration_cv: coefficientOfVariation(durations),
     inter_segment_gap_cv: coefficientOfVariation(gaps),
+    mean_no_speech_prob: meanNoSpeechProb,
     mean_logprob: meanLogprob,
     min_logprob: minLogprob,
     max_logprob: maxLogprob,
@@ -226,9 +258,17 @@ function veryEasyAsrSingleSegment(w: ReturnType<typeof whisperDerived>): boolean
 }
 
 /** Stricter band for 3–4 segment short answers — avoids human at ≈ -0.32. */
-function veryEasyAsrMultiSegment(w: ReturnType<typeof whisperDerived>): boolean {
+function veryEasyAsrMultiSegment(
+  w: ReturnType<typeof whisperDerived>,
+  rhythm: BrowserRhythmInput | null = null
+): boolean {
   if (w.mean_logprob == null || w.min_logprob == null) return false
-  return w.mean_logprob > -0.3 && w.min_logprob > -0.38
+  if (w.min_logprob <= -0.38) return false
+  if (w.mean_logprob > -0.3) return true
+  if (w.mean_logprob > -0.34) {
+    return hasMechanicalTiming(w) && hasTtsRhythmCorroboration(rhythm)
+  }
+  return false
 }
 
 /** 2-segment GTTS band (admin ≈ -0.328); rhythm-only corroboration removed in v2.3.4. */
@@ -273,27 +313,185 @@ function hasTtsRhythmCorroboration(rhythm: BrowserRhythmInput | null): boolean {
   return false
 }
 
+function hasHumanPacing(w: ReturnType<typeof whisperDerived>): boolean {
+  const segCv = w.segment_duration_cv
+  const gapCv = w.inter_segment_gap_cv
+  return (
+    (segCv != null && segCv >= 0.15) ||
+    (gapCv != null && gapCv >= 0.15)
+  )
+}
+
+/** Very uneven chunking — rehearsed/spontaneous human even when pitch is flat. */
+function hasStrongHumanPacing(w: ReturnType<typeof whisperDerived>): boolean {
+  const segCv = w.segment_duration_cv
+  const gapCv = w.inter_segment_gap_cv
+  return (
+    (segCv != null && segCv >= 0.5) ||
+    (gapCv != null && gapCv >= 0.35)
+  )
+}
+
+/** GTTS playback tends toward even segment lengths and gaps. */
+function hasMechanicalTiming(w: ReturnType<typeof whisperDerived>): boolean {
+  const segCv = w.segment_duration_cv
+  const gapCv = w.inter_segment_gap_cv
+  const segMechanical = segCv == null || segCv < 0.18
+  const gapMechanical = gapCv == null || gapCv < 0.18
+  return segMechanical && gapMechanical
+}
+
+/**
+ * Some GTTS / AI playback segments can be unevenly chunked by Whisper while still showing
+ * low no_speech probability + low pitch variance.
+ */
+function hasPlaybackVoicing(
+  w: ReturnType<typeof whisperDerived>,
+  rhythm: BrowserRhythmInput | null
+): boolean {
+  const ns = w.mean_no_speech_prob
+  const pv = rhythm?.pitch_variance
+  return (
+    ns != null &&
+    ns >= 0.03 &&
+    ns < 0.22 &&
+    typeof pv === 'number' &&
+    Number.isFinite(pv) &&
+    pv >= 0 &&
+    pv < 0.0008
+  )
+}
+
 function shortTtsCorroborated(
   w: ReturnType<typeof whisperDerived>,
   rhythm: BrowserRhythmInput | null,
   mode: 'single' | 'two_segment' | 'multi_segment'
 ): boolean {
   if (mode === 'two_segment') {
-    return veryEasyAsrTwoSegment(w)
+    if (!veryEasyAsrTwoSegment(w)) return false
+    const segCv = w.segment_duration_cv
+    if (segCv != null && segCv >= 0.35) return false
+    const e1 = rhythm?.energy_autocorr_lag1
+    if (
+      typeof e1 === 'number' &&
+      Number.isFinite(e1) &&
+      e1 < 0.35 &&
+      segCv != null &&
+      segCv >= 0.12
+    ) {
+      return false
+    }
+    return true
   }
   if (mode === 'multi_segment') {
-    if (veryEasyAsrMultiSegment(w)) return true
-    return hasTtsRhythmCorroboration(rhythm) && isGtssLikeHardAsr(w)
+    if (veryEasyAsrMultiSegment(w, rhythm)) return true
+    return (
+      (hasMechanicalTiming(w) && hasTtsRhythmCorroboration(rhythm) && isGtssLikeHardAsr(w)) ||
+      (hasPlaybackVoicing(w, rhythm) && isGtssLikeHardAsr(w))
+    )
   }
   if (isCrystalClearSingleTts(w)) return true
   if (hasTtsRhythmCorroboration(rhythm) && isAdminTtsSingleBand(w)) return true
   return false
 }
 
-function allowLowPitchTtsBonus(w: ReturnType<typeof whisperDerived>): boolean {
+function allowLowPitchTtsBonus(
+  w: ReturnType<typeof whisperDerived>,
+  rhythm: BrowserRhythmInput | null
+): boolean {
   if (w.segment_count === 1) return isAdminTtsSingleBand(w) || isCrystalClearSingleTts(w)
   if (w.segment_count === 2) return veryEasyAsrTwoSegment(w)
+  if (veryEasyAsrMultiSegment(w, rhythm)) return true
   return w.logprob_is_artifact && w.mean_logprob != null && w.mean_logprob <= -0.4
+}
+
+/**
+ * Rehearsed human read-aloud: flat artifact logprob in the rehearsed human band with uneven
+ * segment timing. Production audit (2026-06-28): all 42 would-flags matched this pattern.
+ */
+function inferLikelyReadingAloud(
+  w: ReturnType<typeof whisperDerived>,
+  rhythm: BrowserRhythmInput | null
+): boolean {
+  if (w.segment_count < 3) return false
+  if (!w.logprob_is_artifact) return false
+  if (w.mean_logprob == null) return false
+  // If it looks like direct playback (low pitch + low no_speech), do not treat as human read-aloud —
+  // unless segment/gap timing is very uneven (rehearsed human mic speech).
+  if (!hasStrongHumanPacing(w)) {
+    if (
+      w.mean_no_speech_prob != null &&
+      w.mean_no_speech_prob >= 0 &&
+      w.mean_no_speech_prob < 0.22
+    ) {
+      const pv = rhythm?.pitch_variance
+      if (typeof pv === 'number' && Number.isFinite(pv) && pv >= 0 && pv < 0.0008) {
+        return false
+      }
+    }
+  }
+
+  if (w.segment_count <= 1 && (isCrystalClearSingleTts(w) || veryEasyAsrSingleSegment(w))) {
+    return false
+  }
+  if (w.segment_count === 2 && veryEasyAsrTwoSegment(w)) return false
+  if (veryEasyAsrMultiSegment(w)) return false
+  if (w.mean_logprob > -0.34) return false
+  if (w.mean_logprob < -0.52) return false
+
+  return hasHumanPacing(w)
+}
+
+/**
+ * Rehearsed/spontaneous human in the easy Whisper band (mean > -0.34): flat logprob but
+ * uneven segment timing or low playback-like energy — not ChatGPT/GTTS playback.
+ */
+function inferLikelyEasyBandHuman(
+  w: ReturnType<typeof whisperDerived>,
+  rhythm: BrowserRhythmInput | null
+): boolean {
+  if (w.mean_logprob == null || w.mean_logprob <= -0.34) return false
+  if (w.segment_count === 1 && (isCrystalClearSingleTts(w) || veryEasyAsrSingleSegment(w))) {
+    return false
+  }
+
+  const segCv = w.segment_duration_cv
+  const e1 = rhythm?.energy_autocorr_lag1
+
+  if (segCv != null && segCv >= 0.45) return true
+
+  if (
+    w.segment_count >= 3 &&
+    w.logprob_is_artifact &&
+    segCv != null &&
+    segCv >= 0.4 &&
+    typeof e1 === 'number' &&
+    Number.isFinite(e1) &&
+    e1 < 0.35
+  ) {
+    return true
+  }
+
+  if (w.segment_count === 2 && segCv != null && segCv >= 0.35) return true
+
+  if (w.std_logprob != null && w.std_logprob >= 0.008) return true
+
+  return false
+}
+
+function inferDeliveryMode(
+  w: ReturnType<typeof whisperDerived>,
+  isImprovementReadAloud: boolean,
+  likelyReadingAloud: boolean,
+  likelyEasyBandHuman: boolean,
+  artifactTtsPoints: number,
+  hasStrongArtifactTts: boolean
+): SpeechDeliveryMode {
+  if (isImprovementReadAloud || likelyReadingAloud) return 'reading'
+  if (likelyEasyBandHuman) return 'speaking'
+  if (hasStrongArtifactTts || artifactTtsPoints >= 38) return 'tts'
+  if (!w.logprob_is_artifact) return 'speaking'
+  return 'speaking'
 }
 
 /** Google Translate / AI TTS playback scoring. */
@@ -502,6 +700,10 @@ export function computeRoboticVoiceScore(input: RoboticVoiceFeaturesInput): Robo
   const w = whisperDerived(input.whisper_verbose)
   const promptId = typeof input.prompt_id === 'string' ? input.prompt_id.trim() : ''
   const isImprovementReadAloud = promptId === 'improvement'
+  const likelyReadingAloud = !isImprovementReadAloud && inferLikelyReadingAloud(w, rhythm)
+  const likelyEasyBandHuman =
+    !isImprovementReadAloud && !likelyReadingAloud && inferLikelyEasyBandHuman(w, rhythm)
+  const suppressArtifactTts = likelyReadingAloud || likelyEasyBandHuman
 
   const pitchVariance =
     typeof rhythm?.pitch_variance === 'number' && Number.isFinite(rhythm.pitch_variance)
@@ -520,7 +722,11 @@ export function computeRoboticVoiceScore(input: RoboticVoiceFeaturesInput): Robo
   const enoughSpeech = w.word_count >= MIN_WORDS_FOR_STRICT_RULES
   const enoughSegmentsForPause = w.segment_count >= 2
 
-  const artifactTts = scoreArtifactTtsBucket(w, enoughSpeech, rhythm)
+  const artifactTtsRaw = scoreArtifactTtsBucket(w, enoughSpeech, rhythm)
+  const artifactTts =
+    suppressArtifactTts
+      ? { points: 0, rulesHit: [] as string[], rawPoints: artifactTtsRaw.rawPoints }
+      : artifactTtsRaw
   const logprob = scoreLogprobBucket(w, enoughSpeech)
 
   rulesHit.push(...artifactTts.rulesHit, ...logprob.rulesHit)
@@ -555,7 +761,7 @@ export function computeRoboticVoiceScore(input: RoboticVoiceFeaturesInput): Robo
     rulesHit.push('filler_absence')
   }
 
-  const allowLowPitchTts = allowLowPitchTtsBonus(w)
+  const allowLowPitchTts = allowLowPitchTtsBonus(w, rhythm)
   if (
     allowLowPitchTts &&
     artifactTts.points >= 38 &&
@@ -577,16 +783,29 @@ export function computeRoboticVoiceScore(input: RoboticVoiceFeaturesInput): Robo
     artifactTts.rulesHit.includes('tts_flat_logprob_short') ||
     artifactTts.rulesHit.includes('tts_easy_single_segment')
 
+  const deliveryMode = inferDeliveryMode(
+    w,
+    isImprovementReadAloud,
+    likelyReadingAloud,
+    likelyEasyBandHuman,
+    artifactTts.points,
+    hasStrongArtifactTts
+  )
+
   let wouldFlag =
     score >= FLAG_THRESHOLD &&
     hasSubstantiveBucket &&
     (bucketCount >= 2 || hasStrongArtifactTts)
-  if (isImprovementReadAloud) {
+  if (isImprovementReadAloud || likelyReadingAloud || likelyEasyBandHuman) {
     wouldFlag = false
   }
 
   const scoreSkipReason =
-    artifactTts.shortSkippedNoCorroboration
+    likelyEasyBandHuman && score === 0
+      ? 'easy_band_human_skip'
+      : likelyReadingAloud && score === 0
+      ? 'reading_aloud_skip'
+      : artifactTtsRaw.shortSkippedNoCorroboration
       ? 'artifact_short_no_corroboration'
       : w.logprob_is_artifact &&
           w.segment_count <= MAX_SEGMENTS_FOR_ALL_EQUAL_SKIP &&
@@ -651,7 +870,14 @@ export function computeRoboticVoiceScore(input: RoboticVoiceFeaturesInput): Robo
       has_strong_artifact_tts: hasStrongArtifactTts,
       rhythm_corroborated: hasTtsRhythmCorroboration(rhythm),
       very_easy_asr: veryEasyAsrFlatLogprob(w),
+      delivery_mode: deliveryMode,
+      likely_reading_aloud: likelyReadingAloud,
+      likely_easy_band_human: likelyEasyBandHuman,
       skip_would_flag_improvement: isImprovementReadAloud,
+      skip_would_flag_reading: likelyReadingAloud,
+      skip_would_flag_easy_band_human: likelyEasyBandHuman,
+      artifact_tts_suppressed_reading: likelyReadingAloud && artifactTtsRaw.points > 0,
+      artifact_tts_suppressed_easy_band_human: likelyEasyBandHuman && artifactTtsRaw.points > 0,
       rules_hit: rulesHit,
       would_flag: wouldFlag,
     },

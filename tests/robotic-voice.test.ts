@@ -1,4 +1,30 @@
+import { readFileSync, existsSync } from 'fs'
+import { join } from 'path'
 import { computeRoboticVoiceScore } from '../functions/robotic-voice'
+
+const BACKUP_FEATURES = join(
+  process.cwd(),
+  'backups/tutorcat-2026-06-24T01-05-16'
+)
+
+function loadBackupFeatures(jobId: string) {
+  const path = join(BACKUP_FEATURES, `${jobId}.features.JSON`)
+  if (!existsSync(path)) return null
+  return JSON.parse(readFileSync(path, 'utf8')) as {
+    whisper_verbose?: object
+    browser_rhythm?: object
+  }
+}
+
+function scoreBackupJob(jobId: string, promptId = 'prompt-0') {
+  const f = loadBackupFeatures(jobId)
+  if (!f) throw new Error(`missing backup features for ${jobId}`)
+  return computeRoboticVoiceScore({
+    whisper_verbose: f.whisper_verbose ?? null,
+    browser_rhythm: f.browser_rhythm ?? null,
+    prompt_id: promptId,
+  })
+}
 
 function seg(
   i: number,
@@ -37,7 +63,119 @@ function variableLogprobSegments(count: number): ReturnType<typeof seg>[] {
   return out
 }
 
-describe('robotic-voice v2.3.5', () => {
+describe('robotic-voice v2.3.7', () => {
+  /** Flat logprob segments with uneven durations (human read-aloud pacing). */
+  function readingLikeSegments(
+    count: number,
+    logprob: number,
+    durations: number[]
+  ): ReturnType<typeof seg>[] {
+    const out = []
+    let t = 0
+    for (let i = 0; i < count; i++) {
+      const dur = durations[i] ?? 2
+      out.push(seg(i, `segment ${i} words here.`, t, t + dur, logprob))
+      t += dur + 0.3
+    }
+    return out
+  }
+
+  describe('v2.3.7 production would-flag audit (2026-06-28)', () => {
+    it.each([
+      { job: '52470 friends', logprob: -0.4115547239780426, segCv: 0.44, durations: [2.1, 3.8, 1.6] },
+      { job: '52470 special', logprob: -0.4472290873527527, segCv: 0.73, durations: [1.2, 4.5, 2.8] },
+      { job: '52466 hero story', logprob: -0.44362759590148926, segCv: 0.58, durations: [2.5, 4.2, 1.9] },
+      { job: '52467 likes', logprob: -0.4155702590942383, segCv: 0.33, durations: [2, 3, 2.5] },
+      { job: 'title mean -0.397', logprob: -0.39737287163734436, durations: [2, 3.4, 2.2] },
+      { job: 'title mean -0.391', logprob: -0.39081329107284546, durations: [1, 5.2, 2.1] },
+    ])('$job — human read-aloud not would-flag', ({ logprob, durations }) => {
+      const segments = readingLikeSegments(3, logprob, durations)
+      const text = segments.map((s) => s.text).join(' ')
+      const r = computeRoboticVoiceScore({
+        whisper_verbose: { text, segments, duration: 12 },
+        browser_rhythm: { pitch_variance: 0.001, energy_autocorr_lag1: 0.15 },
+      })
+      expect(r.signals.delivery_mode).toBe('reading')
+      expect(r.signals.would_flag).toBe(false)
+      expect(r.score).toBeLessThan(70)
+    })
+
+    it('seiryu weather — gap CV corroborates reading when segment CV is low', () => {
+      const logprob = -0.3847607970237732
+      const r = computeRoboticVoiceScore({
+        whisper_verbose: {
+          text: 'one two three four five six seven eight nine ten eleven twelve.',
+          segments: [
+            seg(0, 'one two three four.', 0, 3, logprob),
+            seg(1, 'five six seven eight.', 3.8, 6.9, logprob),
+            seg(2, 'nine ten eleven twelve.', 8.2, 11.3, logprob),
+          ],
+        },
+        browser_rhythm: { pitch_variance: 0.001, energy_autocorr_lag1: 0.12 },
+      })
+      expect(r.signals.delivery_mode).toBe('reading')
+      expect(r.signals.would_flag).toBe(false)
+    })
+  })
+
+  describe('v2.3.6 reading vs TTS (2026-06-28)', () => {
+    it('52448 L1 online time — rehearsed read-aloud, not TTS (flat -0.404, human timing)', () => {
+      const logprob = -0.40451547503471375
+      const text =
+        "I don't think kids should spend too much time online while the internet is gate for doing homework or playing games Sitting in front of skin for hours bad for our eyes and make us Inactive I believe we need to balance We should spend more time playing sport or hanging out with our friends and family in real life Instead of staring at our phone every day all day"
+      const r = computeRoboticVoiceScore({
+        whisper_verbose: {
+          text,
+          segments: [
+            seg(
+              0,
+              "I don't think kids should spend too much time online while the internet is gate for doing homework or playing games",
+              0,
+              4.2,
+              logprob
+            ),
+            seg(1, 'Sitting in front of skin for hours bad for our eyes and make us Inactive', 4.5, 7.1, logprob),
+            seg(2, 'I believe we need to balance', 7.4, 8.6, logprob),
+            seg(3, 'We should spend more time playing sport or hanging out with our friends and family in real life', 8.9, 12.8, logprob),
+            seg(4, 'Instead of staring at our phone every day all day', 13.1, 15.2, logprob),
+          ],
+        },
+        browser_rhythm: {
+          pitch_variance: 0.0009691146261630754,
+          energy_autocorr_lag1: 0.16828371149666813,
+          energy_autocorr_lag3: 0.11623318983297588,
+          pause_entropy: 2.4277185566301887,
+        },
+      })
+      expect(r.signals.delivery_mode).toBe('reading')
+      expect(r.signals.likely_reading_aloud).toBe(true)
+      expect(r.signals.logprob_is_artifact).toBe(true)
+      expect(r.signals.would_flag).toBe(false)
+      expect(r.score).toBeLessThan(70)
+      expect(r.signals.artifact_tts_suppressed_reading).toBe(true)
+      expect(r.signals.score_skip_reason).toBe('reading_aloud_skip')
+    })
+
+    it('52448 games prompt — variable logprob read/speak hybrid is speaking mode', () => {
+      const text =
+        "I don't usually play games, but the games I play the most, and I like it, maybe I like Roblox because it has a lot of games in that application."
+      const r = computeRoboticVoiceScore({
+        whisper_verbose: {
+          text,
+          segments: [
+            seg(0, "I don't usually play games, but the games I play the most,", 0, 3, -0.26),
+            seg(1, 'and I like it, maybe I like Roblox because it has a lot of games', 3.2, 6.5, -0.31),
+            seg(2, 'in that application.', 6.7, 7.5, -0.33),
+          ],
+        },
+        browser_rhythm: { pitch_variance: 0.001, energy_autocorr_lag1: 0.31 },
+      })
+      expect(r.signals.delivery_mode).toBe('speaking')
+      expect(r.signals.logprob_is_artifact).toBe(false)
+      expect(r.signals.would_flag).toBe(false)
+    })
+  })
+
   describe('v2.3.5 production human FP regressions (2026-06-23)', () => {
     it('52468 hero vs villain — near-flat rehearsed 3-seg human (ceb2f18d)', () => {
       const text =
@@ -291,11 +429,61 @@ describe('robotic-voice v2.3.5', () => {
     expect(r.signals.would_flag).toBe(false)
     expect(r.signals.skip_would_flag_improvement).toBe(true)
   })
+})
 
-  it('reports scorer version v2.3.5', () => {
+describe('robotic-voice v2.3.10', () => {
+  const hasBackup = existsSync(BACKUP_FEATURES)
+
+  it('reports scorer version v2.3.10', () => {
     const r = computeRoboticVoiceScore({
       whisper_verbose: { text: 'hello', segments: [seg(0, 'hello.', 0, 1, -0.3)] },
     })
-    expect(r.signals.scorer_version).toBe('v2.3.5')
+    expect(r.signals.scorer_version).toBe('v2.3.10')
+  })
+
+  describe('hard-band human FP vs confirmed student TTS (2026-07-03)', () => {
+    const studentTts = [
+      '029558f0-c6b1-4799-8c19-05ed3ae39f93',
+      'bc1d18eb-a07c-4194-943a-05093dea0141',
+      '9dd690cc-3432-4507-86e6-0a60a5610eb5',
+    ]
+    const humanFp = [
+      'd258a102-ff93-4427-9a55-b8d1cf3ad89a',
+      'e256f960-098e-4467-86f2-0d3e18916314',
+      '3a358f92-647d-4599-9fec-2851f1a783eb',
+      'c444cec6-6d66-4907-872e-60c67b0823cf',
+      '0c8ba875-fd5f-4ac7-a6e6-191882052bd3',
+      '1d5247da-cadc-40ba-9fde-c9cd652c299d',
+      'a7e1be8b-de6f-4b5f-b232-ab6e47d36bae',
+    ]
+    const adminTts = [
+      '47d903a2-d757-4a95-9082-dd6bb2a44479',
+      'db3bbf14-892c-404e-9122-113e37e2f1c9',
+      'a33e9e4e-5648-4457-a85e-fdf557f30540',
+    ]
+
+    it.each(studentTts)('confirmed student TTS %s still would-flags', (jobId) => {
+      if (!hasBackup) return
+      const r = scoreBackupJob(jobId)
+      expect(r.signals.would_flag).toBe(true)
+      expect(r.signals.delivery_mode).toBe('tts')
+      expect(r.score).toBeGreaterThanOrEqual(70)
+    })
+
+    it.each(humanFp)('confirmed human %s no longer would-flags', (jobId) => {
+      if (!hasBackup) return
+      const r = scoreBackupJob(jobId)
+      expect(r.signals.would_flag).toBe(false)
+      expect(r.signals.delivery_mode).not.toBe('tts')
+      expect(r.score).toBeLessThan(70)
+    })
+
+    it.each(adminTts)('admin TTS calibration %s still would-flags', (jobId) => {
+      if (!hasBackup) return
+      const r = scoreBackupJob(jobId)
+      expect(r.signals.would_flag).toBe(true)
+      expect(r.signals.delivery_mode).toBe('tts')
+    })
   })
 })
+
