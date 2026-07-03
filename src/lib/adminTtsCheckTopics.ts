@@ -153,3 +153,15 @@ export function pickRandomPromptsFromTopic(topic: AdminTtsCheckTopic, count = 3)
 export function buildAdminTtsPromptId(topicId: string, promptId: string): string {
   return `${topicId}/${promptId}`
 }
+
+export function getTopicById(topicId: string): AdminTtsCheckTopic | undefined {
+  return ADMIN_TTS_CHECK_TOPICS.find((t) => t.id === topicId)
+}
+
+/** All prompts for a topic in list order — used for admin-selected calibration sessions. */
+export function buildPromptsForTopic(topic: AdminTtsCheckTopic) {
+  return topic.prompts.map((p) => ({
+    id: buildAdminTtsPromptId(topic.id, p.id),
+    text: p.text,
+  }))
+}

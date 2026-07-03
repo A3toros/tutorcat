@@ -9,12 +9,12 @@ import { useNotification } from '@/contexts/NotificationContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { adminApiRequest } from '@/utils/adminApi'
 import {
+  ADMIN_TTS_CHECK_TOPICS,
   ADMIN_TTS_DELIVERY_OPTIONS,
   type AdminTtsDeliveryMethod,
   adminTtsCheckLessonId,
-  buildAdminTtsPromptId,
-  pickRandomPromptsFromTopic,
-  pickRandomTopic,
+  buildPromptsForTopic,
+  getTopicById,
 } from '@/lib/adminTtsCheckTopics'
 
 type SessionRow = {
@@ -58,16 +58,7 @@ function scoreHint(job: NonNullable<SessionRow['jobs']>[number]): string | null 
   return 'no rules fired'
 }
 
-function randomSession() {
-  const nextTopic = pickRandomTopic()
-  return {
-    topic: nextTopic,
-    prompts: pickRandomPromptsFromTopic(nextTopic).map((p) => ({
-      id: buildAdminTtsPromptId(nextTopic.id, p.id),
-      text: p.text,
-    })),
-  }
-}
+const DEFAULT_TOPIC_ID = ADMIN_TTS_CHECK_TOPICS[0]?.id ?? 'family-home'
 
 export default function AdminCheckTtsPage() {
   const router = useRouter()
@@ -75,7 +66,7 @@ export default function AdminCheckTtsPage() {
   const { user } = useAuth()
 
   const [phase, setPhase] = useState<Phase>('setup')
-  const [{ topic, prompts }, setSession] = useState(randomSession)
+  const [topicId, setTopicId] = useState(DEFAULT_TOPIC_ID)
   const [sessionId, setSessionId] = useState(() => crypto.randomUUID())
   const [deliveryMethod, setDeliveryMethod] = useState<AdminTtsDeliveryMethod>('human_mic')
   const [notes, setNotes] = useState('')
@@ -85,9 +76,8 @@ export default function AdminCheckTtsPage() {
 
   const sessionLessonId = useMemo(() => adminTtsCheckLessonId(sessionId), [sessionId])
 
-  const rerollTopic = useCallback(() => {
-    setSession(randomSession())
-  }, [])
+  const topic = useMemo(() => getTopicById(topicId) ?? ADMIN_TTS_CHECK_TOPICS[0], [topicId])
+  const prompts = useMemo(() => buildPromptsForTopic(topic), [topic])
 
   const loadSessions = useCallback(async () => {
     setIsLoadingSessions(true)
@@ -176,7 +166,6 @@ export default function AdminCheckTtsPage() {
 
   const resetForAnother = () => {
     setSessionId(crypto.randomUUID())
-    rerollTopic()
     setPhase('setup')
     setNotes('')
   }
@@ -216,13 +205,19 @@ export default function AdminCheckTtsPage() {
               </Card.Header>
               <Card.Body className="space-y-5">
                 <div>
-                  <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                    <p className="font-medium text-slate-700">Topic: {topic.title}</p>
-                    <Button variant="secondary" size="sm" onClick={rerollTopic}>
-                      Random topic & prompts
-                    </Button>
-                  </div>
-                  <ol className="list-decimal list-inside text-slate-600 space-y-1 text-sm">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Topic</label>
+                  <Select
+                    value={topicId}
+                    onChange={(e) => setTopicId(e.target.value)}
+                    className="w-full max-w-md"
+                  >
+                    {ADMIN_TTS_CHECK_TOPICS.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.title}
+                      </option>
+                    ))}
+                  </Select>
+                  <ol className="list-decimal list-inside text-slate-600 space-y-1 text-sm mt-3">
                     {prompts.map((p) => (
                       <li key={p.id}>{p.text}</li>
                     ))}
