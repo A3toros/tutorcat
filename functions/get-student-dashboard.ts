@@ -3,6 +3,11 @@ import { neon } from '@neondatabase/serverless';
 import { getHeaders } from './cors-headers';
 import { requireStudentAuth } from './student-auth.js';
 import { sumEffectiveScores } from './student-lesson-scoring.js';
+import {
+  fetchStudentPlatformAssignmentLessons,
+  pickCurrentPlatformLesson,
+  studentPlatformAssignmentCount,
+} from './lib/platform-lesson-assignments.js';
 
 const handler: Handler = async (event) => {
   const headers = getHeaders(event, false);
@@ -40,6 +45,59 @@ const handler: Handler = async (event) => {
 
     const sql = neon(databaseUrl);
     const userId = auth.user.id;
+
+    const platformAssignmentCount = await studentPlatformAssignmentCount(sql, userId);
+
+    if (platformAssignmentCount > 0) {
+      const assignedLessons = await fetchStudentPlatformAssignmentLessons(sql, userId)
+      const currentLesson = pickCurrentPlatformLesson(assignedLessons)
+      const completedLessons = assignedLessons.filter((l) => l.completed).length
+      const allComplete = assignedLessons.length > 0 && !currentLesson
+
+      const lessonList = currentLesson
+        ? [
+            {
+              id: currentLesson.id,
+              lesson_number: currentLesson.lesson_number,
+              topic: currentLesson.topic,
+              level: currentLesson.level,
+              track: 'platform' as const,
+              communication_goal: `${currentLesson.level} · Lesson ${currentLesson.lesson_number}`,
+              completed: currentLesson.completed,
+              score: currentLesson.score,
+              score_percentage: currentLesson.score_percentage,
+              progress_percentage: currentLesson.progress_percentage,
+              locked: false,
+            },
+          ]
+        : []
+
+      return {
+        statusCode: 200,
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          success: true,
+          restricted_to_platform_lessons: true,
+          sequential_platform_lessons: true,
+          all_assigned_complete: allComplete,
+          user: {
+            id: auth.user.id,
+            email: auth.user.email,
+            firstName: auth.user.firstName,
+            lastName: auth.user.lastName,
+            schoolStudentId: auth.user.schoolStudentId,
+            honorific: auth.user.honorific,
+            nickname: auth.user.nickname,
+            currentStudentLesson: auth.user.currentStudentLesson ?? 1,
+          },
+          progress: {
+            completedLessons,
+            totalLessons: assignedLessons.length,
+          },
+          lessons: lessonList,
+        }),
+      };
+    }
 
     const allActivityResults = await sql`
       SELECT student_lesson_id, activity_type, score, max_score, answers, feedback
@@ -115,6 +173,7 @@ const handler: Handler = async (event) => {
           : null,
         progress_percentage: Boolean(row.completed) ? 100 : progressPct,
         locked: false,
+        track: 'classroom',
       };
     });
 
@@ -140,6 +199,7 @@ const handler: Handler = async (event) => {
           totalLessons: lessonList.length,
         },
         lessons: lessonList,
+        restricted_to_platform_lessons: false,
       }),
     };
   } catch (error) {

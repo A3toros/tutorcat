@@ -33,10 +33,16 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
         if (typeof window !== 'undefined' && currentUser.role === 'student') {
           const path = window.location.pathname
+          const params = new URLSearchParams(window.location.search)
+          const isAssignedPlatformLesson =
+            path.startsWith('/lessons') &&
+            params.get('fromStudentPunish') === '1' &&
+            Boolean(params.get('lessonId'))
+
           if (
             path === '/dashboard' ||
             path === '/evaluation' ||
-            path.startsWith('/lessons')
+            (path.startsWith('/lessons') && !isAssignedPlatformLesson)
           ) {
             window.location.replace(STUDENT_DASHBOARD_PATH)
             return

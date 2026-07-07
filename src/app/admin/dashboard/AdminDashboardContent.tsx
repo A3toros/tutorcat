@@ -956,6 +956,14 @@ export default function AdminDashboardContent() {
                 >
                   Students
                 </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => router.push('/admin/punish')}
+                  className="bg-red-50 text-red-700 border border-red-200 hover:bg-red-100"
+                >
+                  Punish
+                </Button>
                 <Input
                   placeholder={t('searchUsers', 'Search users...')}
                   value={searchTerm}

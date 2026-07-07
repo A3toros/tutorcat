@@ -215,6 +215,11 @@ function LessonContent() {
   useEffect(() => {
     if (user?.role === 'student') {
       const id = searchParams.get('lessonId') || searchParams.get('id')
+      const isAssignedPlatformLesson =
+        searchParams.get('fromStudentPunish') === '1' && Boolean(id)
+      if (isAssignedPlatformLesson) {
+        return
+      }
       if (id) {
         router.replace(`/student/lessons?lessonId=${id}`)
       } else {
@@ -1486,8 +1491,11 @@ function LessonContent() {
         onContinue={() => {
           setShowCompletionModal(false)
           // localStorage is already cleared in LessonCompletionModal after successful finalization
-          // Navigate to dashboard
-          router.push('/dashboard')
+          router.push(
+            user?.role === 'student' || searchParams.get('fromStudentPunish') === '1'
+              ? '/student_dashboard'
+              : '/dashboard'
+          )
         }}
         onRetry={() => {
           setShowCompletionModal(false)

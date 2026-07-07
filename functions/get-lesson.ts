@@ -2,6 +2,7 @@ import { Handler } from '@netlify/functions';
 import { neon } from '@neondatabase/serverless';
 import { validateJWT } from './auth-validate-jwt.js';
 import { getHeaders } from './cors-headers';
+import { studentCanAccessAssignedPlatformLesson } from './lib/platform-lesson-assignments.js';
 
 /** GPT-combined summary only — never merge per-prompt text here. */
 function getCombinedImprovedTranscript(answers: unknown): string {
@@ -110,6 +111,22 @@ const handler: Handler = async (event, context) => {
     }
 
     const lessonData = lessonResult[0];
+
+    const roleRows = await sql`SELECT role FROM users WHERE id = ${userId} LIMIT 1`;
+    const userRole = (roleRows[0] as { role?: string } | undefined)?.role;
+    if (userRole === 'student') {
+      const allowed = await studentCanAccessAssignedPlatformLesson(sql, userId, lessonId);
+      if (!allowed) {
+        return {
+          statusCode: 403,
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            success: false,
+            error: 'This lesson is not assigned to your account',
+          }),
+        } as any;
+      }
+    }
 
     // Get lesson activities with related data (including new metadata fields)
     const activitiesResult = await sql`

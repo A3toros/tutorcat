@@ -56,6 +56,8 @@ const LessonCompletionModal: React.FC<LessonCompletionModalProps> = ({
   const [isResetByBackend, setIsResetByBackend] = useState(false);
   const [backendPassed, setBackendPassed] = useState<boolean | null>(null); // Backend's passed status
 
+  const homePath = user?.role === 'student' ? '/student_dashboard' : '/dashboard';
+
   const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
   // Use backend's passed status if available, otherwise fall back to frontend calculation
   const isPassed = backendPassed !== null ? backendPassed : (percentage >= 60);
@@ -222,7 +224,7 @@ const LessonCompletionModal: React.FC<LessonCompletionModalProps> = ({
               className: "fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4",
               onClick: () => {
                 onClose();
-                router.push('/dashboard');
+                router.push(homePath);
               }
             } as any)}
             initial={{ opacity: 0 }}
@@ -263,7 +265,7 @@ const LessonCompletionModal: React.FC<LessonCompletionModalProps> = ({
                   <button
                     onClick={() => {
                       onClose();
-                      router.push('/dashboard');
+                      router.push(homePath);
                     }}
                     className="text-white hover:text-primary-200 transition-colors absolute top-4 right-4 md:relative md:top-0 md:right-0"
                   >
@@ -456,7 +458,7 @@ const LessonCompletionModal: React.FC<LessonCompletionModalProps> = ({
                         // Lesson is already auto-finalized when modal opened
                         // Just navigate - no need to save again
                         onContinue();
-                        router.push('/dashboard');
+                        router.push(homePath);
                       }}
                       className="flex-1"
                       size="lg"
@@ -476,7 +478,7 @@ const LessonCompletionModal: React.FC<LessonCompletionModalProps> = ({
                 <Button
                   onClick={() => {
                     onClose();
-                    router.push('/dashboard');
+                    router.push(homePath);
                   }}
                   variant="secondary"
                   className="flex-1"

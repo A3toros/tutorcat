@@ -146,6 +146,8 @@ export interface StudentDashboardLesson {
   lesson_number: number
   topic: string
   slug?: string | null
+  level?: string | null
+  track?: 'classroom' | 'platform'
   communication_goal?: string | null
   completed: boolean
   score: number
