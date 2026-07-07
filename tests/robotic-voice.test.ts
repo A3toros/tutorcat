@@ -31,9 +31,11 @@ function seg(
   text: string,
   start: number,
   end: number,
-  avg_logprob: number
+  avg_logprob: number,
+  no_speech_prob?: number
 ) {
-  return { start, end, text, avg_logprob }
+  const base = { start, end, text, avg_logprob }
+  return no_speech_prob != null ? { ...base, no_speech_prob } : base
 }
 
 function flatSegments(
@@ -431,14 +433,81 @@ describe('robotic-voice v2.3.7', () => {
   })
 })
 
-describe('robotic-voice v2.3.10', () => {
+describe('robotic-voice v2.3.11', () => {
   const hasBackup = existsSync(BACKUP_FEATURES)
 
-  it('reports scorer version v2.3.10', () => {
+  it('reports scorer version v2.3.11', () => {
     const r = computeRoboticVoiceScore({
       whisper_verbose: { text: 'hello', segments: [seg(0, 'hello.', 0, 1, -0.3)] },
     })
-    expect(r.signals.scorer_version).toBe('v2.3.10')
+    expect(r.signals.scorer_version).toBe('v2.3.11')
+  })
+
+  describe('rehearsed read-aloud FP (2026-07-07)', () => {
+    it('best friend Tim — even-pacing hard-band read-aloud at mic (mean -0.418)', () => {
+      const lp = -0.41758617758750916
+      const text =
+        'My best friend is Tim. I like to play basketball with him. We also like to walk around Central Lamma 2 together. We always have fun when we spend time together.'
+      const r = computeRoboticVoiceScore({
+        whisper_verbose: {
+          text,
+          segments: [
+            seg(0, 'My best friend is Tim.', 0, 3.2, lp, 0.01),
+            seg(1, 'I like to play basketball with him.', 3.2, 6.5, lp, 0.01),
+            seg(2, 'We also like to walk around Central Lamma 2 together.', 6.5, 10.8, lp, 0.01),
+          ],
+        },
+        browser_rhythm: {
+          pitch_variance: 0.000649527301938515,
+          energy_autocorr_lag1: 0.3119832724779431,
+        },
+      })
+      expect(r.signals.delivery_mode).toBe('reading')
+      expect(r.signals.would_flag).toBe(false)
+      expect(r.score).toBeLessThan(70)
+    })
+
+    it('brothers/sisters — easy-band 3-seg read-aloud (mean -0.274)', () => {
+      const lp = -0.27421605587005615
+      const text =
+        "I don't have a brother or a sister. I usually spend time with my parents. We watch movies, eat together, and sometimes go shopping. I enjoy spending time with my family."
+      const r = computeRoboticVoiceScore({
+        whisper_verbose: {
+          text,
+          segments: [
+            seg(0, "I don't have a brother or a sister.", 0, 2.5, lp, 0.008),
+            seg(1, 'I usually spend time with my parents.', 2.5, 5.8, lp, 0.008),
+            seg(2, 'We watch movies, eat together, and sometimes go shopping.', 5.8, 10.2, lp, 0.008),
+          ],
+        },
+        browser_rhythm: {
+          pitch_variance: 0.000585152433631318,
+          energy_autocorr_lag1: 0.17396782558840523,
+        },
+      })
+      expect(r.signals.delivery_mode).toBe('speaking')
+      expect(r.signals.would_flag).toBe(false)
+      expect(r.score).toBeLessThan(70)
+    })
+
+    it('basketball study — single-seg admin-band mic speech (mean -0.320)', () => {
+      const lp = -0.31969720125198364
+      const text =
+        'I really enjoy learning basketball because it is a sport I love and I want to learn more and become much better.'
+      const r = computeRoboticVoiceScore({
+        whisper_verbose: {
+          text,
+          segments: [seg(0, text, 0, 12, lp, 0.006)],
+        },
+        browser_rhythm: {
+          pitch_variance: 0.0003797771052242898,
+          energy_autocorr_lag1: 0.36856570959402285,
+        },
+      })
+      expect(r.signals.delivery_mode).toBe('speaking')
+      expect(r.signals.would_flag).toBe(false)
+      expect(r.score).toBeLessThan(70)
+    })
   })
 
   describe('hard-band human FP vs confirmed student TTS (2026-07-03)', () => {

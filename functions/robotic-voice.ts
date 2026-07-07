@@ -1,6 +1,12 @@
 /**
  * Robotic / TTS voice detector (Google Translate speak, AI voice playback).
  *
+ * v2.3.11 (rehearsed read-aloud FP 2026-07-07):
+ *  - Mic speech: mean_no_speech_prob < 0.03 + moderate energy → reading/speaking, not TTS
+ *  - Multi-seg easy band (mean > -0.3): require GTTS pause voicing, not auto-TTS
+ *  - GTTS-hard corroboration requires mean_no_speech_prob ≥ 0.03
+ *  - Single-seg admin band TTS requires mean_no_speech_prob ≥ 0.03
+ *
  * v2.3.10 (hard-band human FP 2026-07-03):
  *  - Strong human pacing (seg_cv ≥ 0.5 or gap_cv ≥ 0.35) overrides playback block in reading inference
  *  - Easy-band human: widen energy_autocorr gate for 3+ seg artifact (e1 < 0.35)
@@ -37,7 +43,7 @@
  * Log-only by default; blocking requires ROBOTIC_VOICE_MODE=block.
  */
 
-export const ROBOTIC_VOICE_SCORER_VERSION = 'v2.3.10'
+export const ROBOTIC_VOICE_SCORER_VERSION = 'v2.3.11'
 
 export type SpeechDeliveryMode = 'speaking' | 'reading' | 'tts'
 
@@ -264,7 +270,10 @@ function veryEasyAsrMultiSegment(
 ): boolean {
   if (w.mean_logprob == null || w.min_logprob == null) return false
   if (w.min_logprob <= -0.38) return false
-  if (w.mean_logprob > -0.3) return true
+  if (w.mean_logprob > -0.3) {
+    if (w.mean_no_speech_prob == null) return true
+    return hasGttsPauseVoicing(w) && hasTtsRhythmCorroboration(rhythm)
+  }
   if (w.mean_logprob > -0.34) {
     return hasMechanicalTiming(w) && hasTtsRhythmCorroboration(rhythm)
   }
@@ -311,6 +320,30 @@ function hasTtsRhythmCorroboration(rhythm: BrowserRhythmInput | null): boolean {
   if (typeof pv === 'number' && Number.isFinite(pv) && pv >= 0 && pv < 0.035) return true
   if (typeof e1 === 'number' && Number.isFinite(e1) && e1 > 0.68) return true
   return false
+}
+
+/** Continuous mic capture — Whisper sees little non-speech between segments. */
+function hasMicSpeechVoicing(w: ReturnType<typeof whisperDerived>): boolean {
+  return w.mean_no_speech_prob != null && w.mean_no_speech_prob < 0.03
+}
+
+/** GTTS / speaker playback — audible pauses between phrases (or legacy jobs without no_speech data). */
+function hasGttsPauseVoicing(w: ReturnType<typeof whisperDerived>): boolean {
+  return w.mean_no_speech_prob == null || w.mean_no_speech_prob >= 0.03
+}
+
+/** Rehearsed human read-aloud at the mic: flat logprob, low no_speech, moderate energy autocorr. */
+function isMicRehearsedReading(
+  w: ReturnType<typeof whisperDerived>,
+  rhythm: BrowserRhythmInput | null
+): boolean {
+  const e1 = rhythm?.energy_autocorr_lag1
+  return (
+    hasMicSpeechVoicing(w) &&
+    typeof e1 === 'number' &&
+    Number.isFinite(e1) &&
+    e1 < 0.35
+  )
 }
 
 function hasHumanPacing(w: ReturnType<typeof whisperDerived>): boolean {
@@ -386,12 +419,21 @@ function shortTtsCorroborated(
   if (mode === 'multi_segment') {
     if (veryEasyAsrMultiSegment(w, rhythm)) return true
     return (
-      (hasMechanicalTiming(w) && hasTtsRhythmCorroboration(rhythm) && isGtssLikeHardAsr(w)) ||
+      (hasMechanicalTiming(w) &&
+        hasTtsRhythmCorroboration(rhythm) &&
+        isGtssLikeHardAsr(w) &&
+        hasGttsPauseVoicing(w)) ||
       (hasPlaybackVoicing(w, rhythm) && isGtssLikeHardAsr(w))
     )
   }
   if (isCrystalClearSingleTts(w)) return true
-  if (hasTtsRhythmCorroboration(rhythm) && isAdminTtsSingleBand(w)) return true
+  if (
+    hasTtsRhythmCorroboration(rhythm) &&
+    isAdminTtsSingleBand(w) &&
+    hasGttsPauseVoicing(w)
+  ) {
+    return true
+  }
   return false
 }
 
@@ -417,8 +459,8 @@ function inferLikelyReadingAloud(
   if (!w.logprob_is_artifact) return false
   if (w.mean_logprob == null) return false
   // If it looks like direct playback (low pitch + low no_speech), do not treat as human read-aloud —
-  // unless segment/gap timing is very uneven (rehearsed human mic speech).
-  if (!hasStrongHumanPacing(w)) {
+  // unless segment/gap timing is very uneven, or mic rehearsed reading (low no_speech + moderate e1).
+  if (!hasStrongHumanPacing(w) && !isMicRehearsedReading(w, rhythm)) {
     if (
       w.mean_no_speech_prob != null &&
       w.mean_no_speech_prob >= 0 &&
@@ -439,6 +481,7 @@ function inferLikelyReadingAloud(
   if (w.mean_logprob > -0.34) return false
   if (w.mean_logprob < -0.52) return false
 
+  if (isMicRehearsedReading(w, rhythm)) return true
   return hasHumanPacing(w)
 }
 
@@ -451,12 +494,24 @@ function inferLikelyEasyBandHuman(
   rhythm: BrowserRhythmInput | null
 ): boolean {
   if (w.mean_logprob == null || w.mean_logprob <= -0.34) return false
-  if (w.segment_count === 1 && (isCrystalClearSingleTts(w) || veryEasyAsrSingleSegment(w))) {
+  if (w.segment_count === 1 && isCrystalClearSingleTts(w)) {
     return false
   }
 
   const segCv = w.segment_duration_cv
   const e1 = rhythm?.energy_autocorr_lag1
+
+  if (
+    w.segment_count === 1 &&
+    w.mean_logprob != null &&
+    w.mean_logprob > -0.34 &&
+    hasMicSpeechVoicing(w) &&
+    typeof e1 === 'number' &&
+    Number.isFinite(e1) &&
+    e1 >= 0.35
+  ) {
+    return true
+  }
 
   if (segCv != null && segCv >= 0.45) return true
 
@@ -464,7 +519,7 @@ function inferLikelyEasyBandHuman(
     w.segment_count >= 3 &&
     w.logprob_is_artifact &&
     segCv != null &&
-    segCv >= 0.4 &&
+    segCv >= 0.32 &&
     typeof e1 === 'number' &&
     Number.isFinite(e1) &&
     e1 < 0.35

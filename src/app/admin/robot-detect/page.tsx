@@ -37,6 +37,25 @@ function scoreBadgeClass(score: number | null): string {
   return 'bg-green-100 text-green-800'
 }
 
+function deliveryModeCell(signals: Record<string, unknown> | null | undefined): React.ReactNode {
+  const mode = signals?.delivery_mode
+  if (mode === 'reading') {
+    return (
+      <span className="font-bold text-red-600 text-base" title="Reading aloud">
+        R
+      </span>
+    )
+  }
+  if (mode === 'speaking') {
+    return (
+      <span className="font-bold text-green-600 text-base" title="Speaking">
+        S
+      </span>
+    )
+  }
+  return <span className="text-slate-400 text-sm">—</span>
+}
+
 export default function AdminRobotDetectPage() {
   const router = useRouter()
   const { showNotification } = useNotification()
@@ -244,6 +263,7 @@ export default function AdminRobotDetectPage() {
                 <Header>
                   <Row>
                     <Head>Score</Head>
+                    <Head title="Reading (R) or Speaking (S)">R/S</Head>
                     <Head>Would flag</Head>
                     <Head>Student</Head>
                     <Head>Lesson</Head>
@@ -284,6 +304,7 @@ export default function AdminRobotDetectPage() {
                               {item.robotic_voice_score ?? '—'}
                             </span>
                           </Cell>
+                          <Cell className="text-center">{deliveryModeCell(item.signals)}</Cell>
                           <Cell>
                             {item.robotic_voice_would_flag ? (
                               <span className="text-red-700 font-semibold text-sm">Yes</span>
@@ -332,7 +353,7 @@ export default function AdminRobotDetectPage() {
                         </Row>
                         {expanded && (
                           <Row>
-                            <Cell colSpan={8} className="bg-slate-50 text-sm">
+                            <Cell colSpan={9} className="bg-slate-50 text-sm">
                               <p className="font-semibold text-slate-700 mb-1">Prompt</p>
                               <p className="text-slate-600 mb-3">{item.prompt || '—'}</p>
                               <p className="font-semibold text-slate-700 mb-1">Transcript</p>
