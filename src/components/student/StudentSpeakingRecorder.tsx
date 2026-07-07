@@ -19,6 +19,8 @@ export interface StudentSpeakingRecorderProps {
   promptText: string
   promptId: string
   lessonId: string
+  activityType?: string
+  referenceText?: string
   minWords?: number
   maxRecordingSeconds?: number
   cefrLevel?: string
@@ -48,6 +50,8 @@ export default function StudentSpeakingRecorder({
   promptText,
   promptId,
   lessonId,
+  activityType,
+  referenceText,
   minWords,
   maxRecordingSeconds = 60,
   cefrLevel,
@@ -166,6 +170,8 @@ export default function StudentSpeakingRecorder({
           userId: user?.id,
           minWords: effectiveMinWords,
           cefrLevel,
+          activityType,
+          referenceText,
           browserRhythm,
           onPollStatus: (status) =>
             setStep(status === 'analyzing' ? 'analyzing' : 'transcribing'),
@@ -186,13 +192,16 @@ export default function StudentSpeakingRecorder({
           isDeliveryReadError: e.isDeliveryReadError,
         })
         setStep('idle')
+        // Important: invalidate any previously-passing result in the parent.
+        // Otherwise the parent may still think this card is passed and allow Next/Finish.
+        onRerecord?.()
       } finally {
         setIsProcessing(false)
         setIsStopping(false)
         cleanupStream()
       }
     },
-    [promptText, promptId, lessonId, user?.id, effectiveMinWords, cefrLevel, onSuccess, cleanupStream]
+    [promptText, promptId, lessonId, user?.id, effectiveMinWords, cefrLevel, activityType, referenceText, onSuccess, cleanupStream]
   )
 
   const startRecording = async () => {
@@ -203,6 +212,8 @@ export default function StudentSpeakingRecorder({
     setTranscript('')
     setSubmissionError(null)
     setErrorFlags({})
+    // Starting a new attempt should lock progression until it succeeds.
+    onRerecord?.()
 
     try {
       const isIOS =

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, memo } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback, memo } from 'react';
 
 import Button from '../../ui/Button';
 import Card from '../../ui/Card';
@@ -6,8 +6,9 @@ import Mascot from '../../ui/Mascot';
 import { useNotification } from '../../../contexts/NotificationContext';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useApi } from '../../../hooks/useApi';
-import { getSpeakingHelper, SpeechResult } from '../../../utils/speakingHelper';
 import { getAIFeedbackHelper } from '../../../utils/aiFeedbackHelper';
+import { createBrowserRhythmSampler } from '@/lib/browserRhythm'
+import { getSupportedRecordingMimeType, submitSpeechJobAndPoll } from '@/lib/speechJobFlow'
 
 interface ReadingImprovementData {
   lessonId: string;
@@ -34,103 +35,131 @@ const ReadingImprovement = memo<ReadingImprovementProps>(({ lessonData, onComple
   const [isComplete, setIsComplete] = useState(false);
   const [startTime] = useState(Date.now());
 
-  const speakingHelper = getSpeakingHelper();
   const aiFeedbackHelper = getAIFeedbackHelper();
 
-  // Handle speech recognition results
-  const handleSpeechResult = useCallback((result: SpeechResult) => {
-    if (result.isFinal) {
-      setTranscript(result.transcript);
-      setIsRecording(false);
+  const streamRef = useRef<MediaStream | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const chunksRef = useRef<BlobPart[]>([])
+  const startMsRef = useRef<number>(0)
+  const mimeType = useMemo(() => {
+    try {
+      return getSupportedRecordingMimeType()
+    } catch {
+      return 'audio/webm'
     }
-  }, []);
+  }, [])
+  const rhythmSamplerRef = useRef(createBrowserRhythmSampler())
 
-  const handleSpeechError = useCallback((error: string) => {
-    console.error('Speech recognition error:', error);
-    setIsRecording(false);
-    showNotification('Speech recognition failed. Please try again.', 'error');
-  }, [showNotification]);
-
-  const handleSpeechEnd = useCallback(() => {
-    setIsRecording(false);
-  }, []);
+  const cleanupStream = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop())
+      streamRef.current = null
+    }
+    mediaRecorderRef.current = null
+    chunksRef.current = []
+    rhythmSamplerRef.current.stop()
+  }, [])
 
   // Start reading aloud
   const startReading = useCallback(async () => {
     if (isRecording) return;
 
     try {
-      const success = await speakingHelper.startListening(
-        { continuous: false, interimResults: false },
-        handleSpeechResult,
-        handleSpeechError,
-        handleSpeechEnd
-      );
+      setTranscript('');
+      setSimilarityResult(null);
 
-      if (success) {
-        setIsRecording(true);
-        setTranscript('');
-        setSimilarityResult(null);
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      streamRef.current = stream
+      rhythmSamplerRef.current.start(stream)
+
+      chunksRef.current = []
+      const recorder = new MediaRecorder(stream, { mimeType })
+      mediaRecorderRef.current = recorder
+      startMsRef.current = Date.now()
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chunksRef.current.push(event.data)
       }
+
+      recorder.onstop = async () => {
+        const recordingMs = Math.max(1, Date.now() - startMsRef.current)
+        const audioBlob = new Blob(chunksRef.current, { type: mimeType })
+        cleanupStream()
+        setIsRecording(false)
+
+        if (!audioBlob || audioBlob.size < 1000) {
+          showNotification('No audio recorded. Please try again.', 'warning')
+          return
+        }
+
+        setIsProcessing(true)
+        setAttempts((prev) => prev + 1)
+        try {
+          const browserRhythm = rhythmSamplerRef.current.getFeatures(recordingMs)
+          const res = await submitSpeechJobAndPoll({
+            audioBlob,
+            recordingDurationSec: Math.max(1, Math.round(recordingMs / 1000)),
+            prompt: lessonData.targetText,
+            promptId: 'reading-improvement',
+            lessonId: lessonData.lessonId,
+            userId: user?.id,
+            minWords: 0,
+            cefrLevel: user?.level || undefined,
+            activityType: 'reading_improvement',
+            referenceText: lessonData.targetText,
+            browserRhythm,
+            skipIntegrityCheck: true,
+            skipDeliveryCheck: true,
+            requireOverallScore: false,
+          })
+          const t = res.transcript || ''
+          setTranscript(t)
+
+          if (!t.trim()) {
+            showNotification('No speech detected. Please try reading again.', 'warning')
+            return
+          }
+
+          const sim = await aiFeedbackHelper.checkSimilarity(lessonData.targetText, t, 'en')
+          if (!sim.success) throw new Error(sim.error || 'Failed to analyze reading')
+          setSimilarityResult(sim)
+
+          if (sim.similarity >= lessonData.similarityThreshold) {
+            setIsComplete(true)
+            showNotification("Excellent reading! You've achieved the required similarity.", 'success')
+          } else if (attempts >= 2) {
+            setIsComplete(true)
+            showNotification('Good effort! Moving to the next activity.', 'info')
+          } else {
+            showNotification(`Similarity: ${sim.similarity}%. Try reading again for better accuracy.`, 'info')
+          }
+        } catch (error) {
+          console.error('Reading improvement error:', error)
+          showNotification('Failed to analyze your reading. Please try again.', 'error')
+        } finally {
+          setIsProcessing(false)
+        }
+      }
+
+      recorder.start()
+      setIsRecording(true)
     } catch (error) {
       console.error('Failed to start reading:', error);
       showNotification('Failed to start recording. Please check your microphone permissions.', 'error');
     }
-  }, [isRecording, handleSpeechResult, handleSpeechError, handleSpeechEnd, speakingHelper, showNotification]);
+  }, [isRecording, mimeType, cleanupStream, lessonData, user?.id, user?.level, aiFeedbackHelper, attempts, showNotification]);
 
   // Stop reading and analyze
   const stopReading = useCallback(() => {
-    speakingHelper.stopListening();
-    setIsRecording(false);
-  }, [speakingHelper]);
-
-  // Analyze reading similarity
-  const analyzeReading = useCallback(async () => {
-    if (!transcript.trim()) {
-      showNotification('No speech detected. Please try reading again.', 'warning');
-      return;
+    const rec = mediaRecorderRef.current
+    if (rec && rec.state === 'recording') {
+      rec.requestData()
+      rec.stop()
+    } else {
+      cleanupStream()
+      setIsRecording(false)
     }
-
-    setIsProcessing(true);
-    setAttempts(prev => prev + 1);
-
-    try {
-      const result = await aiFeedbackHelper.checkSimilarity(
-        lessonData.targetText,
-        transcript,
-        'en' // language
-      );
-
-      if (result.success) {
-        setSimilarityResult(result);
-
-        // Check if similarity meets threshold
-        if (result.similarity >= lessonData.similarityThreshold) {
-          setIsComplete(true);
-          showNotification('Excellent reading! You\'ve achieved the required similarity.', 'success');
-        } else if (attempts >= 2) { // Allow up to 3 attempts
-          setIsComplete(true);
-          showNotification('Good effort! Moving to the next activity.', 'info');
-        } else {
-          showNotification(`Similarity: ${result.similarity}%. Try reading again for better accuracy.`, 'info');
-        }
-      } else {
-        throw new Error(result.error || 'Failed to analyze reading');
-      }
-    } catch (error) {
-      console.error('Similarity analysis error:', error);
-      showNotification('Failed to analyze your reading. Please try again.', 'error');
-    } finally {
-      setIsProcessing(false);
-    }
-  }, [transcript, lessonData, aiFeedbackHelper, attempts, showNotification]);
-
-  // Analyze similarity when recording stops
-  useEffect(() => {
-    if (!isRecording && transcript && !similarityResult) {
-      analyzeReading();
-    }
-  }, [isRecording, transcript, similarityResult, analyzeReading]);
+  }, [cleanupStream]);
 
   // Handle completion
   const handleComplete = useCallback(async () => {
@@ -176,9 +205,9 @@ const ReadingImprovement = memo<ReadingImprovementProps>(({ lessonData, onComple
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      speakingHelper.destroy();
+      cleanupStream()
     };
-  }, [speakingHelper]);
+  }, [cleanupStream]);
 
   const canTryAgain = attempts < 3 && similarityResult && similarityResult.similarity < lessonData.similarityThreshold;
 

@@ -21,6 +21,8 @@ interface SpeechJobBody {
   user_id?: string;
   duration_seconds?: number;
   lesson_id?: string;
+  activity_type?: string;
+  reference_text?: string;
   browser_rhythm?: {
     speech_rate?: number;
     pause_variance?: number;
@@ -222,6 +224,22 @@ export const handler: Handler = async (event) => {
           avg_logprob: s.avg_logprob,
           no_speech_prob: s.no_speech_prob,
           compression_ratio: s.compression_ratio,
+          words: Array.isArray(s.words)
+            ? s.words.map((w: any) => ({
+                word: w.word,
+                start: w.start,
+                end: w.end,
+                probability: w.probability,
+              }))
+            : undefined,
+        }))
+      : undefined;
+    const topWords = Array.isArray(raw.words)
+      ? raw.words.map((w: any) => ({
+          word: w.word,
+          start: w.start,
+          end: w.end,
+          probability: w.probability,
         }))
       : undefined;
     return {
@@ -229,6 +247,7 @@ export const handler: Handler = async (event) => {
       duration: (raw as any).duration,
       language: (raw as any).language,
       segments,
+      words: topWords,
     };
   };
 
@@ -251,6 +270,9 @@ export const handler: Handler = async (event) => {
          jobId,
          whisper_verbose: minimalWhisper,
          browser_rhythm: body.browser_rhythm || null,
+         activity_type: body.activity_type || null,
+         reference_text: body.reference_text || null,
+         prompt_text: body.prompt.trim(),
          created_at: new Date().toISOString(),
        };
        const featuresPath = `${jobId}.features.JSON`;

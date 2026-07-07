@@ -71,6 +71,7 @@ export default function StudentChallengeWheel({ activity, lesson, onComplete }: 
               promptText={speechPrompt}
               promptId={`${activity.id}-wheel-${topicIndex ?? topic}`}
               lessonId={lesson.id}
+              activityType={activity.activity_type}
               minWords={30}
               maxRecordingSeconds={90}
               cefrLevel="B1"

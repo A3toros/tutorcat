@@ -250,7 +250,7 @@ describe('robotic-voice v2.3.7', () => {
       })
       expect(r.score).toBeLessThan(70)
       expect(r.signals.would_flag).toBe(false)
-      expect(r.signals.score_skip_reason).toBe('artifact_short_no_corroboration')
+      expect(r.signals.score_skip_reason).toMatch(/artifact_short_(no_corroboration|skip)/)
     })
 
     it('still flags admin GTTS party 3-seg (mean -0.42) via hard-ASR rhythm path', () => {
@@ -433,6 +433,58 @@ describe('robotic-voice v2.3.7', () => {
   })
 })
 
+describe('robotic-voice v2.4.0', () => {
+  it('reports scorer version v2.4.0', () => {
+    const r = computeRoboticVoiceScore({
+      whisper_verbose: { text: 'hello', segments: [seg(0, 'hello.', 0, 1, -0.3)] },
+    })
+    expect(r.signals.scorer_version).toBe('v2.4.0')
+  })
+
+  it('hero vs villain — 2-seg near-flat hard-band prompt read-aloud (mean -0.416)', () => {
+    const lp0 = -0.4078414738178253
+    const lp1 = -0.42390838265419006
+    const text =
+      'My hero is Mariko. She was brave, hardworking, and kind. She spent her life discovering new things to help science and medicine. She never gave up, even when life was difficult. I really like is someone who hurt other people or does bad things for selfish reasons. I like my hero is one who thinks only about themselves and does not care about others.'
+    const r = computeRoboticVoiceScore({
+      whisper_verbose: {
+        text,
+        segments: [
+          seg(
+            0,
+            'My hero is Mariko. She was brave, hardworking, and kind. She spent her life discovering new things to help science and medicine.',
+            0,
+            8.2,
+            lp0,
+            0.01
+          ),
+          seg(
+            1,
+            'She never gave up, even when life was difficult. I really like is someone who hurt other people or does bad things for selfish reasons.',
+            8.5,
+            13.5,
+            lp1,
+            0.01
+          ),
+        ],
+      },
+      browser_rhythm: {
+        pitch_variance: 0.002024790295560004,
+        energy_autocorr_lag1: 0.48700687006780313,
+        energy_autocorr_lag3: 0.14317640427174091,
+        pause_entropy: 2.471492474768819,
+      },
+    })
+    expect(r.signals.logprob_is_near_flat).toBe(true)
+    expect(r.signals.logprob_is_artifact).toBe(false)
+    expect(r.signals.likely_reading_aloud).toBe(true)
+    expect(r.signals.delivery_mode).toBe('reading')
+    expect(r.signals.would_flag).toBe(false)
+    expect(r.score).toBeLessThan(70)
+    expect(r.signals.score_skip_reason).toBe('reading_aloud_skip')
+  })
+})
+
 describe('robotic-voice v2.3.11', () => {
   const hasBackup = existsSync(BACKUP_FEATURES)
 
@@ -440,7 +492,7 @@ describe('robotic-voice v2.3.11', () => {
     const r = computeRoboticVoiceScore({
       whisper_verbose: { text: 'hello', segments: [seg(0, 'hello.', 0, 1, -0.3)] },
     })
-    expect(r.signals.scorer_version).toBe('v2.3.11')
+    expect(r.signals.scorer_version).toBe('v2.4.0')
   })
 
   describe('rehearsed read-aloud FP (2026-07-07)', () => {

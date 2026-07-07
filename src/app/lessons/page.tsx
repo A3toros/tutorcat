@@ -1771,6 +1771,7 @@ function WarmupStep({ data, level, lessonId, onComplete, isCompleted, isTransiti
             userId: user?.id,
             minWords: 0,
             cefrLevel: level,
+            activityType: 'warm_up_speaking',
             browserRhythm,
           })
 

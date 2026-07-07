@@ -249,6 +249,7 @@ export default function StudentCharacterStory({
         promptText={currentPrompt}
         promptId={`${activity.id}-card-${index}`}
         lessonId={lesson.id}
+        activityType={activity.activity_type}
         minWords={10}
         maxRecordingSeconds={75}
         cefrLevel="A1"

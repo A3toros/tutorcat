@@ -189,6 +189,7 @@ export default function StudentSpeakingCards({ activity, lesson, onComplete }: S
         promptText={currentPrompt}
         promptId={`${activity.id}-card-${index}`}
         lessonId={lesson.id}
+        activityType={activity.activity_type}
         minWords={15}
         maxRecordingSeconds={75}
         cefrLevel="A1"

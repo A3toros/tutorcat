@@ -116,6 +116,8 @@ export interface SubmitSpeechJobParams {
   userId?: string
   minWords?: number
   cefrLevel?: string
+  activityType?: string
+  referenceText?: string
   browserRhythm?: BrowserRhythmFeatures
   onPollStatus?: (status: 'processing' | 'analyzing') => void
   /** Improvement reads scripted text — skip AI-integrity client block. */
@@ -147,6 +149,8 @@ export async function submitSpeechJobAndPoll(params: SubmitSpeechJobParams): Pro
     userId,
     minWords,
     cefrLevel,
+    activityType,
+    referenceText,
     browserRhythm,
     onPollStatus,
     skipIntegrityCheck = false,
@@ -178,6 +182,8 @@ export async function submitSpeechJobAndPoll(params: SubmitSpeechJobParams): Pro
       duration_seconds: Math.max(1, Math.round(recordingDurationSec)),
       user_id: userId || undefined,
       lesson_id: lessonId,
+      activity_type: activityType || undefined,
+      reference_text: referenceText || undefined,
       browser_rhythm: browserRhythm || undefined,
     }),
   })

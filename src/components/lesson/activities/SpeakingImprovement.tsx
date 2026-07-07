@@ -528,6 +528,8 @@ const SpeakingImprovement = memo<SpeakingImprovementProps>(({ lessonData, onComp
             userId: user?.id,
             minWords: 0,
             cefrLevel: lessonData.level,
+            activityType: 'speaking_improvement',
+            referenceText: speechPrompt,
             browserRhythm,
             skipIntegrityCheck: true,
             skipDeliveryCheck: true,

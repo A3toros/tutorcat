@@ -1,6 +1,16 @@
 /**
  * Robotic / TTS voice detector (Google Translate speak, AI voice playback).
  *
+ * v2.4.0 (task gate + short-clip path 2026-07-07):
+ *  - Task context first: spontaneous vs reading expected (activity_type, prompt_id)
+ *  - Word-level Whisper probability for short clips (< 25 words or < 3 segments)
+ *  - Spontaneous human cues (fillers, disfluency) suppress TTS score — not filler_absence bonus
+ *  - Prompt overlap → task-inappropriate reading on spontaneous tasks
+ *  - Long clips still use v2.3 segment-stat paths
+ *
+ * v2.3.12 (2-seg rehearsed read-aloud 2026-07-07):
+ *  - inferLikelyReadingAloud: 2-seg near-flat hard-band + moderate seg_cv (rehearsed prompt read)
+ *
  * v2.3.11 (rehearsed read-aloud FP 2026-07-07):
  *  - Mic speech: mean_no_speech_prob < 0.03 + moderate energy → reading/speaking, not TTS
  *  - Multi-seg easy band (mean > -0.3): require GTTS pause voicing, not auto-TTS
@@ -43,7 +53,21 @@
  * Log-only by default; blocking requires ROBOTIC_VOICE_MODE=block.
  */
 
-export const ROBOTIC_VOICE_SCORER_VERSION = 'v2.3.11'
+import {
+  resolveTaskContext,
+  isTaskInappropriateReading,
+  type RoboticVoiceTaskContext,
+} from './lib/robotic-voice-task.js'
+import {
+  computeWordAsrStats,
+  isVeryEasyWordAsr,
+  isVeryEasySegmentLogprobFallback,
+} from './lib/robotic-voice-word-asr.js'
+
+export const ROBOTIC_VOICE_SCORER_VERSION = 'v2.4.0'
+
+/** Below this word count, prefer word-level ASR + task gate over segment logprob stats. */
+const V24_SHORT_CLIP_WORD_MAX = 22
 
 export type SpeechDeliveryMode = 'speaking' | 'reading' | 'tts'
 
@@ -65,6 +89,12 @@ export interface WhisperSegment {
   avg_logprob?: number
   no_speech_prob?: number
   compression_ratio?: number
+  words?: Array<{
+    word?: string
+    start?: number
+    end?: number
+    probability?: number
+  }>
 }
 
 export interface WhisperVerboseInput {
@@ -79,7 +109,15 @@ export interface RoboticVoiceFeaturesInput {
   browser_rhythm?: BrowserRhythmInput | null
   /** speech_jobs.prompt_id — improvement read-aloud is excluded from would-flag */
   prompt_id?: string | null
+  /** Question / topic text shown to the student */
+  prompt_text?: string | null
+  /** Lesson activity type — e.g. speaking_with_feedback */
+  activity_type?: string | null
+  /** Script for read-aloud activities (improvement target text) */
+  reference_text?: string | null
 }
+
+export type { RoboticVoiceTaskContext }
 
 export interface RoboticVoiceResult {
   score: number
@@ -92,6 +130,24 @@ export interface RoboticVoiceResult {
 }
 
 const FILLER_WORDS = new Set(['um', 'uh', 'er', 'ah', 'erm', 'hmm'])
+
+function hasDisfluencyPattern(text: string): boolean {
+  if (/\b(\w+)['\u2019]?\s*[-\u2013]\s*\1\b/i.test(text)) return true
+  if (/\b(\w{1,4})\s+\1\b/i.test(text)) return true
+  return false
+}
+
+function hasSpontaneousHumanCues(w: ReturnType<typeof whisperDerived>, text: string): boolean {
+  return w.filler_count >= 1 || hasDisfluencyPattern(text)
+}
+
+function isShortClip(w: ReturnType<typeof whisperDerived>, wordAsr: ReturnType<typeof computeWordAsrStats>): boolean {
+  return (
+    w.word_count <= V24_SHORT_CLIP_WORD_MAX &&
+    !wordAsr.uses_segment_fallback &&
+    wordAsr.word_prob_count >= 3
+  )
+}
 
 const FLAG_THRESHOLD = 70
 const MIN_WORDS_FOR_STRICT_RULES = 10
@@ -238,10 +294,13 @@ function ruleBucket(rule: string): string {
     rule === 'tts_logprob_combo' ||
     rule === 'tts_flat_logprob' ||
     rule === 'tts_flat_logprob_short' ||
-    rule === 'tts_easy_single_segment'
+    rule === 'tts_easy_single_segment' ||
+    rule === 'word_easy_asr' ||
+    rule === 'segment_easy_asr_fallback'
   ) {
     return 'whisper_logprob'
   }
+  if (rule === 'spontaneous_human_cues') return 'filler'
   if (rule === 'high_boundary_pauses') return 'pause_placement'
   if (rule === 'filler_absence') return 'filler'
   if (rule === 'low_pitch_tts') return 'pitch'
@@ -447,6 +506,12 @@ function allowLowPitchTtsBonus(
   return w.logprob_is_artifact && w.mean_logprob != null && w.mean_logprob <= -0.4
 }
 
+/** Rehearsed 2-chunk read-aloud: mildly uneven segment lengths, not spontaneous burst-then-tail. */
+function hasRehearsedTwoSegmentPacing(w: ReturnType<typeof whisperDerived>): boolean {
+  const segCv = w.segment_duration_cv
+  return segCv != null && segCv >= 0.15 && segCv <= 0.35
+}
+
 /**
  * Rehearsed human read-aloud: flat artifact logprob in the rehearsed human band with uneven
  * segment timing. Production audit (2026-06-28): all 42 would-flags matched this pattern.
@@ -455,8 +520,8 @@ function inferLikelyReadingAloud(
   w: ReturnType<typeof whisperDerived>,
   rhythm: BrowserRhythmInput | null
 ): boolean {
-  if (w.segment_count < 3) return false
-  if (!w.logprob_is_artifact) return false
+  if (w.segment_count < 2) return false
+  if (!isFlatLikeLogprob(w)) return false
   if (w.mean_logprob == null) return false
   // If it looks like direct playback (low pitch + low no_speech), do not treat as human read-aloud —
   // unless segment/gap timing is very uneven, or mic rehearsed reading (low no_speech + moderate e1).
@@ -482,6 +547,7 @@ function inferLikelyReadingAloud(
   if (w.mean_logprob < -0.52) return false
 
   if (isMicRehearsedReading(w, rhythm)) return true
+  if (w.segment_count === 2) return hasRehearsedTwoSegmentPacing(w)
   return hasHumanPacing(w)
 }
 
@@ -534,19 +600,61 @@ function inferLikelyEasyBandHuman(
   return false
 }
 
-function inferDeliveryMode(
+/** v2.4 short-clip TTS scoring — word confidence + rhythm, not segment logprob variance. */
+function scoreShortClipArtifact(
   w: ReturnType<typeof whisperDerived>,
-  isImprovementReadAloud: boolean,
-  likelyReadingAloud: boolean,
-  likelyEasyBandHuman: boolean,
-  artifactTtsPoints: number,
-  hasStrongArtifactTts: boolean
-): SpeechDeliveryMode {
-  if (isImprovementReadAloud || likelyReadingAloud) return 'reading'
-  if (likelyEasyBandHuman) return 'speaking'
-  if (hasStrongArtifactTts || artifactTtsPoints >= 38) return 'tts'
-  if (!w.logprob_is_artifact) return 'speaking'
-  return 'speaking'
+  rhythm: BrowserRhythmInput | null,
+  wordAsr: ReturnType<typeof computeWordAsrStats>,
+  transcript: string
+): { points: number; rulesHit: string[]; rawPoints: number; shortSkippedNoCorroboration?: boolean } {
+  if (w.word_count < MIN_WORDS_FOR_ARTIFACT_TTS_SHORT) {
+    return { points: 0, rulesHit: [], rawPoints: 0 }
+  }
+
+  const rulesHit: string[] = []
+  let points = 0
+
+  const easyWord = isVeryEasyWordAsr(wordAsr)
+  const easySegFallback =
+    wordAsr.uses_segment_fallback &&
+    isVeryEasySegmentLogprobFallback(w.mean_logprob, w.min_logprob)
+
+  if (easyWord) {
+    points += 48
+    rulesHit.push('word_easy_asr')
+  } else if (easySegFallback) {
+    points += 42
+    rulesHit.push('segment_easy_asr_fallback')
+  }
+
+  if (points > 0) {
+    if (hasTtsRhythmCorroboration(rhythm)) {
+      points += 12
+      rulesHit.push('rhythm_tts_corroboration')
+    }
+    if (hasGttsPauseVoicing(w)) {
+      points += 8
+      rulesHit.push('gtts_pause_voicing')
+    }
+  }
+
+  if (hasSpontaneousHumanCues(w, transcript)) {
+    points = Math.max(0, points - 45)
+    rulesHit.push('spontaneous_human_cues')
+  }
+
+  const shortSkippedNoCorroboration =
+    (easyWord || easySegFallback) &&
+    points < 38 &&
+    !hasTtsRhythmCorroboration(rhythm) &&
+    !hasGttsPauseVoicing(w)
+
+  return {
+    points: Math.min(ARTIFACT_TTS_SHORT_BUCKET_CAP, points),
+    rulesHit,
+    rawPoints: points,
+    shortSkippedNoCorroboration,
+  }
 }
 
 /** Google Translate / AI TTS playback scoring. */
@@ -752,13 +860,35 @@ export function roboticVoiceToDbColumns(rv: RoboticVoiceResult | null): RoboticV
 export function computeRoboticVoiceScore(input: RoboticVoiceFeaturesInput): RoboticVoiceResult {
   const mode = getMode()
   const rhythm = input.browser_rhythm || null
+  const transcript = typeof input.whisper_verbose?.text === 'string' ? input.whisper_verbose.text : ''
   const w = whisperDerived(input.whisper_verbose)
-  const promptId = typeof input.prompt_id === 'string' ? input.prompt_id.trim() : ''
-  const isImprovementReadAloud = promptId === 'improvement'
-  const likelyReadingAloud = !isImprovementReadAloud && inferLikelyReadingAloud(w, rhythm)
+  const wordAsr = computeWordAsrStats(input.whisper_verbose)
+  const shortClip = isShortClip(w, wordAsr)
+
+  const taskCtx = resolveTaskContext(
+    {
+      prompt_id: input.prompt_id,
+      activity_type: input.activity_type,
+      prompt_text: input.prompt_text,
+      reference_text: input.reference_text,
+    },
+    transcript
+  )
+
+  const promptText = typeof input.prompt_text === 'string' ? input.prompt_text.trim() : ''
+  const isImprovementReadAloud = taskCtx.skip_tts_would_flag
+  const taskInappropriateReading =
+    !isImprovementReadAloud &&
+    isTaskInappropriateReading(taskCtx, transcript, promptText)
+
+  const likelyReadingAloud =
+    !isImprovementReadAloud &&
+    !taskInappropriateReading &&
+    inferLikelyReadingAloud(w, rhythm)
   const likelyEasyBandHuman =
     !isImprovementReadAloud && !likelyReadingAloud && inferLikelyEasyBandHuman(w, rhythm)
-  const suppressArtifactTts = likelyReadingAloud || likelyEasyBandHuman
+  const suppressArtifactTts =
+    likelyReadingAloud || likelyEasyBandHuman || taskInappropriateReading
 
   const pitchVariance =
     typeof rhythm?.pitch_variance === 'number' && Number.isFinite(rhythm.pitch_variance)
@@ -777,12 +907,16 @@ export function computeRoboticVoiceScore(input: RoboticVoiceFeaturesInput): Robo
   const enoughSpeech = w.word_count >= MIN_WORDS_FOR_STRICT_RULES
   const enoughSegmentsForPause = w.segment_count >= 2
 
-  const artifactTtsRaw = scoreArtifactTtsBucket(w, enoughSpeech, rhythm)
+  const artifactTtsRaw = shortClip
+    ? scoreShortClipArtifact(w, rhythm, wordAsr, transcript)
+    : scoreArtifactTtsBucket(w, enoughSpeech, rhythm)
   const artifactTts =
     suppressArtifactTts
       ? { points: 0, rulesHit: [] as string[], rawPoints: artifactTtsRaw.rawPoints }
       : artifactTtsRaw
-  const logprob = scoreLogprobBucket(w, enoughSpeech)
+  const logprob = shortClip
+    ? { points: 0, rulesHit: [] as string[], rawPoints: 0 }
+    : scoreLogprobBucket(w, enoughSpeech)
 
   rulesHit.push(...artifactTts.rulesHit, ...logprob.rulesHit)
   let score = artifactTts.points + logprob.points
@@ -807,6 +941,7 @@ export function computeRoboticVoiceScore(input: RoboticVoiceFeaturesInput): Robo
   }
 
   if (
+    !shortClip &&
     logprobBucketActive &&
     w.word_count >=
       (artifactTts.points > 0 ? MIN_WORDS_FOR_FILLER_WHEN_TTS : MIN_WORDS_FOR_FILLER_ABSENCE) &&
@@ -814,6 +949,18 @@ export function computeRoboticVoiceScore(input: RoboticVoiceFeaturesInput): Robo
   ) {
     score += 5
     rulesHit.push('filler_absence')
+  }
+
+  if (
+    shortClip &&
+    taskCtx.expectation === 'spontaneous' &&
+    hasSpontaneousHumanCues(w, transcript) &&
+    score > 0
+  ) {
+    score = Math.max(0, score - 20)
+    if (!rulesHit.includes('spontaneous_human_cues')) {
+      rulesHit.push('spontaneous_human_cues')
+    }
   }
 
   const allowLowPitchTts = allowLowPitchTtsBonus(w, rhythm)
@@ -836,27 +983,35 @@ export function computeRoboticVoiceScore(input: RoboticVoiceFeaturesInput): Robo
   const hasStrongArtifactTts =
     artifactTts.rulesHit.includes('tts_flat_logprob') ||
     artifactTts.rulesHit.includes('tts_flat_logprob_short') ||
-    artifactTts.rulesHit.includes('tts_easy_single_segment')
+    artifactTts.rulesHit.includes('tts_easy_single_segment') ||
+    artifactTts.rulesHit.includes('word_easy_asr') ||
+    artifactTts.rulesHit.includes('segment_easy_asr_fallback')
 
-  const deliveryMode = inferDeliveryMode(
-    w,
-    isImprovementReadAloud,
-    likelyReadingAloud,
-    likelyEasyBandHuman,
-    artifactTts.points,
-    hasStrongArtifactTts
-  )
+  const deliveryMode: SpeechDeliveryMode = (() => {
+    if (isImprovementReadAloud || taskCtx.expectation === 'reading') return 'reading'
+    if (taskInappropriateReading || likelyReadingAloud) return 'reading'
+    if (likelyEasyBandHuman) return 'speaking'
+    if (hasStrongArtifactTts || artifactTts.points >= 38) return 'tts'
+    return 'speaking'
+  })()
 
   let wouldFlag =
     score >= FLAG_THRESHOLD &&
     hasSubstantiveBucket &&
     (bucketCount >= 2 || hasStrongArtifactTts)
-  if (isImprovementReadAloud || likelyReadingAloud || likelyEasyBandHuman) {
+  if (isImprovementReadAloud || likelyReadingAloud || likelyEasyBandHuman || taskInappropriateReading) {
+    wouldFlag = false
+  }
+  if (taskCtx.expectation === 'spontaneous' && hasSpontaneousHumanCues(w, transcript)) {
     wouldFlag = false
   }
 
   const scoreSkipReason =
-    likelyEasyBandHuman && score === 0
+    taskCtx.skip_tts_would_flag && score === 0
+      ? 'task_reading_expected_skip'
+      : taskInappropriateReading && score === 0
+        ? 'task_inappropriate_reading_skip'
+        : likelyEasyBandHuman && score === 0
       ? 'easy_band_human_skip'
       : likelyReadingAloud && score === 0
       ? 'reading_aloud_skip'
@@ -899,6 +1054,17 @@ export function computeRoboticVoiceScore(input: RoboticVoiceFeaturesInput): Robo
     signals: {
       scorer_version: ROBOTIC_VOICE_SCORER_VERSION,
       score_skip_reason: scoreSkipReason,
+      short_clip_path: shortClip,
+      task_expectation: taskCtx.expectation,
+      task_reason: taskCtx.task_reason,
+      task_inappropriate_reading: taskInappropriateReading,
+      prompt_overlap: taskCtx.prompt_overlap ?? -1,
+      reference_overlap: taskCtx.reference_overlap ?? -1,
+      word_prob_count: wordAsr.word_prob_count,
+      mean_word_prob: wordAsr.mean_word_prob ?? -1,
+      min_word_prob: wordAsr.min_word_prob ?? -1,
+      word_asr_fallback: wordAsr.uses_segment_fallback,
+      has_spontaneous_human_cues: hasSpontaneousHumanCues(w, transcript),
       logprob_is_artifact: w.logprob_is_artifact,
       logprob_is_near_flat: w.logprob_is_near_flat,
       std_logprob: w.std_logprob ?? -1,
@@ -929,7 +1095,8 @@ export function computeRoboticVoiceScore(input: RoboticVoiceFeaturesInput): Robo
       likely_reading_aloud: likelyReadingAloud,
       likely_easy_band_human: likelyEasyBandHuman,
       skip_would_flag_improvement: isImprovementReadAloud,
-      skip_would_flag_reading: likelyReadingAloud,
+      skip_would_flag_reading: likelyReadingAloud || taskInappropriateReading,
+      skip_would_flag_task_reading: taskCtx.expectation === 'reading',
       skip_would_flag_easy_band_human: likelyEasyBandHuman,
       artifact_tts_suppressed_reading: likelyReadingAloud && artifactTtsRaw.points > 0,
       artifact_tts_suppressed_easy_band_human: likelyEasyBandHuman && artifactTtsRaw.points > 0,

@@ -223,11 +223,18 @@ async function downloadJobFeatures(jobId: string): Promise<RoboticVoiceFeaturesI
       return null;
     }
     const text = await (data as Blob).text();
-    const parsed = JSON.parse(text) as RoboticVoiceFeaturesInput;
+    const parsed = JSON.parse(text) as RoboticVoiceFeaturesInput & {
+      activity_type?: string | null
+      reference_text?: string | null
+      prompt_text?: string | null
+    }
     return {
       whisper_verbose: parsed.whisper_verbose ?? null,
       browser_rhythm: parsed.browser_rhythm ?? null,
-    };
+      activity_type: parsed.activity_type ?? null,
+      reference_text: parsed.reference_text ?? null,
+      prompt_text: parsed.prompt_text ?? null,
+    }
   } catch (e) {
     console.warn('run-speech-analysis-background: failed to load features JSON', { jobId, e });
     return null;
@@ -366,6 +373,7 @@ export default async (req: Request, _context?: unknown): Promise<void> => {
     roboticVoice = computeRoboticVoiceScore({
       ...featuresInput,
       prompt_id: job.prompt_id,
+      prompt_text: featuresInput.prompt_text ?? job.prompt ?? null,
     });
     console.log('run-speech-analysis-background: [robotic_voice]', {
       jobId,
@@ -408,6 +416,48 @@ export default async (req: Request, _context?: unknown): Promise<void> => {
     );
     if (result.success) {
       const feedback = result.feedback as any;
+
+      // v2.4 delivery gate: use robotic-voice task context + prompt overlap.
+      // The frontend will block (isDeliveryReadError) when spoken_pct < 70.
+      if (roboticVoice && roboticVoice.signals && typeof roboticVoice.signals === 'object') {
+        const signals = roboticVoice.signals as Record<string, unknown>
+        const taskExpectation = String(signals.task_expectation || '')
+        const deliveryMode = String(signals.delivery_mode || '')
+        const taskInappropriateReading = signals.task_inappropriate_reading === true
+        const promptOverlap = typeof signals.prompt_overlap === 'number' ? signals.prompt_overlap : null
+
+        const shouldBlockForReading =
+          !isImprovementRead &&
+          (taskInappropriateReading ||
+            (taskExpectation === 'spontaneous' && deliveryMode === 'reading') ||
+            (promptOverlap != null && promptOverlap >= 0.55))
+
+        if (shouldBlockForReading) {
+          feedback.delivery = {
+            spoken_pct: 0,
+            mode: 'reading',
+            confidence: 0.8,
+            signals: {
+              taskExpectation,
+              deliveryMode,
+              taskInappropriateReading,
+              promptOverlap,
+            },
+            _note: 'Derived from robotic-voice task gate (v2.4).',
+          }
+        } else {
+          // Keep existing stub, but ensure the shape exists.
+          if (!feedback.delivery || typeof feedback.delivery !== 'object') {
+            feedback.delivery = {
+              spoken_pct: 100,
+              mode: 'spoken',
+              confidence: 0,
+              signals: {},
+              _note: 'No delivery classifier; default spoken.',
+            }
+          }
+        }
+      }
 
       if (!isWheelTopic && !isImprovementRead && feedback.question_repetition === true) {
         const errorMsg =
