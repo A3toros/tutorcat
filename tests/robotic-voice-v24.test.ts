@@ -24,12 +24,12 @@ function easyWords(text: string, prob = 0.94): Array<{ word: string; start: numb
   }))
 }
 
-describe('robotic-voice v2.4.0', () => {
-  it('reports scorer version v2.4.0', () => {
+describe('robotic-voice v2.4.1', () => {
+  it('reports scorer version v2.4.1', () => {
     const r = computeRoboticVoiceScore({
       whisper_verbose: { text: 'hello world here now ok', segments: [seg(0, 'hello world here now ok.', 0, 3, -0.3)] },
     })
-    expect(r.signals.scorer_version).toBe('v2.4.0')
+    expect(r.signals.scorer_version).toBe('v2.4.1')
   })
 
   it('uses short_clip_path when word probs exist and answer is brief', () => {

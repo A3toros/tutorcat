@@ -58,8 +58,13 @@ export const handler: Handler = async (event) => {
     const sql = neon(databaseUrl);
 
     const userSearch = (event.queryStringParameters?.userSearch || '').trim() || null;
-    const onlyWouldFlag = (event.queryStringParameters?.onlyWouldFlag || '') === 'true';
     const onlyScored = (event.queryStringParameters?.onlyScored || 'true') !== 'false';
+    const viewFilterRaw = (event.queryStringParameters?.viewFilter || 'all').toLowerCase();
+    const viewFilter =
+      viewFilterRaw === 'would_flag' || viewFilterRaw === 'reading' ? viewFilterRaw : 'all';
+    // Back-compat: onlyWouldFlag=true maps to would_flag view
+    const onlyWouldFlagLegacy = (event.queryStringParameters?.onlyWouldFlag || '') === 'true';
+    const viewFilterEffective = onlyWouldFlagLegacy ? 'would_flag' : viewFilter;
     const minScoreRaw = parseInt(event.queryStringParameters?.minScore || '0', 10);
     const minScore = Number.isFinite(minScoreRaw) && minScoreRaw >= 0 ? minScoreRaw : 0;
     const sort = (event.queryStringParameters?.sort || 'score_desc').toLowerCase();
@@ -101,7 +106,19 @@ export const handler: Handler = async (event) => {
         LEFT JOIN student_lessons sls ON sls.id::text = sj.lesson_id::text
         WHERE 1 = 1
           ${onlyScored ? sql`AND sj.robotic_voice_score IS NOT NULL` : sql``}
-          ${onlyWouldFlag ? sql`AND sj.robotic_voice_would_flag = TRUE` : sql``}
+          ${
+            viewFilterEffective === 'would_flag'
+              ? sql`AND sj.robotic_voice_would_flag = TRUE`
+              : sql``
+          }
+          ${
+            viewFilterEffective === 'reading'
+              ? sql`AND COALESCE(
+                  sj.result_json->'robotic_voice'->'signals'->>'delivery_mode',
+                  ''
+                ) = 'reading'`
+              : sql``
+          }
           ${minScore > 0 ? sql`AND sj.robotic_voice_score >= ${minScore}` : sql``}
           ${
             userSearch
@@ -120,8 +137,20 @@ export const handler: Handler = async (event) => {
         LEFT JOIN users u ON sj.user_id = u.id
         WHERE 1 = 1
           ${onlyScored ? sql`AND sj.robotic_voice_score IS NOT NULL` : sql``}
-          ${onlyWouldFlag ? sql`AND sj.robotic_voice_would_flag = TRUE` : sql``}
-          ${minScore > 0 ? sql`AND sj.robotic_voice_score >= ${minScore}` : sql``}
+          ${
+            viewFilterEffective === 'would_flag'
+              ? sql`AND sj.robotic_voice_would_flag = TRUE`
+              : sql``
+          }
+          ${
+            viewFilterEffective === 'reading'
+              ? sql`AND COALESCE(
+                  sj.result_json->'robotic_voice'->'signals'->>'delivery_mode',
+                  ''
+                ) = 'reading'`
+              : sql``
+          }
+          ${minScore > 0 ? sql`AND sj.robotic_voice_score >= ${minScore}` : sql``
           ${
             userSearch
               ? sql`AND (

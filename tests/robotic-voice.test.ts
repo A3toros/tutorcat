@@ -299,15 +299,15 @@ describe('robotic-voice v2.3.7', () => {
       )
     })
 
-    it('2-segment worth-the-price prompt (594cb450 pattern)', () => {
+    it('2-segment worth-the-price prompt (594cb450 pattern — GTTS playback)', () => {
       const text =
         "I think that the good product doesn't have to be expensive, but it has to be reliable. Something from a brand that existed for some time and got a reputation."
       const r = computeRoboticVoiceScore({
         whisper_verbose: {
           text,
           segments: [
-            seg(0, "I think that the good product doesn't have to be expensive, but it has to be reliable.", 0, 6, -0.3279002606868744),
-            seg(1, 'Something from a brand that existed for some time and got a reputation.', 6, 12, -0.3279002606868744),
+            seg(0, "I think that the good product doesn't have to be expensive, but it has to be reliable.", 0, 6, -0.3279002606868744, 0.05),
+            seg(1, 'Something from a brand that existed for some time and got a reputation.', 6, 12, -0.3279002606868744, 0.05),
           ],
         },
         browser_rhythm: { pitch_variance: 0.0003762488534464638, energy_autocorr_lag1: 0.09 },
@@ -315,6 +315,77 @@ describe('robotic-voice v2.3.7', () => {
       expect(r.score).toBeGreaterThanOrEqual(70)
       expect(r.signals.would_flag).toBe(true)
       expect(r.signals.rules_hit).toContain('tts_flat_logprob_short')
+    })
+
+    it.each([
+      {
+        job: 'aipun weather',
+        text: 'I prefer sunny weather because it is bright and warm. I like this weather because I can go outside, have fun, and enjoy.',
+        logprob: -0.3222743570804596,
+        e1: 0.063427077624766,
+        pitch: 0.0011332891007100254,
+        durations: [5.2, 5.55],
+      },
+      {
+        job: 'aipun home',
+        text: 'What I like most about my home is that it is comfortable and peaceful. I enjoy spending time with my family because my home makes me feel',
+        logprob: -0.2890782356262207,
+        e1: 0.28362548701235896,
+        pitch: 0.0008124948713514542,
+        durations: [5.5, 5.75],
+      },
+      {
+        job: 'aipun bedroom',
+        text: 'I usually relax in my bedroom because it is quiet, comfortable, and peaceful. I like to read books, listen to music, watch videos, and rest.',
+        logprob: -0.3279273211956024,
+        e1: 0.4214357057515174,
+        pitch: 0.0003393374185564216,
+        durations: [5.3, 5.6],
+      },
+      {
+        job: 'aipun school',
+        text: 'My school is very close to my home. It is only about three kilometers away. I like riding a motorcycle to school because it is fast and convenient.',
+        logprob: -0.31138846278190613,
+        e1: 0.44088582966529677,
+        pitch: 0.001426289851673768,
+        durations: [4.2, 5.8],
+      },
+      {
+        job: 'aipun TV',
+        text: 'I like to watch TV and I use it to listen to music. I also watch movie or anime and I like using the TV to play.',
+        logprob: -0.3266131281852722,
+        e1: 0.44622377041053773,
+        pitch: 0.0005033776730201078,
+        durations: [5.4, 5.55],
+      },
+      {
+        job: 'aipun reading',
+        text: 'I like reading comic books and books about space. I enjoy reading in my bedroom or in the library because they are',
+        logprob: -0.3036637604236603,
+        e1: 0.47040560560121636,
+        pitch: 0.00023339856388603975,
+        durations: [4.5, 5.3],
+      },
+    ])('$job — rehearsed human at mic, not TTS', ({ text, logprob, e1, pitch, durations }) => {
+      const mid = Math.floor(text.length / 2)
+      const splitAt = text.indexOf('. ', mid)
+      const cut = splitAt > 0 ? splitAt + 1 : mid
+      const s0 = text.slice(0, cut).trim()
+      const s1 = text.slice(cut).trim()
+      const r = computeRoboticVoiceScore({
+        whisper_verbose: {
+          text,
+          segments: [
+            seg(0, s0, 0, durations[0], logprob, 0.01),
+            seg(1, s1, durations[0] + 0.2, durations[0] + 0.2 + durations[1], logprob, 0.01),
+          ],
+        },
+        browser_rhythm: { pitch_variance: pitch, energy_autocorr_lag1: e1 },
+        activity_type: 'speaking_with_feedback',
+      })
+      expect(r.signals.would_flag).toBe(false)
+      expect(r.signals.delivery_mode).toBe('speaking')
+      expect(r.signals.likely_easy_band_human).toBe(true)
     })
   })
 
@@ -433,12 +504,12 @@ describe('robotic-voice v2.3.7', () => {
   })
 })
 
-describe('robotic-voice v2.4.0', () => {
-  it('reports scorer version v2.4.0', () => {
+describe('robotic-voice v2.4.1', () => {
+  it('reports scorer version v2.4.1', () => {
     const r = computeRoboticVoiceScore({
       whisper_verbose: { text: 'hello', segments: [seg(0, 'hello.', 0, 1, -0.3)] },
     })
-    expect(r.signals.scorer_version).toBe('v2.4.0')
+    expect(r.signals.scorer_version).toBe('v2.4.1')
   })
 
   it('hero vs villain — 2-seg near-flat hard-band prompt read-aloud (mean -0.416)', () => {
@@ -492,7 +563,7 @@ describe('robotic-voice v2.3.11', () => {
     const r = computeRoboticVoiceScore({
       whisper_verbose: { text: 'hello', segments: [seg(0, 'hello.', 0, 1, -0.3)] },
     })
-    expect(r.signals.scorer_version).toBe('v2.4.0')
+    expect(r.signals.scorer_version).toBe('v2.4.1')
   })
 
   describe('rehearsed read-aloud FP (2026-07-07)', () => {

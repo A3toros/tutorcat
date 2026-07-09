@@ -1,6 +1,11 @@
 /**
  * Robotic / TTS voice detector (Google Translate speak, AI voice playback).
  *
+ * v2.4.1 (easy-band 2-seg human FP 2026-07-08):
+ *  - 2-seg short TTS corroboration requires GTTS pause/playback voicing — not pitch alone on mic speech
+ *  - Easy-band human: 2-seg artifact + mic voicing + moderate energy (e1 < 0.55)
+ *  - Short-clip word path extended to 28 words (platform speaking answers)
+ *
  * v2.4.0 (task gate + short-clip path 2026-07-07):
  *  - Task context first: spontaneous vs reading expected (activity_type, prompt_id)
  *  - Word-level Whisper probability for short clips (< 25 words or < 3 segments)
@@ -64,10 +69,10 @@ import {
   isVeryEasySegmentLogprobFallback,
 } from './lib/robotic-voice-word-asr.js'
 
-export const ROBOTIC_VOICE_SCORER_VERSION = 'v2.4.0'
+export const ROBOTIC_VOICE_SCORER_VERSION = 'v2.4.1'
 
 /** Below this word count, prefer word-level ASR + task gate over segment logprob stats. */
-const V24_SHORT_CLIP_WORD_MAX = 22
+const V24_SHORT_CLIP_WORD_MAX = 28
 
 export type SpeechDeliveryMode = 'speaking' | 'reading' | 'tts'
 
@@ -464,16 +469,23 @@ function shortTtsCorroborated(
     const segCv = w.segment_duration_cv
     if (segCv != null && segCv >= 0.35) return false
     const e1 = rhythm?.energy_autocorr_lag1
+
+    if (isMicRehearsedReading(w, rhythm)) return false
     if (
+      hasMicSpeechVoicing(w) &&
       typeof e1 === 'number' &&
       Number.isFinite(e1) &&
-      e1 < 0.35 &&
-      segCv != null &&
-      segCv >= 0.12
+      e1 < 0.55
     ) {
       return false
     }
-    return true
+
+    if (hasPlaybackVoicing(w, rhythm)) return true
+    if (!hasGttsPauseVoicing(w) || !hasTtsRhythmCorroboration(rhythm)) return false
+    if (typeof e1 === 'number' && Number.isFinite(e1) && e1 > 0.68 && hasMechanicalTiming(w)) {
+      return true
+    }
+    return hasMechanicalTiming(w) || (typeof e1 === 'number' && Number.isFinite(e1) && e1 > 0.55)
   }
   if (mode === 'multi_segment') {
     if (veryEasyAsrMultiSegment(w, rhythm)) return true
@@ -594,6 +606,17 @@ function inferLikelyEasyBandHuman(
   }
 
   if (w.segment_count === 2 && segCv != null && segCv >= 0.35) return true
+
+  if (
+    w.segment_count === 2 &&
+    w.logprob_is_artifact &&
+    hasMicSpeechVoicing(w) &&
+    typeof e1 === 'number' &&
+    Number.isFinite(e1) &&
+    e1 < 0.55
+  ) {
+    return true
+  }
 
   if (w.std_logprob != null && w.std_logprob >= 0.008) return true
 

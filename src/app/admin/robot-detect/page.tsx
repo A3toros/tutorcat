@@ -53,6 +53,13 @@ function deliveryModeCell(signals: Record<string, unknown> | null | undefined): 
       </span>
     )
   }
+  if (mode === 'tts') {
+    return (
+      <span className="font-bold text-purple-700 text-base" title="TTS / robotic voice">
+        T
+      </span>
+    )
+  }
   return <span className="text-slate-400 text-sm">—</span>
 }
 
@@ -66,7 +73,7 @@ export default function AdminRobotDetectPage() {
   const [total, setTotal] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
   const [userSearch, setUserSearch] = useState('')
-  const [onlyWouldFlag, setOnlyWouldFlag] = useState(false)
+  const [viewFilter, setViewFilter] = useState<'all' | 'would_flag' | 'reading'>('all')
   const [onlyScored, setOnlyScored] = useState(true)
   const [minScore, setMinScore] = useState('0')
   // Default to newest-first so fresh recordings are visible (v2.2 often scores 0).
@@ -84,7 +91,7 @@ export default function AdminRobotDetectPage() {
         limit: '50',
         sort,
         onlyScored: String(onlyScored),
-        onlyWouldFlag: String(onlyWouldFlag),
+        viewFilter,
         minScore: minScore || '0',
       })
       if (userSearch.trim()) params.set('userSearch', userSearch.trim())
@@ -103,7 +110,7 @@ export default function AdminRobotDetectPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [page, sort, onlyScored, onlyWouldFlag, minScore, userSearch, showNotification])
+  }, [page, sort, onlyScored, viewFilter, minScore, userSearch, showNotification])
 
   useEffect(() => {
     loadItems()
@@ -179,6 +186,20 @@ export default function AdminRobotDetectPage() {
                   className="w-48"
                 />
                 <Select
+                  value={viewFilter}
+                  onChange={(e) => {
+                    const next = e.target.value as 'all' | 'would_flag' | 'reading'
+                    setViewFilter(next)
+                    if (next === 'reading') setOnlyScored(false)
+                    setPage(1)
+                  }}
+                  className="w-44"
+                >
+                  <option value="all">All scores</option>
+                  <option value="would_flag">Would flag only</option>
+                  <option value="reading">Reading only</option>
+                </Select>
+                <Select
                   value={onlyScored ? 'scored' : 'all'}
                   onChange={(e) => {
                     setOnlyScored(e.target.value === 'scored')
@@ -188,17 +209,6 @@ export default function AdminRobotDetectPage() {
                 >
                   <option value="scored">Scored only</option>
                   <option value="all">All submissions</option>
-                </Select>
-                <Select
-                  value={onlyWouldFlag ? 'would' : 'all'}
-                  onChange={(e) => {
-                    setOnlyWouldFlag(e.target.value === 'would')
-                    setPage(1)
-                  }}
-                  className="w-44"
-                >
-                  <option value="all">All scores</option>
-                  <option value="would">Would flag only</option>
                 </Select>
                 <Select
                   value={minScore}
