@@ -505,11 +505,11 @@ describe('robotic-voice v2.3.7', () => {
 })
 
 describe('robotic-voice v2.4.1', () => {
-  it('reports scorer version v2.4.1', () => {
+  it('reports scorer version v2.4.2', () => {
     const r = computeRoboticVoiceScore({
       whisper_verbose: { text: 'hello', segments: [seg(0, 'hello.', 0, 1, -0.3)] },
     })
-    expect(r.signals.scorer_version).toBe('v2.4.1')
+    expect(r.signals.scorer_version).toBe('v2.4.2')
   })
 
   it('hero vs villain — 2-seg near-flat hard-band prompt read-aloud (mean -0.416)', () => {
@@ -563,7 +563,7 @@ describe('robotic-voice v2.3.11', () => {
     const r = computeRoboticVoiceScore({
       whisper_verbose: { text: 'hello', segments: [seg(0, 'hello.', 0, 1, -0.3)] },
     })
-    expect(r.signals.scorer_version).toBe('v2.4.1')
+    expect(r.signals.scorer_version).toBe('v2.4.2')
   })
 
   describe('rehearsed read-aloud FP (2026-07-07)', () => {

@@ -1,6 +1,11 @@
 /**
  * Robotic / TTS voice detector (Google Translate speak, AI voice playback).
  *
+ * v2.4.2 (single-seg reading + unknown task 2026-07-13):
+ *  - inferLikelyReadingAloud: single-segment mic rehearsed path (was hard-gated at segment_count ≥ 2)
+ *  - Task default without activity_type/prompt signal → unknown (not silent spontaneous prior)
+ *  - speaking_with_feedback / warm_up stay spontaneous by product design (not reading-expected)
+ *
  * v2.4.1 (easy-band 2-seg human FP 2026-07-08):
  *  - 2-seg short TTS corroboration requires GTTS pause/playback voicing — not pitch alone on mic speech
  *  - Easy-band human: 2-seg artifact + mic voicing + moderate energy (e1 < 0.55)
@@ -69,7 +74,7 @@ import {
   isVeryEasySegmentLogprobFallback,
 } from './lib/robotic-voice-word-asr.js'
 
-export const ROBOTIC_VOICE_SCORER_VERSION = 'v2.4.1'
+export const ROBOTIC_VOICE_SCORER_VERSION = 'v2.4.2'
 
 /** Below this word count, prefer word-level ASR + task gate over segment logprob stats. */
 const V24_SHORT_CLIP_WORD_MAX = 28
@@ -527,14 +532,32 @@ function hasRehearsedTwoSegmentPacing(w: ReturnType<typeof whisperDerived>): boo
 /**
  * Rehearsed human read-aloud: flat artifact logprob in the rehearsed human band with uneven
  * segment timing. Production audit (2026-06-28): all 42 would-flags matched this pattern.
+ *
+ * Single-segment path (v2.4.2): mic voicing + moderate energy (isMicRehearsedReading) was already
+ * used to *exclude* TTS corroboration but never to earn reading — so short answers defaulted to
+ * speaking. Wire that same cue into reading inference for segment_count === 1.
  */
 function inferLikelyReadingAloud(
   w: ReturnType<typeof whisperDerived>,
   rhythm: BrowserRhythmInput | null
 ): boolean {
+  if (w.mean_logprob == null) return false
+
+  // Single Whisper segment: no seg/gap CV — rely on mic rehearsed cues + flat/easy ASR band.
+  if (w.segment_count === 1) {
+    if (isCrystalClearSingleTts(w)) return false
+    // Admin TTS band with audible playback pauses is still TTS, not mic read-aloud.
+    if (isAdminTtsSingleBand(w) && hasGttsPauseVoicing(w) && !isMicRehearsedReading(w, rhythm)) {
+      return false
+    }
+    if (!isMicRehearsedReading(w, rhythm)) return false
+    if (w.mean_logprob < -0.52) return false
+    // Hard-band flat artifact, or easy single-seg ASR that still has mic rehearsed voicing.
+    return isFlatLikeLogprob(w) || veryEasyAsrSingleSegment(w)
+  }
+
   if (w.segment_count < 2) return false
   if (!isFlatLikeLogprob(w)) return false
-  if (w.mean_logprob == null) return false
   // If it looks like direct playback (low pitch + low no_speech), do not treat as human read-aloud —
   // unless segment/gap timing is very uneven, or mic rehearsed reading (low no_speech + moderate e1).
   if (!hasStrongHumanPacing(w) && !isMicRehearsedReading(w, rhythm)) {
@@ -550,9 +573,6 @@ function inferLikelyReadingAloud(
     }
   }
 
-  if (w.segment_count <= 1 && (isCrystalClearSingleTts(w) || veryEasyAsrSingleSegment(w))) {
-    return false
-  }
   if (w.segment_count === 2 && veryEasyAsrTwoSegment(w)) return false
   if (veryEasyAsrMultiSegment(w)) return false
   if (w.mean_logprob > -0.34) return false

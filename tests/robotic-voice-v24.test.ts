@@ -24,12 +24,12 @@ function easyWords(text: string, prob = 0.94): Array<{ word: string; start: numb
   }))
 }
 
-describe('robotic-voice v2.4.1', () => {
-  it('reports scorer version v2.4.1', () => {
+describe('robotic-voice v2.4.2', () => {
+  it('reports scorer version v2.4.2', () => {
     const r = computeRoboticVoiceScore({
       whisper_verbose: { text: 'hello world here now ok', segments: [seg(0, 'hello world here now ok.', 0, 3, -0.3)] },
     })
-    expect(r.signals.scorer_version).toBe('v2.4.1')
+    expect(r.signals.scorer_version).toBe('v2.4.2')
   })
 
   it('uses short_clip_path when word probs exist and answer is brief', () => {
@@ -117,6 +117,44 @@ describe('robotic-voice v2.4.1', () => {
     expect(r.signals.would_flag).toBe(false)
     expect(r.signals.skip_would_flag_task_reading).toBe(true)
   })
+
+  it('single-seg mic rehearsed easy ASR → reading (not silent speaking / TTS)', () => {
+    const lp = -0.319
+    const text =
+      'I really enjoy learning basketball because it is a sport I love and I want to learn more and become much better.'
+    const r = computeRoboticVoiceScore({
+      whisper_verbose: {
+        text,
+        segments: [seg(0, text, 0, 12, lp, 0.006)],
+      },
+      browser_rhythm: {
+        pitch_variance: 0.00046,
+        energy_autocorr_lag1: 0.22,
+      },
+      activity_type: 'speaking_with_feedback',
+      prompt_id: 'prompt-2',
+    })
+    expect(r.signals.task_expectation).toBe('spontaneous')
+    expect(r.signals.likely_reading_aloud).toBe(true)
+    expect(r.signals.delivery_mode).toBe('reading')
+    expect(r.signals.would_flag).toBe(false)
+    expect(r.signals.score_skip_reason).toBe('reading_aloud_skip')
+  })
+
+  it('single-seg crystal-clear TTS with high energy autocorr still TTS', () => {
+    const text =
+      'My hero is very strong and kind one day a villain tried to rob a bank downtown.'
+    const r = computeRoboticVoiceScore({
+      whisper_verbose: {
+        text,
+        segments: [seg(0, text, 0, 8, -0.29, 0.06, easyWords(text, 0.96))],
+      },
+      browser_rhythm: { pitch_variance: 0.001, energy_autocorr_lag1: 0.75 },
+      activity_type: 'speaking_with_feedback',
+    })
+    expect(r.signals.likely_reading_aloud).toBe(false)
+    expect(r.signals.delivery_mode).toBe('tts')
+  })
 })
 
 describe('robotic-voice-task', () => {
@@ -126,8 +164,21 @@ describe('robotic-voice-task', () => {
     expect(t.skip_tts_would_flag).toBe(true)
   })
 
-  it('resolves speaking_with_feedback as spontaneous', () => {
+  it('resolves speaking_with_feedback as spontaneous (product design, not reading)', () => {
     const t = resolveTaskContext({ activity_type: 'speaking_with_feedback' }, 'hello')
     expect(t.expectation).toBe('spontaneous')
+    expect(t.skip_tts_would_flag).toBe(false)
+  })
+
+  it('resolves warm_up_speaking as spontaneous', () => {
+    const t = resolveTaskContext({ activity_type: 'warm_up_speaking', prompt_id: 'warmup' }, 'hello')
+    expect(t.expectation).toBe('spontaneous')
+  })
+
+  it('resolves missing activity/prompt context as unknown (not default spontaneous)', () => {
+    const t = resolveTaskContext({}, 'hello')
+    expect(t.expectation).toBe('unknown')
+    expect(t.task_reason).toBe('unknown_task_context')
+    expect(t.skip_tts_would_flag).toBe(false)
   })
 })

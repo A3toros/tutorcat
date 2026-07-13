@@ -1,9 +1,15 @@
 /**
  * Task-context gate for robotic-voice v2.4+.
  * Decides what delivery we expect before acoustic classifiers run.
+ *
+ * Product note (aipun audit 2026-07): prompt-N / warmup are answered by reading-from-notes
+ * for some students, but the *task design* is still spontaneous answer — do not reclassify
+ * speaking_with_feedback / warm_up_speaking as reading-expected (that would skip TTS would-flag
+ * for real playback cheats). Use acoustic reading inference for delivery_mode instead.
+ * When activity_type/prompt_id give no clear signal, use `unknown` — not a silent speaking prior.
  */
 
-export type TaskDeliveryExpectation = 'spontaneous' | 'reading'
+export type TaskDeliveryExpectation = 'spontaneous' | 'reading' | 'unknown'
 
 export interface RoboticVoiceTaskContext {
   /** speech_jobs.prompt_id — e.g. prompt-0, improvement, topic-wheel-3 */
@@ -35,6 +41,7 @@ const READING_ACTIVITY_TYPES = new Set([
   'reading_improvement',
 ])
 
+/** Designed for improvised answers — not read-aloud scripts (even if some students read notes). */
 const SPONTANEOUS_ACTIVITY_TYPES = new Set([
   'speaking_with_feedback',
   'speaking_practice',
@@ -113,11 +120,11 @@ export function resolveTaskContext(
     }
   }
 
-  // Platform speaking cards default to spontaneous answer expected.
+  // No reliable task signal — do not presume spontaneous speaking or reading.
   return {
-    expectation: 'spontaneous',
+    expectation: 'unknown',
     skip_tts_would_flag: false,
-    task_reason: 'default_spontaneous',
+    task_reason: 'unknown_task_context',
     prompt_overlap: promptOverlap,
     reference_overlap: referenceOverlap,
   }
