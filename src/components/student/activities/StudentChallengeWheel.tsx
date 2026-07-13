@@ -17,6 +17,7 @@ export default function StudentChallengeWheel({ activity, lesson, onComplete }: 
   const [hasSpun, setHasSpun] = useState(false)
   const [wheelSize, setWheelSize] = useState(300)
   const [speechResult, setSpeechResult] = useState<SpeechFeedbackPayload | null>(null)
+  const [recorderBusy, setRecorderBusy] = useState(false)
 
   useEffect(() => {
     const update = () => setWheelSize(window.innerWidth < 400 ? 260 : 300)
@@ -75,6 +76,7 @@ export default function StudentChallengeWheel({ activity, lesson, onComplete }: 
               minWords={30}
               maxRecordingSeconds={90}
               cefrLevel="B1"
+              onBusyChange={setRecorderBusy}
               onSuccess={setSpeechResult}
               onRerecord={() => setSpeechResult(null)}
             />
@@ -83,25 +85,27 @@ export default function StudentChallengeWheel({ activity, lesson, onComplete }: 
       )}
 
       <div className="flex flex-col sm:flex-row gap-2 justify-center">
-        <Button
-          disabled={!speechResult || (speechResult?.overall_score ?? 0) < 50}
-          onClick={() => {
-            const { score, maxScore } = challengeWheelTotals(speechResult?.overall_score)
-            onComplete({
-              score,
-              maxScore,
-              attempts: 1,
-              answers: {
-                topic,
-                transcript: speechResult?.transcript,
-                overall_score: speechResult?.overall_score,
-              },
-              feedback: speechResult,
-            })
-          }}
-        >
-          Finish challenge
-        </Button>
+        {!recorderBusy && (speechResult?.overall_score ?? 0) >= 50 && (
+          <Button
+            onClick={() => {
+              if (!speechResult || speechResult.overall_score < 50) return
+              const { score, maxScore } = challengeWheelTotals(speechResult.overall_score)
+              onComplete({
+                score,
+                maxScore,
+                attempts: 1,
+                answers: {
+                  topic,
+                  transcript: speechResult.transcript,
+                  overall_score: speechResult.overall_score,
+                },
+                feedback: speechResult,
+              })
+            }}
+          >
+            Finish challenge
+          </Button>
+        )}
       </div>
     </Card>
   )

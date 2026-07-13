@@ -27,6 +27,8 @@ export interface StudentSpeakingRecorderProps {
   disabled?: boolean
   onSuccess: (result: SpeechFeedbackPayload) => void
   onRerecord?: () => void
+  /** True while recording or waiting on speech analysis — parents should lock Next/Finish. */
+  onBusyChange?: (busy: boolean) => void
 }
 
 type Step = 'idle' | 'recording' | 'transcribing' | 'analyzing' | 'feedback'
@@ -58,6 +60,7 @@ export default function StudentSpeakingRecorder({
   disabled = false,
   onSuccess,
   onRerecord,
+  onBusyChange,
 }: StudentSpeakingRecorderProps) {
   const isAdminLessonTestMode =
     typeof window !== 'undefined' && (window as any).__ADMIN_LESSON_TEST_MODE === true
@@ -80,9 +83,15 @@ export default function StudentSpeakingRecorder({
   const autoStopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const recordingStartRef = useRef<number>(0)
   const rhythmSamplerRef = useRef(createBrowserRhythmSampler())
+  const onBusyChangeRef = useRef(onBusyChange)
+  onBusyChangeRef.current = onBusyChange
 
   const effectiveMinWords = minWords ?? getMinWordsForLevel(cefrLevel)
   const maxSeconds = Math.min(maxRecordingSeconds, SPEECH_MAX_DURATION_SECONDS)
+
+  const setBusy = useCallback((busy: boolean) => {
+    onBusyChangeRef.current?.(busy)
+  }, [])
 
   if (isAdminLessonTestMode) {
     return (
@@ -122,9 +131,15 @@ export default function StudentSpeakingRecorder({
     setErrorFlags({})
     setStep('idle')
     chunksRef.current = []
-  }, [cleanupStream])
+    setBusy(false)
+  }, [cleanupStream, setBusy])
 
-  useEffect(() => () => cleanupStream(), [cleanupStream])
+  useEffect(() => {
+    return () => {
+      cleanupStream()
+      setBusy(false)
+    }
+  }, [cleanupStream, setBusy])
 
   useEffect(() => {
     navigator.permissions
@@ -154,6 +169,7 @@ export default function StudentSpeakingRecorder({
   const processRecording = useCallback(
     async (audioBlob: Blob, durationSec: number) => {
       setIsProcessing(true)
+      setBusy(true)
       setStep('transcribing')
       setSubmissionError(null)
       setErrorFlags({})
@@ -179,6 +195,7 @@ export default function StudentSpeakingRecorder({
         setTranscript(result.transcript)
         setFeedback(result)
         setStep('feedback')
+        setBusy(false)
         onSuccess(result)
       } catch (err: unknown) {
         const e = err as Error & SpeechErrorFlags
@@ -192,6 +209,7 @@ export default function StudentSpeakingRecorder({
           isDeliveryReadError: e.isDeliveryReadError,
         })
         setStep('idle')
+        setBusy(false)
         // Important: invalidate any previously-passing result in the parent.
         // Otherwise the parent may still think this card is passed and allow Next/Finish.
         onRerecord?.()
@@ -201,7 +219,20 @@ export default function StudentSpeakingRecorder({
         cleanupStream()
       }
     },
-    [promptText, promptId, lessonId, user?.id, effectiveMinWords, cefrLevel, activityType, referenceText, onSuccess, cleanupStream]
+    [
+      promptText,
+      promptId,
+      lessonId,
+      user?.id,
+      effectiveMinWords,
+      cefrLevel,
+      activityType,
+      referenceText,
+      onSuccess,
+      onRerecord,
+      cleanupStream,
+      setBusy,
+    ]
   )
 
   const startRecording = async () => {
@@ -212,6 +243,7 @@ export default function StudentSpeakingRecorder({
     setTranscript('')
     setSubmissionError(null)
     setErrorFlags({})
+    setBusy(true)
     // Starting a new attempt should lock progression until it succeeds.
     onRerecord?.()
 
@@ -269,6 +301,7 @@ export default function StudentSpeakingRecorder({
       }, maxSeconds * 1000)
     } catch {
       setSubmissionError('Failed to start recording. Check your microphone and try again.')
+      setBusy(false)
     }
   }
 
@@ -278,6 +311,7 @@ export default function StudentSpeakingRecorder({
     setIsStopping(true)
     setIsRecording(false)
     setIsProcessing(true)
+    setBusy(true)
     setStep('transcribing')
 
     if (autoStopTimeoutRef.current) {
@@ -300,6 +334,7 @@ export default function StudentSpeakingRecorder({
     setIsStopping(false)
     setIsProcessing(false)
     setStep('idle')
+    setBusy(false)
   }
 
   if (!hasMicPermission) {

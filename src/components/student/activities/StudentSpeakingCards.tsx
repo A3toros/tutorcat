@@ -16,10 +16,24 @@ function firstIncompleteIndex(
 ): number {
   if (promptsLen <= 0) return 0
   for (let i = 0; i < promptsLen; i++) {
-    const r = results[i]
-    if (!r || r.overall_score < 50) return i
+    if (!cardPassed(results[i])) return i
   }
   return 0
+}
+
+function cardPassed(result: SpeechFeedbackPayload | undefined): boolean {
+  return Boolean(result && typeof result.overall_score === 'number' && result.overall_score >= 50)
+}
+
+function allCardsPassed(
+  promptsLen: number,
+  results: Record<number, SpeechFeedbackPayload>
+): boolean {
+  if (promptsLen <= 0) return false
+  for (let i = 0; i < promptsLen; i++) {
+    if (!cardPassed(results[i])) return false
+  }
+  return true
 }
 
 export default function StudentSpeakingCards({ activity, lesson, onComplete }: StudentActivityProps) {
@@ -33,7 +47,16 @@ export default function StudentSpeakingCards({ activity, lesson, onComplete }: S
 
   const [index, setIndex] = useState(0)
   const [results, setResults] = useState<Record<number, SpeechFeedbackPayload>>({})
+  const [recorderBusy, setRecorderBusy] = useState(false)
   const didApplyDbResumeRef = useRef(false)
+  const recorderBusyRef = useRef(false)
+  const indexRef = useRef(0)
+  indexRef.current = index
+
+  const handleBusyChange = (busy: boolean) => {
+    recorderBusyRef.current = busy
+    setRecorderBusy(busy)
+  }
 
   // Restore from DB (speech_jobs) so completed cards stay completed across refresh/device.
   useEffect(() => {
@@ -88,6 +111,8 @@ export default function StudentSpeakingCards({ activity, lesson, onComplete }: S
         setResults((prev) => {
           const next = { ...prev }
           for (const [k, v] of bestByIndex.entries()) {
+            // Don't revive a pass for the card the student is currently recording.
+            if (recorderBusyRef.current && k === indexRef.current) continue
             const existing = next[k]
             if (!existing || v.overall_score > existing.overall_score) next[k] = v
           }
@@ -154,10 +179,10 @@ export default function StudentSpeakingCards({ activity, lesson, onComplete }: S
   }, [lesson.id, activity.id, index, results])
 
   const currentPrompt = prompts[index]
-  const currentResult = results[index]
-  const currentPassed = Boolean(currentResult && currentResult.overall_score >= 50)
-  const allPassed =
-    prompts.length > 0 && prompts.every((_, i) => results[i] && results[i]!.overall_score >= 50)
+  const currentPassed = cardPassed(results[index])
+  const allPassed = allCardsPassed(prompts.length, results)
+  const canGoNext = currentPassed && !recorderBusy
+  const canFinish = allPassed && !recorderBusy
 
   if (!currentPrompt) {
     return (
@@ -193,6 +218,7 @@ export default function StudentSpeakingCards({ activity, lesson, onComplete }: S
         minWords={15}
         maxRecordingSeconds={75}
         cefrLevel="A1"
+        onBusyChange={handleBusyChange}
         onSuccess={(result) => setResults((prev) => ({ ...prev, [index]: result }))}
         onRerecord={() =>
           setResults((prev) => {
@@ -204,14 +230,13 @@ export default function StudentSpeakingCards({ activity, lesson, onComplete }: S
       />
 
       <div className="flex flex-col sm:flex-row gap-2 justify-center mt-6">
-        {index + 1 < prompts.length && (
-          <Button disabled={!currentPassed} onClick={() => setIndex((i) => i + 1)}>
-            Next card
-          </Button>
+        {index + 1 < prompts.length && canGoNext && (
+          <Button onClick={() => setIndex((i) => i + 1)}>Next card</Button>
         )}
-        {allPassed && (
+        {canFinish && (
           <Button
             onClick={() => {
+              if (!allCardsPassed(prompts.length, results)) return
               const { score, maxScore } = speakingCardsTotals(results, prompts.length)
               onComplete({
                 score,
